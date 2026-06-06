@@ -1,0 +1,194 @@
+import type { CrmTableColumn, CrmTableRow } from "@lightcrm/ui";
+
+export type TableDefinition = {
+  title: string;
+  description: string;
+  columns: CrmTableColumn[];
+  rows: CrmTableRow[];
+  tableKey?: string;
+};
+
+export const tables: Record<string, TableDefinition> = {
+  clients: {
+    title: "Clients",
+    description: "Warm and confirmed relationships with contact context.",
+    columns: [
+      { id: "name", title: "Name", width: 190, mobilePriority: 1 },
+      { id: "company", title: "Company", width: 180, mobilePriority: 2 },
+      { id: "email", title: "Email", width: 230, mobilePriority: 3 },
+      { id: "phone", title: "Phone", width: 150, mobilePriority: 4 },
+      { id: "status", title: "Status", width: 120, mobilePriority: 5 },
+      { id: "sourceChannel", title: "Source", width: 140, defaultVisible: false },
+      { id: "notes", title: "Notes", width: 260, mobilePriority: 6 }
+    ],
+    rows: [
+      { id: "1", values: { name: "Ada Lovelace", company: "Analytical Studio", email: "ada@example.com", phone: "+33 600 000 001", status: "active", sourceChannel: "referral", notes: "Prefers WhatsApp" } },
+      { id: "2", values: { name: "Grace Hopper", company: "Compiler Works", email: "grace@example.com", phone: "+33 600 000 002", status: "warm", sourceChannel: "website", notes: "Interested in June rollout" } }
+    ]
+  },
+  leads: {
+    title: "Leads",
+    description: "Potential opportunities, optionally linked to client records.",
+    tableKey: "leads.v2",
+    columns: [
+      { id: "client.name", title: "Client", width: 190, mobilePriority: 1, group: "Client" },
+      { id: "project", title: "Project", width: 240, mobilePriority: 2 },
+      { id: "area", title: "Area", width: 120, mobilePriority: 3 },
+      { id: "description", title: "Description", width: 280, mobilePriority: 4 },
+      { id: "interest", title: "Interest", width: 120, mobilePriority: 5 },
+      { id: "urgency", title: "Urgency", width: 120, mobilePriority: 6 },
+      { id: "todo", title: "Todo", width: 180 },
+      { id: "address", title: "Address", width: 210 },
+      { id: "client.phone", title: "Phone", width: 150, group: "Client" },
+      { id: "client.email", title: "Email", width: 230, group: "Client" },
+      { id: "messenger", title: "Messenger", width: 150 },
+      { id: "sourceChannel", title: "Source", width: 140 },
+      { id: "clientProjects", title: "Active projects", width: 150 },
+      { id: "budgetEur", title: "Money brought", width: 150 },
+      { id: "status", title: "Lead status", width: 130, defaultVisible: false },
+      { id: "name", title: "Lead name", width: 240, defaultVisible: false },
+      { id: "email", title: "Lead email", width: 230, defaultVisible: false },
+      { id: "phone", title: "Lead phone", width: 150, defaultVisible: false },
+      { id: "rawInput", title: "Raw input", width: 320, defaultVisible: false },
+      { id: "notes", title: "All notes", width: 320, defaultVisible: false }
+    ],
+    rows: [
+      {
+        id: "1",
+        values: {
+          "client.name": "Ada Lovelace",
+          project: "Northwind house",
+          area: "140 m2",
+          description: "Planning request",
+          interest: "hot",
+          urgency: "June",
+          todo: "Send KP",
+          address: "Birkenfeld",
+          "client.phone": "+33 600 000 001",
+          "client.email": "ada@example.com",
+          messenger: "Telegram",
+          sourceChannel: "telegram",
+          clientProjects: 1,
+          budgetEur: 0,
+          name: "Nora Prospect",
+          status: "qualified"
+        }
+      },
+      {
+        id: "2",
+        values: {
+          "client.name": "Ivan Buyer",
+          project: "Blue Market apartment",
+          description: "Needs follow-up",
+          interest: "warm",
+          todo: "Clarify area",
+          messenger: "WhatsApp",
+          sourceChannel: "referral",
+          clientProjects: 1,
+          budgetEur: 0,
+          name: "Ivan Buyer",
+          status: "new"
+        }
+      }
+    ]
+  },
+  coldTargets: {
+    title: "Cold Targets",
+    description: "Outbound people and companies before a warmer relationship exists.",
+    columns: [
+      { id: "name", title: "Name", width: 190, mobilePriority: 1 },
+      { id: "company", title: "Company", width: 180 },
+      { id: "role", title: "Role", width: 180 },
+      { id: "email", title: "Email", width: 230 },
+      { id: "linkedinUrl", title: "LinkedIn", width: 220 },
+      { id: "status", title: "Status", width: 130, mobilePriority: 2 }
+    ],
+    rows: [
+      { id: "1", values: { name: "Maya Ops", company: "Bright Supply", role: "COO", email: "maya@example.com", linkedinUrl: "linkedin.com/in/maya", status: "queued" } },
+      { id: "2", values: { name: "Leo Founder", company: "Small SaaS", role: "Founder", email: "leo@example.com", linkedinUrl: "linkedin.com/in/leo", status: "new" } }
+    ]
+  },
+  storage: {
+    title: "Storage",
+    description: "Document register for client and lead files stored in Cloudflare R2.",
+    tableKey: "storage.v1",
+    columns: [
+      { id: "shortSummary", title: "Summary", width: 220, mobilePriority: 1 },
+      { id: "longSummary", title: "Full summary", width: 360, mobilePriority: 2 },
+      { id: "downloadUrl", title: "Download", width: 280, mobilePriority: 3, valueKind: "link" },
+      { id: "relatedLabel", title: "Linked to", width: 220, mobilePriority: 4 },
+      { id: "relatedHref", title: "Open link", width: 180, mobilePriority: 5, valueKind: "link" },
+      { id: "fileName", title: "File name", width: 220, mobilePriority: 6 },
+      { id: "storageProvider", title: "Provider", width: 110, defaultVisible: false },
+      { id: "storageBucket", title: "Bucket", width: 160, defaultVisible: false },
+      { id: "storageKey", title: "Storage key", width: 280, defaultVisible: false },
+      { id: "mimeType", title: "MIME type", width: 160, defaultVisible: false },
+      { id: "sizeBytes", title: "Size", width: 110, defaultVisible: false }
+    ],
+    rows: [
+      {
+        id: "1",
+        values: {
+          shortSummary: "Initial project brief",
+          longSummary: "Detailed request brief extracted from the first lead intake documents.",
+          downloadUrl: "https://example.com/download/brief.pdf",
+          relatedLabel: "Northwind house",
+          relatedHref: "/leads?record=1",
+          fileName: "brief.pdf",
+          storageProvider: "s3",
+          storageBucket: "photo-studios",
+          storageKey: "leads/1/brief.pdf",
+          mimeType: "application/pdf",
+          sizeBytes: 204800
+        }
+      }
+    ]
+  },
+  outreach: {
+    title: "Outreach",
+    description: "Contact history across cold targets, leads, and clients.",
+    columns: [
+      { id: "subject", title: "Subject", width: 220 },
+      { id: "channel", title: "Channel", width: 130 },
+      { id: "direction", title: "Direction", width: 130 },
+      { id: "related", title: "Related record", width: 200 },
+      { id: "occurredAt", title: "Occurred", width: 170 },
+      { id: "outcome", title: "Outcome", width: 220 }
+    ],
+    rows: [
+      { id: "1", values: { subject: "Intro email", channel: "email", direction: "outbound", related: "Maya Ops", occurredAt: "2026-06-05 09:30", outcome: "Opened" } },
+      { id: "2", values: { subject: "Pricing question", channel: "whatsapp", direction: "inbound", related: "Nora Prospect", occurredAt: "2026-06-05 13:10", outcome: "Reply needed" } }
+    ]
+  },
+  calendar: {
+    title: "Calendar",
+    description: "Events stored in CRM now, external sync later.",
+    columns: [
+      { id: "title", title: "Title", width: 220 },
+      { id: "startsAt", title: "Starts", width: 170 },
+      { id: "endsAt", title: "Ends", width: 170 },
+      { id: "related", title: "Related record", width: 200 },
+      { id: "location", title: "Location", width: 180 },
+      { id: "syncStatus", title: "Sync", width: 130 }
+    ],
+    rows: [
+      { id: "1", values: { title: "Northwind intro call", startsAt: "2026-06-09 09:00", endsAt: "2026-06-09 10:00", related: "Nora Prospect", location: "Google Meet", syncStatus: "local" } },
+      { id: "2", values: { title: "Client onboarding", startsAt: "2026-06-10 14:00", endsAt: "2026-06-10 15:00", related: "Grace Hopper", location: "Zoom", syncStatus: "local" } }
+    ]
+  },
+  today: {
+    title: "Today",
+    description: "Operational queue for reminders and scheduled work.",
+    columns: [
+      { id: "title", title: "Task", width: 260 },
+      { id: "dueAt", title: "Due", width: 170 },
+      { id: "related", title: "Related record", width: 200 },
+      { id: "status", title: "Status", width: 130 },
+      { id: "sourceChannel", title: "Source", width: 150 }
+    ],
+    rows: [
+      { id: "1", values: { title: "Follow up with Northwind", dueAt: "2026-06-06 16:00", related: "Nora Prospect", status: "open", sourceChannel: "manual" } },
+      { id: "2", values: { title: "Send onboarding notes", dueAt: "2026-06-06 18:00", related: "Grace Hopper", status: "open", sourceChannel: "calendar" } }
+    ]
+  }
+};

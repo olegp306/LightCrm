@@ -1,0 +1,237 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Workspace {
+  id               String            @id @default(cuid())
+  name             String
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  clients          Client[]
+  leads            Lead[]
+  coldTargets      ColdTarget[]
+  outreachTouches  OutreachTouch[]
+  reminders        Reminder[]
+  calendarEvents   CalendarEvent[]
+  documentFiles     DocumentFile[]
+  tablePreferences TablePreference[]
+  auditLogs        AuditLog[]
+}
+
+model Client {
+  id                String          @id @default(cuid())
+  workspaceId       String
+  workspace         Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  leads             Lead[]
+  outreachTouches   OutreachTouch[]
+  reminders         Reminder[]
+  calendarEvents    CalendarEvent[]
+  documentFiles     DocumentFile[]
+  name              String
+  email             String?
+  phone             String?
+  whatsapp          String?
+  company           String?
+  status            String          @default("active")
+  notes             String?
+  sourceChannel     String?
+  externalThreadId  String?
+  externalMessageId String?
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+  archivedAt        DateTime?
+
+  @@index([workspaceId, archivedAt])
+  @@index([workspaceId, email])
+}
+
+model Lead {
+  id                String          @id @default(cuid())
+  workspaceId       String
+  workspace         Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  clientId          String?
+  client            Client?         @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  outreachTouches   OutreachTouch[]
+  reminders         Reminder[]
+  calendarEvents    CalendarEvent[]
+  documentFiles     DocumentFile[]
+  name              String
+  email             String?
+  phone             String?
+  whatsapp          String?
+  company           String?
+  status            String          @default("new")
+  sourceChannel     String?
+  externalThreadId  String?
+  externalMessageId String?
+  notes             String?
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+  archivedAt        DateTime?
+
+  @@index([workspaceId, archivedAt])
+  @@index([workspaceId, clientId])
+}
+
+model ColdTarget {
+  id               String          @id @default(cuid())
+  workspaceId      String
+  workspace        Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  outreachTouches  OutreachTouch[]
+  reminders        Reminder[]
+  calendarEvents   CalendarEvent[]
+  name             String
+  company          String?
+  role             String?
+  email            String?
+  phone            String?
+  linkedinUrl      String?
+  website          String?
+  status           String          @default("new")
+  source           String?
+  notes            String?
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+  archivedAt       DateTime?
+
+  @@index([workspaceId, archivedAt])
+}
+
+model OutreachTouch {
+  id           String      @id @default(cuid())
+  workspaceId  String
+  workspace    Workspace   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  coldTargetId String?
+  coldTarget   ColdTarget? @relation(fields: [coldTargetId], references: [id], onDelete: SetNull)
+  leadId       String?
+  lead         Lead?       @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  clientId     String?
+  client       Client?     @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  channel      String
+  direction    String
+  subject      String?
+  body         String?
+  occurredAt   DateTime
+  outcome      String?
+  createdAt    DateTime    @default(now())
+
+  @@index([workspaceId, occurredAt])
+  @@index([coldTargetId])
+  @@index([leadId])
+  @@index([clientId])
+}
+
+model Reminder {
+  id            String      @id @default(cuid())
+  workspaceId   String
+  workspace     Workspace   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  clientId      String?
+  client        Client?     @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  leadId        String?
+  lead          Lead?       @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  coldTargetId  String?
+  coldTarget    ColdTarget? @relation(fields: [coldTargetId], references: [id], onDelete: SetNull)
+  calendarEvents CalendarEvent[]
+  title         String
+  description   String?
+  dueAt         DateTime
+  status        String      @default("open")
+  sourceChannel String?
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+  archivedAt    DateTime?
+
+  @@index([workspaceId, dueAt])
+  @@index([workspaceId, status])
+}
+
+model CalendarEvent {
+  id               String      @id @default(cuid())
+  workspaceId      String
+  workspace        Workspace   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  clientId         String?
+  client           Client?     @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  leadId           String?
+  lead             Lead?       @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  coldTargetId     String?
+  coldTarget       ColdTarget? @relation(fields: [coldTargetId], references: [id], onDelete: SetNull)
+  reminderId       String?
+  reminder         Reminder?   @relation(fields: [reminderId], references: [id], onDelete: SetNull)
+  title            String
+  description      String?
+  startsAt         DateTime
+  endsAt           DateTime
+  location         String?
+  externalProvider String?
+  externalEventId  String?
+  syncStatus       String?
+  lastSyncedAt     DateTime?
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
+  archivedAt       DateTime?
+
+  @@index([workspaceId, startsAt])
+  @@index([externalProvider, externalEventId])
+}
+
+model DocumentFile {
+  id              String    @id @default(cuid())
+  workspaceId     String
+  workspace       Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  clientId        String?
+  client          Client?   @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  leadId          String?
+  lead            Lead?     @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  fileName        String
+  shortSummary    String
+  longSummary     String?
+  downloadUrl     String?
+  storageProvider String    @default("s3")
+  storageBucket   String?
+  storageKey      String
+  mimeType        String?
+  sizeBytes       Int?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  archivedAt      DateTime?
+
+  @@index([workspaceId, archivedAt])
+  @@index([workspaceId, leadId])
+  @@index([workspaceId, clientId])
+  @@unique([workspaceId, storageProvider, storageBucket, storageKey])
+}
+
+model TablePreference {
+  id            String    @id @default(cuid())
+  workspaceId   String
+  workspace     Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  userId        String
+  tableKey      String
+  hiddenColumns Json      @default("[]")
+  columnWidths  Json      @default("{}")
+  filters       Json      @default("{}")
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@unique([workspaceId, userId, tableKey])
+}
+
+model AuditLog {
+  id          String    @id @default(cuid())
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  actorId     String?
+  action      String
+  entity      String
+  entityId    String
+  metadata    Json      @default("{}")
+  createdAt   DateTime  @default(now())
+
+  @@index([workspaceId, createdAt])
+  @@index([entity, entityId])
+}
