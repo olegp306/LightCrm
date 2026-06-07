@@ -13,6 +13,13 @@ const newLeadPhrases = [
   "снова клиент"
 ];
 
+const negatedNewLeadPatterns = [
+  /не\s+нов(?:ый|ого|ым)?\s+лид/i,
+  /это\s+не\s+нов(?:ый|ого|ым)?\s+лид/i,
+  /нет[, ]+это\s+не\s+нов(?:ый|ого|ым)?\s+лид/i,
+  /не\s+нов(?:ый|ого|ым)?\s+клиент/i
+];
+
 const riskyPhrases = ["удали", "удалить", "delete", "undo", "отмени", "коммерческое предложение", "kp", "кп", "offer"];
 
 function normalizeForRules(text: string): string {
@@ -51,6 +58,9 @@ export function createEvidence(input: CrmOrchestrationInput, normalizedText: str
 
 export function classifyIntentByRules(text: string): CrmIntent {
   const normalized = normalizeForRules(text);
+  if (negatedNewLeadPatterns.some((pattern) => pattern.test(normalized))) {
+    return "clarification";
+  }
   if (newLeadPhrases.some((phrase) => normalized.includes(phrase))) {
     return "create_new_lead";
   }
@@ -114,6 +124,9 @@ export function riskCheck(intent: CrmIntent, facts: ExtractedFacts, text: string
   }
   if (intent === "unknown") {
     return { risk: "review", reason: "Intent is unknown." };
+  }
+  if (intent === "clarification") {
+    return { risk: "review", reason: "Message negated a new-lead interpretation and needs human review." };
   }
   return { risk: "auto", reason: "Low-risk CRM action." };
 }

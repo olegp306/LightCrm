@@ -43,6 +43,22 @@ describe("runCrmOrchestration", () => {
     });
   });
 
+  it("does not create a lead when new-lead wording is negated", async () => {
+    const result = await runCrmOrchestration({
+      workspaceId: "workspace-1",
+      messageId: "negated-new-lead",
+      author: "Катя",
+      text: "Нет, это не новый лид"
+    });
+
+    expect(result.intent).toBe("clarification");
+    expect(result.actions[0]).toMatchObject({
+      type: "request_review",
+      risk: "review"
+    });
+    expect(result.actions[0]?.reason).toContain("negated");
+  });
+
   it("keeps a potential developer without a concrete project as an opportunity", async () => {
     const result = await runCrmOrchestration({
       workspaceId: "workspace-1",
