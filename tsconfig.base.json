@@ -17,6 +17,7 @@
     "paths": {
       "@lightcrm/core": ["packages/core/src/index.ts"],
       "@lightcrm/orchestrator": ["packages/orchestrator/src/index.ts"],
+      "@lightcrm/storage": ["packages/storage/src/index.ts"],
       "@lightcrm/telegram-bot": ["packages/telegram-bot/src/index.ts"],
       "@lightcrm/db": ["packages/db/src/index.ts"],
       "@lightcrm/ui": ["packages/ui/src/index.ts"]

@@ -247,6 +247,45 @@ export type UpsertDocumentFileInput = {
   sizeBytes?: number | null;
 };
 
+export type LeadIntakeTextItem = {
+  sourceMessageId?: string | null;
+  author?: string | null;
+  text: string;
+};
+
+export type LeadIntakeAttachmentKind = "image" | "pdf" | "audio" | "voice" | "document" | "other";
+
+export type LeadIntakeAttachmentInput = {
+  sourceMessageId?: string | null;
+  kind: LeadIntakeAttachmentKind;
+  fileName: string;
+  storageProvider?: string;
+  storageBucket?: string | null;
+  storageKey: string;
+  downloadUrl?: string | null;
+  mimeType?: string | null;
+  sizeBytes?: number | null;
+  summary?: string | null;
+  longSummary?: string | null;
+};
+
+export type IngestLeadIntakeInput = {
+  workspaceId: string;
+  leadId: string;
+  sourceChannel?: string | null;
+  sourceThreadId?: string | null;
+  sourceMessageId?: string | null;
+  textItems?: LeadIntakeTextItem[];
+  attachments?: LeadIntakeAttachmentInput[];
+};
+
+export type LeadIntakeResult = {
+  lead: Lead;
+  documents: DocumentFile[];
+  summary: string;
+  originalTakes: string[];
+};
+
 export type CreateOutreachTouchInput = {
   workspaceId: string;
   coldTargetId?: string | null;

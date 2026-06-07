@@ -13,7 +13,9 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
+    "@lightcrm/core": "workspace:*",
     "@lightcrm/orchestrator": "workspace:*",
+    "@lightcrm/storage": "workspace:*",
     "dotenv": "^16.4.7",
     "tsx": "^4.19.2",
     "zod": "^3.23.8"

@@ -118,4 +118,75 @@ describe("createCrmService", () => {
     expect(file.shortSummary).toBe("Initial project brief");
     await expect(crm.listRecords({ workspaceId: "workspace-1", entity: "documentFile" })).resolves.toEqual([file]);
   });
+
+  it("ingests a lead intake bundle with text and attachments", async () => {
+    const repository = new MemoryCrmRepository();
+    const crm = createCrmService(repository);
+    const lead = await crm.upsertLead({ workspaceId: "workspace-1", name: "Lead With Intake" });
+
+    const intake = await crm.ingestLeadIntake({
+      workspaceId: "workspace-1",
+      leadId: lead.id,
+      sourceChannel: "telegram",
+      sourceThreadId: "763604722",
+      sourceMessageId: "901",
+      textItems: [
+        {
+          sourceMessageId: "901",
+          author: "Katya",
+          text: "Клиент хочет дом 140 м2 в Швейцарии, нужно быстро собрать КП."
+        }
+      ],
+      attachments: [
+        {
+          sourceMessageId: "902",
+          kind: "pdf",
+          fileName: "brief.pdf",
+          storageProvider: "s3",
+          storageBucket: "photo-studios",
+          storageKey: "leads/lead-1/brief.pdf",
+          downloadUrl: "https://files.example/brief.pdf",
+          mimeType: "application/pdf",
+          sizeBytes: 204800,
+          summary: "PDF brief with project requirements"
+        },
+        {
+          sourceMessageId: "903",
+          kind: "voice",
+          fileName: "voice.ogg",
+          storageProvider: "s3",
+          storageBucket: "photo-studios",
+          storageKey: "leads/lead-1/voice.ogg",
+          mimeType: "audio/ogg",
+          sizeBytes: 32768
+        }
+      ]
+    });
+
+    expect(intake.lead.id).toBe(lead.id);
+    expect(intake.summary).toContain("Клиент хочет дом 140 м2");
+    expect(intake.summary).toContain("2 attachment(s)");
+    expect(intake.documents).toHaveLength(2);
+    expect(intake.documents[0]).toMatchObject({
+      leadId: lead.id,
+      fileName: "brief.pdf",
+      shortSummary: "PDF brief with project requirements"
+    });
+    expect(intake.documents[1]).toMatchObject({
+      fileName: "voice.ogg",
+      shortSummary: "Voice attached to lead intake"
+    });
+
+    const updatedLead = await repository.get("lead", lead.id);
+    expect(updatedLead?.notes).toContain("Lead intake summary");
+    expect(updatedLead?.notes).toContain("Original takes");
+    expect(updatedLead?.notes).toContain("brief.pdf");
+
+    const auditLogs = await repository.listAuditLogs("workspace-1");
+    expect(auditLogs.at(-1)).toMatchObject({
+      action: "lead.intakeIngest",
+      entity: "lead",
+      entityId: lead.id
+    });
+  });
 });

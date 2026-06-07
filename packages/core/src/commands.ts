@@ -8,7 +8,10 @@ import type {
   CreateOutreachTouchInput,
   DocumentFile,
   EntityMap,
+  IngestLeadIntakeInput,
   Lead,
+  LeadIntakeAttachmentInput,
+  LeadIntakeResult,
   OutreachTouch,
   Reminder,
   UpsertCalendarEventInput,
@@ -58,6 +61,63 @@ function now(): Date {
 
 function nullable(value: string | null | undefined): string | null {
   return value ?? null;
+}
+
+function trimText(value: string | null | undefined): string | null {
+  const trimmed = value?.trim();
+  return trimmed ? trimmed : null;
+}
+
+function attachmentSummary(attachment: LeadIntakeAttachmentInput): string {
+  const provided = trimText(attachment.summary);
+  if (provided) {
+    return provided;
+  }
+  const label: Record<LeadIntakeAttachmentInput["kind"], string> = {
+    image: "Image",
+    pdf: "PDF",
+    audio: "Audio",
+    voice: "Voice",
+    document: "Document",
+    other: "File"
+  };
+  return `${label[attachment.kind]} attached to lead intake`;
+}
+
+function buildLeadIntakeSummary(input: IngestLeadIntakeInput): { summary: string; originalTakes: string[] } {
+  const originalTakes = [
+    ...(input.textItems ?? []).map((item) => {
+      const prefix = [item.author, item.sourceMessageId ? `#${item.sourceMessageId}` : null].filter(Boolean).join(" ");
+      return prefix ? `${prefix}: ${item.text}` : item.text;
+    }),
+    ...(input.attachments ?? []).map((attachment) => `${attachment.kind}: ${attachment.fileName}`)
+  ].filter((value) => trimText(value)) as string[];
+
+  const textSummary = (input.textItems ?? [])
+    .map((item) => item.text.trim())
+    .filter(Boolean)
+    .join(" ");
+  const attachmentCount = input.attachments?.length ?? 0;
+  const parts = [
+    textSummary || "No text notes yet.",
+    attachmentCount > 0 ? `${attachmentCount} attachment(s): ${(input.attachments ?? []).map((item) => item.fileName).join(", ")}.` : null
+  ];
+
+  return {
+    summary: parts.filter(Boolean).join(" "),
+    originalTakes
+  };
+}
+
+function appendIntakeNotes(existingNotes: string | null, summary: string, originalTakes: string[]): string {
+  const block = [
+    "Lead intake summary",
+    summary,
+    "",
+    "Original takes",
+    ...originalTakes.map((take) => `- ${take}`)
+  ].join("\n");
+  return [trimText(existingNotes), block].filter(Boolean).join("\n\n");
 }
 
 export function createCrmService(repository: CrmRepository) {
@@ -291,6 +351,62 @@ export function createCrmService(repository: CrmRepository) {
     return record;
   }
 
+  async function ingestLeadIntake(input: IngestLeadIntakeInput): Promise<LeadIntakeResult> {
+    const lead = await repository.get("lead", input.leadId);
+    if (!lead || lead.workspaceId !== input.workspaceId) {
+      throw new Error("Lead not found");
+    }
+
+    const { summary, originalTakes } = buildLeadIntakeSummary(input);
+    const documents: DocumentFile[] = [];
+    for (const attachment of input.attachments ?? []) {
+      documents.push(
+        await upsertDocumentFile({
+          workspaceId: input.workspaceId,
+          leadId: lead.id,
+          clientId: lead.clientId,
+          fileName: attachment.fileName,
+          shortSummary: attachmentSummary(attachment),
+          longSummary:
+            attachment.longSummary ??
+            `Original ${attachment.kind} from ${input.sourceChannel ?? "intake"} intake${attachment.sourceMessageId ? ` message ${attachment.sourceMessageId}` : ""}.`,
+          downloadUrl: attachment.downloadUrl,
+          storageProvider: attachment.storageProvider,
+          storageBucket: attachment.storageBucket,
+          storageKey: attachment.storageKey,
+          mimeType: attachment.mimeType,
+          sizeBytes: attachment.sizeBytes
+        })
+      );
+    }
+
+    const updatedLead: Lead = {
+      ...lead,
+      sourceChannel: nullable(input.sourceChannel ?? lead.sourceChannel),
+      externalThreadId: nullable(input.sourceThreadId ?? lead.externalThreadId),
+      externalMessageId: nullable(input.sourceMessageId ?? lead.externalMessageId),
+      notes: appendIntakeNotes(lead.notes, summary, originalTakes),
+      updatedAt: now()
+    };
+    await repository.save("lead", updatedLead);
+    await audit({
+      workspaceId: input.workspaceId,
+      actorId: null,
+      action: "lead.intakeIngest",
+      entity: "lead",
+      entityId: lead.id,
+      metadata: {
+        sourceChannel: input.sourceChannel,
+        sourceThreadId: input.sourceThreadId,
+        sourceMessageId: input.sourceMessageId,
+        textCount: input.textItems?.length ?? 0,
+        attachmentCount: input.attachments?.length ?? 0
+      }
+    });
+
+    return { lead: updatedLead, documents, summary, originalTakes };
+  }
+
   async function linkLeadToClient(input: LinkLeadToClientInput): Promise<Lead> {
     const lead = await repository.get("lead", input.leadId);
     const client = await repository.get("client", input.clientId);
@@ -355,6 +471,7 @@ export function createCrmService(repository: CrmRepository) {
     upsertReminder,
     upsertCalendarEvent,
     upsertDocumentFile,
+    ingestLeadIntake,
     linkLeadToClient,
     archiveRecord,
     globalSearch: (input: { workspaceId: string; query: string }) => globalSearch(repository, input)
