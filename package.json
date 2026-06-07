@@ -7,6 +7,7 @@
     "build": "pnpm -r build",
     "dev": "pnpm --filter @lightcrm/web dev",
     "lint": "pnpm -r lint",
+    "telegram:dev": "pnpm --filter @lightcrm/telegram-bot dev",
     "test": "pnpm -r test",
     "typecheck": "pnpm -r typecheck"
   },
@@ -15,4 +16,3 @@
     "typescript": "^5.5.4"
   }
 }
-
