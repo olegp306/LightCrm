@@ -1,6 +1,6 @@
 import { PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { mkdir, writeFile } from "node:fs/promises";
-import { dirname, join } from "node:path";
+import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 
 export type StorageEnv = {
   STORAGE_PROVIDER?: string;
@@ -75,6 +75,13 @@ export function sanitizeStorageSegment(value: string): string {
     .replace(/[^a-z0-9._-]+/g, "-")
     .replace(/^[._-]+|[._-]+$/g, "");
   return ascii || "file";
+}
+
+export function isPathInsideRoot(root: string, filePath: string): boolean {
+  const resolvedRoot = resolve(root);
+  const resolvedFilePath = resolve(filePath);
+  const pathFromRoot = relative(resolvedRoot, resolvedFilePath);
+  return pathFromRoot === "" || (!pathFromRoot.startsWith("..") && !isAbsolute(pathFromRoot));
 }
 
 function buildStorageKey(input: StoreCrmFileInput): string {

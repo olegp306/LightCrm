@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { formatOrchestrationReply, handleTelegramUpdate, parseAllowedChatIds } from "./bot-core";
+import { formatOrchestrationReply, handleTelegramUpdate, parseAllowedChatIds, uploadTelegramAttachmentToWeb } from "./bot-core";
 
 describe("telegram bot core", () => {
   it("parses allowed chat ids from comma-separated env", () => {
@@ -198,13 +198,63 @@ describe("telegram bot core", () => {
         attachment: expect.objectContaining({ fileId: "file-1", fileName: "brief.pdf" })
       })
     );
-    expect(ingestLeadIntake).toHaveBeenCalledWith(
-      expect.objectContaining({
-        leadId: "lead-1",
-        textItems: [expect.objectContaining({ text: "Ещё новый лид: дом 140 м2" })],
-        attachments: [expect.objectContaining({ fileName: "brief.pdf" })]
-      })
-    );
+    expect(ingestLeadIntake).not.toHaveBeenCalled();
     expect(sendMessage).toHaveBeenCalledWith(111111, expect.stringContaining("Intake: saved 1 attachment"));
+  });
+
+  it("uploads telegram attachment bytes through the web upload API", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        documents: [
+          {
+            fileName: "brief.pdf",
+            storageProvider: "local",
+            storageBucket: null,
+            storageKey: "workspaces/default/leads/lead-1/brief.pdf",
+            downloadUrl: "/api/crm/storage/local/workspaces%2Fdefault%2Fleads%2Flead-1%2Fbrief.pdf",
+            mimeType: "application/pdf",
+            sizeBytes: 3
+          }
+        ]
+      })
+    });
+
+    const attachment = await uploadTelegramAttachmentToWeb({
+      crmApiBase: "http://localhost:4900",
+      workspaceId: "default",
+      leadId: "lead-1",
+      sourceChannel: "telegram",
+      sourceThreadId: "111111",
+      sourceMessageId: "200",
+      text: "Ещё новый лид",
+      author: "Katya",
+      attachment: {
+        fileId: "file-1",
+        uniqueId: "unique-1",
+        kind: "pdf",
+        fileName: "brief.pdf",
+        mimeType: "application/pdf",
+        sizeBytes: 3
+      },
+      bytes: new Uint8Array([1, 2, 3]),
+      fetchImpl
+    });
+
+    expect(fetchImpl).toHaveBeenCalledWith("http://localhost:4900/api/crm/lead-intake/upload", {
+      method: "POST",
+      body: expect.any(FormData)
+    });
+    const form = fetchImpl.mock.calls[0][1].body as FormData;
+    expect(form.get("leadId")).toBe("lead-1");
+    expect(form.get("sourceChannel")).toBe("telegram");
+    expect(form.get("text")).toBe("Ещё новый лид");
+    expect(form.get("file")).toBeInstanceOf(File);
+    expect(attachment).toMatchObject({
+      kind: "pdf",
+      fileName: "brief.pdf",
+      storageProvider: "local",
+      storageKey: "workspaces/default/leads/lead-1/brief.pdf"
+    });
   });
 });

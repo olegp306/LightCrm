@@ -55,6 +55,22 @@ export type PrepareTelegramAttachmentInput = {
   leadId: string;
   attachment: TelegramAttachment;
   message: TelegramMessage;
+  text?: string;
+  author?: string | null;
+};
+
+export type UploadTelegramAttachmentToWebInput = {
+  crmApiBase: string;
+  workspaceId: string;
+  leadId: string;
+  sourceChannel: string;
+  sourceThreadId: string;
+  sourceMessageId: string;
+  text: string;
+  author: string | null;
+  attachment: TelegramAttachment;
+  bytes: Uint8Array;
+  fetchImpl?: typeof fetch;
 };
 
 export type TelegramBotDeps = {
@@ -176,6 +192,66 @@ function actionPayload(result: CrmOrchestrationResult): Record<string, unknown> 
   return payload && typeof payload === "object" ? payload : {};
 }
 
+type LeadIntakeUploadResponse = {
+  documents?: Array<{
+    fileName: string;
+    storageProvider: string;
+    storageBucket: string | null;
+    storageKey: string;
+    downloadUrl: string | null;
+    mimeType: string | null;
+    sizeBytes: number | null;
+  }>;
+};
+
+export async function uploadTelegramAttachmentToWeb(
+  input: UploadTelegramAttachmentToWebInput
+): Promise<LeadIntakeAttachmentInput> {
+  const form = new FormData();
+  form.set("workspaceId", input.workspaceId);
+  form.set("leadId", input.leadId);
+  form.set("sourceChannel", input.sourceChannel);
+  form.set("sourceThreadId", input.sourceThreadId);
+  form.set("sourceMessageId", input.sourceMessageId);
+  form.set("text", input.text);
+  if (input.author) {
+    form.set("author", input.author);
+  }
+  form.set("summary", `${input.attachment.kind} from Telegram intake`);
+  form.set(
+    "file",
+    new File([new Blob([Buffer.from(input.bytes)])], input.attachment.fileName, {
+      type: input.attachment.mimeType ?? "application/octet-stream"
+    })
+  );
+
+  const fetchImpl = input.fetchImpl ?? fetch;
+  const response = await fetchImpl(`${input.crmApiBase.replace(/\/$/, "")}/api/crm/lead-intake/upload`, {
+    method: "POST",
+    body: form
+  });
+  const payload = (await response.json()) as LeadIntakeUploadResponse & { error?: string };
+  if (!response.ok) {
+    throw new Error(payload.error ?? "LightCrm intake upload failed");
+  }
+  const document = payload.documents?.[0];
+  if (!document) {
+    throw new Error("LightCrm intake upload did not return a document");
+  }
+  return {
+    sourceMessageId: input.sourceMessageId,
+    kind: input.attachment.kind,
+    fileName: document.fileName,
+    storageProvider: document.storageProvider,
+    storageBucket: document.storageBucket,
+    storageKey: document.storageKey,
+    downloadUrl: document.downloadUrl,
+    mimeType: document.mimeType,
+    sizeBytes: document.sizeBytes ?? input.attachment.sizeBytes,
+    summary: `${input.attachment.kind} from Telegram intake`
+  };
+}
+
 async function maybeCreateLead(
   message: TelegramMessage,
   text: string,
@@ -245,25 +321,29 @@ export async function handleTelegramUpdate(update: TelegramUpdate, deps: Telegra
     const preparedAttachments =
       deps.prepareAttachment && attachments.length > 0
         ? await Promise.all(
-            attachments.map((attachment) =>
+            attachments.map((attachment, index) =>
               deps.prepareAttachment?.({
                 workspaceId: deps.workspaceId,
                 leadId: lead.id,
                 attachment,
-                message
+                message,
+                text: index === 0 ? text : "",
+                author
               })
             )
           )
         : [];
-    await deps.ingestLeadIntake({
-      workspaceId: deps.workspaceId,
-      leadId: lead.id,
-      sourceChannel: "telegram",
-      sourceThreadId: String(message.chat.id),
-      sourceMessageId: String(message.message_id),
-      textItems: [{ sourceMessageId: String(message.message_id), author, text }],
-      attachments: preparedAttachments.filter((item): item is LeadIntakeAttachmentInput => Boolean(item))
-    });
+    if (preparedAttachments.length === 0) {
+      await deps.ingestLeadIntake({
+        workspaceId: deps.workspaceId,
+        leadId: lead.id,
+        sourceChannel: "telegram",
+        sourceThreadId: String(message.chat.id),
+        sourceMessageId: String(message.message_id),
+        textItems: [{ sourceMessageId: String(message.message_id), author, text }],
+        attachments: []
+      });
+    }
     await deps.sendMessage(
       chatId,
       [formatOrchestrationReply(result), `Intake: saved ${preparedAttachments.length} attachment(s) to ${lead.name}.`]

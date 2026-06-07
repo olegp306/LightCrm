@@ -2,7 +2,7 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { afterEach, describe, expect, it } from "vitest";
-import { sanitizeStorageSegment, storeCrmFile } from "./index";
+import { isPathInsideRoot, sanitizeStorageSegment, storeCrmFile } from "./index";
 
 let tempDir: string | null = null;
 
@@ -43,5 +43,12 @@ describe("crm storage", () => {
     });
     expect(stored.downloadUrl).toContain("/api/crm/storage/local/");
     await expect(readFile(join(tempDir, stored.storageKey))).resolves.toEqual(Buffer.from([1, 2, 3]));
+  });
+
+  it("rejects sibling paths that only share the storage root prefix", () => {
+    expect(isPathInsideRoot("C:\\data\\.local-storage", "C:\\data\\.local-storage\\file.txt")).toBe(true);
+    expect(isPathInsideRoot("C:\\data\\.local-storage", "C:\\data\\.local-storage-evil\\secret.txt")).toBe(false);
+    expect(isPathInsideRoot("/data/.local-storage", "/data/.local-storage/file.txt")).toBe(true);
+    expect(isPathInsideRoot("/data/.local-storage", "/data/.local-storage-evil/secret.txt")).toBe(false);
   });
 });

@@ -1,12 +1,12 @@
 import { config } from "dotenv";
-import { storeCrmFile } from "@lightcrm/storage";
 import type { IngestLeadIntakeInput, LeadIntakeAttachmentInput, UpsertLeadInput } from "@lightcrm/core";
-import { isAbsolute, resolve } from "node:path";
+import { resolve } from "node:path";
 import {
   handleTelegramUpdate,
   parseAllowedChatIds,
   type PrepareTelegramAttachmentInput,
-  type TelegramUpdate
+  type TelegramUpdate,
+  uploadTelegramAttachmentToWeb
 } from "./bot-core";
 
 const repoRoot = resolve(process.cwd(), "../..");
@@ -84,14 +84,6 @@ async function downloadTelegramFile(filePath: string): Promise<Uint8Array> {
   return new Uint8Array(await response.arrayBuffer());
 }
 
-function storageEnv() {
-  const localDir = process.env.LOCAL_STORAGE_DIR;
-  return {
-    ...process.env,
-    LOCAL_STORAGE_DIR: localDir && !isAbsolute(localDir) ? resolve(repoRoot, localDir) : localDir
-  };
-}
-
 async function createLead(input: UpsertLeadInput) {
   return crmCall<{ id: string; name: string }>("/api/crm/leads/upsert", input);
 }
@@ -103,26 +95,19 @@ async function ingestLeadIntake(input: IngestLeadIntakeInput) {
 async function prepareAttachment(input: PrepareTelegramAttachmentInput): Promise<LeadIntakeAttachmentInput> {
   const fileInfo = await getFile(input.attachment.fileId);
   const bytes = await downloadTelegramFile(fileInfo.file_path);
-  const stored = await storeCrmFile({
-    bytes,
-    fileName: `${input.message.message_id}-${input.attachment.fileName}`,
+  return uploadTelegramAttachmentToWeb({
+    crmApiBase,
     workspaceId: input.workspaceId,
     leadId: input.leadId,
-    mimeType: input.attachment.mimeType,
-    env: storageEnv()
-  });
-  return {
+    sourceChannel: "telegram",
+    sourceThreadId: String(input.message.chat.id),
     sourceMessageId: String(input.message.message_id),
-    kind: input.attachment.kind,
-    fileName: input.attachment.fileName,
-    storageProvider: stored.storageProvider,
-    storageBucket: stored.storageBucket,
-    storageKey: stored.storageKey,
-    downloadUrl: stored.downloadUrl,
-    mimeType: stored.mimeType,
-    sizeBytes: input.attachment.sizeBytes ?? stored.sizeBytes,
-    summary: `${input.attachment.kind} from Telegram intake`
-  };
+    text: input.text ?? input.message.caption ?? input.message.text ?? "",
+    author: input.author ?? null,
+    attachment: input.attachment,
+    bytes,
+    fetchImpl: fetch
+  });
 }
 
 async function runPolling() {
