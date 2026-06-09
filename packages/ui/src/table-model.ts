@@ -17,6 +17,14 @@ export type ApiRecord = Record<string, unknown> & {
   id: string;
 };
 
+export type CreateRecordFieldValue = string | number | null;
+
+export type CreateRecordPayloadConfig = {
+  workspaceId?: string;
+  payloadMap?: Record<string, string>;
+  noteFields?: Record<string, string>;
+};
+
 function valueAtPath(record: Record<string, unknown>, path: string): unknown {
   return path.split(".").reduce<unknown>((current, segment) => {
     if (current && typeof current === "object" && segment in current) {
@@ -82,8 +90,8 @@ export function formatTableValue(value: unknown): CrmTableCellValue {
   return String(value);
 }
 
-export function recordsToRows(records: ApiRecord[], columns: CrmTableColumn[]): CrmTableRow[] {
-  return records.map((record) => ({
+export function recordToRow(record: ApiRecord, columns: CrmTableColumn[]): CrmTableRow {
+  return {
     id: record.id,
     values: Object.fromEntries(
       columns.map((column) => {
@@ -91,7 +99,41 @@ export function recordsToRows(records: ApiRecord[], columns: CrmTableColumn[]): 
         return [column.id, column.valueKind === "documents" ? normalizeDocumentCellValue(value) : formatTableValue(value)];
       })
     )
-  }));
+  };
+}
+
+export function recordsToRows(records: ApiRecord[], columns: CrmTableColumn[]): CrmTableRow[] {
+  return records.map((record) => recordToRow(record, columns));
+}
+
+export function buildCreateRecordPayload(
+  values: Record<string, CreateRecordFieldValue>,
+  config: CreateRecordPayloadConfig = {}
+): Record<string, unknown> {
+  const payload: Record<string, unknown> = {
+    workspaceId: config.workspaceId ?? "default"
+  };
+  const notes: string[] = [];
+  for (const [fieldId, rawValue] of Object.entries(values)) {
+    const value = typeof rawValue === "string" ? rawValue.trim() : rawValue;
+    if (value === null || value === "") {
+      continue;
+    }
+    const noteLabel = config.noteFields?.[fieldId];
+    if (noteLabel) {
+      notes.push(`${noteLabel}: ${value}`);
+    }
+    const payloadKey = config.payloadMap?.[fieldId] ?? fieldId;
+    if (!fieldId.includes(".") && !noteLabel) {
+      payload[payloadKey] = value;
+    } else if (config.payloadMap?.[fieldId]) {
+      payload[payloadKey] = value;
+    }
+  }
+  if (notes.length > 0) {
+    payload.notes = notes.join("\n\n");
+  }
+  return payload;
 }
 
 export function applyTablePreferences(columns: CrmTableColumn[], preferences: TablePreferences): CrmTableColumn[] {

@@ -16,11 +16,15 @@ import type { ComponentProps, FormEvent } from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   applyTablePreferences,
+  buildCreateRecordPayload,
   compactDocumentTitle,
   documentExtensionLabel,
+  recordToRow,
   sortRows,
   toCsv,
   updateRowCell,
+  type ApiRecord,
+  type CreateRecordPayloadConfig,
   type TablePreferences,
   type TableSort
 } from "./table-model";
@@ -54,6 +58,18 @@ export type CrmTableRow = {
   values: Record<string, CrmTableCellValue>;
 };
 
+export type CreateRecordField = {
+  id: string;
+  label: string;
+  required?: boolean;
+  multiline?: boolean;
+};
+
+export type CreateRecordConfig = CreateRecordPayloadConfig & {
+  endpoint: string;
+  fields: CreateRecordField[];
+};
+
 export type CrmTableProps = {
   title: string;
   description: string;
@@ -61,6 +77,7 @@ export type CrmTableProps = {
   rows: CrmTableRow[];
   tableKey?: string;
   documentUploadEndpoint?: string;
+  createRecord?: CreateRecordConfig;
 };
 
 type DocumentsCustomCell = CustomCell<{
@@ -231,7 +248,8 @@ export function CrmTable({
   columns,
   rows,
   tableKey = title.toLowerCase(),
-  documentUploadEndpoint
+  documentUploadEndpoint,
+  createRecord
 }: CrmTableProps) {
   const [query, setQuery] = useState("");
   const storageKey = `lightcrm.table.${tableKey}`;
@@ -245,6 +263,10 @@ export function CrmTable({
   const [uploadSummary, setUploadSummary] = useState("");
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [createValues, setCreateValues] = useState<Record<string, string>>({});
+  const [createError, setCreateError] = useState<string | null>(null);
+  const [isCreating, setIsCreating] = useState(false);
 
   useEffect(() => {
     setEditableRows(rows);
@@ -397,6 +419,64 @@ export function CrmTable({
     setEditableRows((current) => updateRowCell(current, row.id, column.id, value.data));
   }, [configuredColumns, filteredRows]);
 
+  const openCreateRecord = useCallback(() => {
+    if (!createRecord) {
+      return;
+    }
+    setCreateValues(Object.fromEntries(createRecord.fields.map((field) => [field.id, ""])));
+    setCreateError(null);
+    setIsCreateOpen(true);
+  }, [createRecord]);
+
+  const submitCreateRecord = useCallback(
+    async (event: FormEvent<HTMLFormElement>) => {
+      event.preventDefault();
+      if (!createRecord) {
+        return;
+      }
+      const missingField = createRecord.fields.find((field) => field.required && !createValues[field.id]?.trim());
+      if (missingField) {
+        setCreateError(`${missingField.label} is required.`);
+        return;
+      }
+      const payload = buildCreateRecordPayload(createValues, createRecord);
+      setIsCreating(true);
+      setCreateError(null);
+      try {
+        const response = await fetch(createRecord.endpoint, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+        const record = (await response.json()) as ApiRecord & { error?: string };
+        if (!response.ok) {
+          throw new Error(record.error ?? "Create record failed.");
+        }
+        const newRow = recordToRow(record, columns);
+        setEditableRows((current) => [
+          {
+            ...newRow,
+            values: {
+              ...newRow.values,
+              ...Object.fromEntries(
+                Object.entries(createValues)
+                  .map(([key, value]) => [key, value.trim()])
+                  .filter(([, value]) => value)
+              )
+            }
+          },
+          ...current
+        ]);
+        setIsCreateOpen(false);
+      } catch (error) {
+        setCreateError(error instanceof Error ? error.message : "Create record failed.");
+      } finally {
+        setIsCreating(false);
+      }
+    },
+    [columns, createRecord, createValues]
+  );
+
   const handleCellClicked = useCallback(
     ([columnIndex, rowIndex]: Item, event: Parameters<NonNullable<ComponentProps<typeof DataEditor>["onCellClicked"]>>[1]) => {
       const column = configuredColumns[columnIndex];
@@ -493,7 +573,13 @@ export function CrmTable({
             <Search size={16} aria-hidden="true" />
             <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search" />
           </label>
-          <button type="button" title="Create row" aria-label="Create row">
+          <button
+            type="button"
+            title={createRecord ? "Create row" : "Create row unavailable"}
+            aria-label="Create row"
+            disabled={!createRecord}
+            onClick={openCreateRecord}
+          >
             <Plus size={16} />
           </button>
           <button
@@ -629,6 +715,49 @@ export function CrmTable({
               ) : null}
             </footer>
           </section>
+        </div>
+      ) : null}
+      {isCreateOpen && createRecord ? (
+        <div className="documentModalBackdrop" role="presentation" onMouseDown={() => setIsCreateOpen(false)}>
+          <form className="documentModal recordCreateForm" onSubmit={submitCreateRecord} onMouseDown={(event) => event.stopPropagation()}>
+            <header>
+              <div>
+                <span>ADD</span>
+                <h2>Add record</h2>
+              </div>
+              <button type="button" onClick={() => setIsCreateOpen(false)} aria-label="Close create form">
+                ×
+              </button>
+            </header>
+            {createRecord.fields.map((field) => (
+              <label key={field.id}>
+                <span>{field.label}</span>
+                {field.multiline ? (
+                  <textarea
+                    rows={3}
+                    value={createValues[field.id] ?? ""}
+                    onChange={(event) => setCreateValues((current) => ({ ...current, [field.id]: event.target.value }))}
+                    required={field.required}
+                  />
+                ) : (
+                  <input
+                    value={createValues[field.id] ?? ""}
+                    onChange={(event) => setCreateValues((current) => ({ ...current, [field.id]: event.target.value }))}
+                    required={field.required}
+                  />
+                )}
+              </label>
+            ))}
+            {createError ? <p className="documentUploadError">{createError}</p> : null}
+            <footer>
+              <button type="button" onClick={() => setIsCreateOpen(false)}>
+                Cancel
+              </button>
+              <button type="submit" disabled={isCreating}>
+                {isCreating ? "Creating" : "Create"}
+              </button>
+            </footer>
+          </form>
         </div>
       ) : null}
       {uploadTarget ? (

@@ -1,4 +1,4 @@
-import type { CrmTableColumn, CrmTableRow } from "@lightcrm/ui";
+import type { CreateRecordConfig, CrmTableColumn, CrmTableRow } from "@lightcrm/ui";
 
 export type TableDefinition = {
   title: string;
@@ -6,6 +6,7 @@ export type TableDefinition = {
   columns: CrmTableColumn[];
   rows: CrmTableRow[];
   tableKey?: string;
+  createRecord?: CreateRecordConfig;
 };
 
 export const tables: Record<string, TableDefinition> = {
@@ -21,6 +22,17 @@ export const tables: Record<string, TableDefinition> = {
       { id: "sourceChannel", title: "Source", width: 140, defaultVisible: false },
       { id: "notes", title: "Notes", width: 260, mobilePriority: 6 }
     ],
+    createRecord: {
+      endpoint: "/api/crm/clients/upsert",
+      workspaceId: "default",
+      fields: [
+        { id: "name", label: "Name", required: true },
+        { id: "company", label: "Company" },
+        { id: "email", label: "Email" },
+        { id: "phone", label: "Phone" },
+        { id: "notes", label: "Notes", multiline: true }
+      ]
+    },
     rows: [
       { id: "1", values: { name: "Ada Lovelace", company: "Analytical Studio", email: "ada@example.com", phone: "+33 600 000 001", status: "active", sourceChannel: "referral", notes: "Prefers WhatsApp" } },
       { id: "2", values: { name: "Grace Hopper", company: "Compiler Works", email: "grace@example.com", phone: "+33 600 000 002", status: "warm", sourceChannel: "website", notes: "Interested in June rollout" } }
@@ -53,6 +65,30 @@ export const tables: Record<string, TableDefinition> = {
       { id: "rawInput", title: "Raw input", width: 320, defaultVisible: false },
       { id: "notes", title: "All notes", width: 320, defaultVisible: false }
     ],
+    createRecord: {
+      endpoint: "/api/crm/leads/upsert",
+      workspaceId: "default",
+      payloadMap: { project: "company" },
+      noteFields: {
+        project: "Project",
+        area: "Area",
+        description: "Description",
+        interest: "Interest",
+        urgency: "Urgency",
+        todo: "Todo",
+        address: "Address"
+      },
+      fields: [
+        { id: "name", label: "Lead name", required: true },
+        { id: "project", label: "Project" },
+        { id: "area", label: "Area" },
+        { id: "description", label: "Description", multiline: true },
+        { id: "phone", label: "Phone" },
+        { id: "email", label: "Email" },
+        { id: "address", label: "Address" },
+        { id: "todo", label: "Todo" }
+      ]
+    },
     rows: [
       {
         id: "1",
@@ -124,6 +160,17 @@ export const tables: Record<string, TableDefinition> = {
       { id: "linkedinUrl", title: "LinkedIn", width: 220 },
       { id: "status", title: "Status", width: 130, mobilePriority: 2 }
     ],
+    createRecord: {
+      endpoint: "/api/crm/cold-targets/upsert",
+      workspaceId: "default",
+      fields: [
+        { id: "name", label: "Name", required: true },
+        { id: "company", label: "Company" },
+        { id: "role", label: "Role" },
+        { id: "email", label: "Email" },
+        { id: "linkedinUrl", label: "LinkedIn" }
+      ]
+    },
     rows: [
       { id: "1", values: { name: "Maya Ops", company: "Bright Supply", role: "COO", email: "maya@example.com", linkedinUrl: "linkedin.com/in/maya", status: "queued" } },
       { id: "2", values: { name: "Leo Founder", company: "Small SaaS", role: "Founder", email: "leo@example.com", linkedinUrl: "linkedin.com/in/leo", status: "new" } }

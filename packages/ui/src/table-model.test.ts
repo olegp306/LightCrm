@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
   applyTablePreferences,
+  buildCreateRecordPayload,
   compactDocumentTitle,
   documentExtensionLabel,
+  recordToRow,
   recordsToRows,
   sortRows,
   toCsv,
@@ -73,6 +75,39 @@ describe("table-model", () => {
         status: "new",
         documents: [document]
       }
+    });
+  });
+
+  it("maps a single API record to a table row", () => {
+    expect(recordToRow({ id: "lead-1", name: "Lead Person", status: "new" }, columns)).toMatchObject({
+      id: "lead-1",
+      values: {
+        name: "Lead Person",
+        status: "new"
+      }
+    });
+  });
+
+  it("builds a create payload with mapped fields and note fields", () => {
+    expect(
+      buildCreateRecordPayload(
+        {
+          name: " Максим ",
+          project: "Дом",
+          description: " 140 m2 ",
+          phone: null
+        },
+        {
+          workspaceId: "workspace-1",
+          payloadMap: { project: "company" },
+          noteFields: { project: "Project", description: "Description" }
+        }
+      )
+    ).toEqual({
+      workspaceId: "workspace-1",
+      name: "Максим",
+      company: "Дом",
+      notes: "Project: Дом\n\nDescription: 140 m2"
     });
   });
 
