@@ -43,11 +43,12 @@ export const tables: Record<string, TableDefinition> = {
   leads: {
     title: "Leads",
     description: "Potential opportunities, optionally linked to client records.",
-    tableKey: "leads.v2",
+    tableKey: "leads.v3",
     archiveEntity: "lead",
     columns: [
       { id: "client.name", title: "Client", width: 190, mobilePriority: 1, group: "Client" },
       { id: "project", title: "Project", width: 240, mobilePriority: 2 },
+      { id: "calendar", title: "Calendar", width: 260, mobilePriority: 3, valueKind: "calendar" },
       { id: "area", title: "Area", width: 120, mobilePriority: 3 },
       { id: "description", title: "Description", width: 280, mobilePriority: 4 },
       { id: "documents", title: "Documents", width: 300, mobilePriority: 5, valueKind: "documents" },
@@ -98,6 +99,17 @@ export const tables: Record<string, TableDefinition> = {
         values: {
           "client.name": "Ada Lovelace",
           project: "Northwind house",
+          calendar: [
+            {
+              id: "sample-event-northwind",
+              kind: "event",
+              title: "Northwind intro call",
+              startsAt: "2026-06-09T09:00:00.000Z",
+              endsAt: "2026-06-09T10:00:00.000Z",
+              status: "local",
+              sourceChannel: "crm"
+            }
+          ],
           area: "140 m2",
           description: "Planning request",
           interest: "hot",

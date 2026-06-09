@@ -41,7 +41,7 @@ export type CrmTableColumn = {
   defaultVisible?: boolean;
   mobilePriority?: number;
   group?: string;
-  valueKind?: "text" | "link" | "documents";
+  valueKind?: "text" | "link" | "documents" | "calendar";
 };
 
 export type DocumentCellItem = {
@@ -56,8 +56,19 @@ export type DocumentCellItem = {
 };
 
 export type DocumentCellValue = DocumentCellItem[];
+export type CalendarCellItem = {
+  id: string;
+  kind: "reminder" | "event";
+  title: string;
+  startsAt: string;
+  endsAt: string | null;
+  status: string | null;
+  sourceChannel: string | null;
+};
 
-export type CrmTableCellValue = string | number | null | DocumentCellValue;
+export type CalendarCellValue = CalendarCellItem[];
+
+export type CrmTableCellValue = string | number | null | DocumentCellValue | CalendarCellValue;
 
 export type CrmTableRow = {
   id: string;
@@ -94,6 +105,11 @@ type DocumentsCustomCell = CustomCell<{
   documents: DocumentCellValue;
   uploadPulse: number;
   uploadingCount: number;
+}>;
+
+type CalendarCustomCell = CustomCell<{
+  kind: "calendar-cell";
+  items: CalendarCellValue;
 }>;
 
 type DocumentCellAction = { type: "open"; index: number } | { type: "upload" } | null;
@@ -225,6 +241,9 @@ const documentIconHeight = 18;
 const documentUploadInset = 8;
 const documentUploadHitWidth = 40;
 const documentUploadPlusSize = 12;
+const calendarChipWidth = 112;
+const calendarChipHeight = 24;
+const calendarChipGap = 3;
 const tableFontScales = [1, 1.2, 1.4] as const;
 
 function documentChipDisplayWidth(documents: DocumentCellValue): number {
@@ -332,8 +351,40 @@ function documentCellDisplayData(documents: DocumentCellValue): string {
   return documents.map((document) => document.fileName).join(", ");
 }
 
+function isDocumentCellItem(value: unknown): value is DocumentCellItem {
+  return Boolean(value && typeof value === "object" && "fileName" in value);
+}
+
+function isCalendarCellItem(value: unknown): value is CalendarCellItem {
+  return Boolean(value && typeof value === "object" && "startsAt" in value && "title" in value);
+}
+
+function calendarTimeLabel(value: string): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+  return date.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+}
+
+function calendarDateLabel(value: string): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+  return date.toLocaleDateString(undefined, { month: "short", day: "2-digit" });
+}
+
+function calendarCellDisplayData(items: CalendarCellValue): string {
+  return items.map((item) => `${calendarDateLabel(item.startsAt)} ${calendarTimeLabel(item.startsAt)} ${item.title}`).join(", ");
+}
+
 function cellDocuments(value: CrmTableCellValue | undefined): DocumentCellValue {
-  return Array.isArray(value) ? value : [];
+  return Array.isArray(value) && value.every(isDocumentCellItem) ? value : [];
+}
+
+function cellCalendarItems(value: CrmTableCellValue | undefined): CalendarCellValue {
+  return Array.isArray(value) && value.every(isCalendarCellItem) ? value : [];
 }
 
 function currentColorTheme(): "light" | "dark" {
@@ -363,7 +414,13 @@ function useDarkModeEnabled(): boolean {
 
 function mobileDisplayValue(value: CrmTableCellValue | undefined): string | number {
   if (Array.isArray(value)) {
-    return value.length > 0 ? value.map((item) => compactDocumentTitle(item.fileName)).join(", ") : "n/a";
+    if (value.every(isDocumentCellItem)) {
+      return value.length > 0 ? value.map((item) => compactDocumentTitle(item.fileName)).join(", ") : "n/a";
+    }
+    if (value.every(isCalendarCellItem)) {
+      return value.length > 0 ? calendarCellDisplayData(value) : "n/a";
+    }
+    return "n/a";
   }
   return value ?? "n/a";
 }
@@ -508,6 +565,71 @@ const documentCellRenderer: CustomRenderer<DocumentsCustomCell> = {
         ctx.lineCap = "round";
         ctx.stroke();
       }
+    }
+    ctx.restore();
+  },
+  onPaste: (_value, cellData) => cellData
+};
+
+const calendarCellRenderer: CustomRenderer<CalendarCustomCell> = {
+  kind: GridCellKind.Custom,
+  isMatch: (cell): cell is CalendarCustomCell =>
+    cell.data && typeof cell.data === "object" && "kind" in cell.data && cell.data.kind === "calendar-cell",
+  needsHover: true,
+  draw: (args, cell) => {
+    const { ctx, rect, theme, hoverAmount } = args;
+    const items = cell.data.items.slice(0, 3);
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(rect.x, rect.y, rect.width, rect.height);
+    ctx.clip();
+    if (hoverAmount > 0) {
+      ctx.globalAlpha = hoverAmount;
+      ctx.fillStyle = theme.bgHeaderHovered;
+      ctx.fillRect(rect.x + 1, rect.y + 1, rect.width - 2, rect.height - 2);
+      ctx.globalAlpha = 1;
+    }
+    if (items.length === 0) {
+      ctx.fillStyle = theme.textMedium;
+      ctx.font = `500 ${Math.max(12, fontSizeFromTheme(theme, 13) - 1)}px Inter, sans-serif`;
+      ctx.textAlign = "left";
+      ctx.textBaseline = "middle";
+      ctx.fillText("No events", rect.x + 10, rect.y + rect.height / 2);
+      ctx.restore();
+      return;
+    }
+    let left = rect.x + 8;
+    const top = rect.y + Math.floor((rect.height - calendarChipHeight) / 2);
+    const visibleRight = Math.min(rect.x + rect.width - 8, ctx.canvas.getBoundingClientRect().width);
+    for (const item of items) {
+      if (left + calendarChipWidth > visibleRight) {
+        break;
+      }
+      ctx.fillStyle = theme.bgBubble;
+      ctx.strokeStyle = item.kind === "reminder" ? "#b45309" : theme.accentColor;
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.roundRect(left, top, calendarChipWidth, calendarChipHeight, 7);
+      ctx.fill();
+      ctx.stroke();
+
+      ctx.fillStyle = item.kind === "reminder" ? "#b45309" : theme.accentColor;
+      ctx.font = "700 9px Inter, sans-serif";
+      ctx.textAlign = "left";
+      ctx.textBaseline = "middle";
+      ctx.fillText(calendarDateLabel(item.startsAt), left + 7, top + calendarChipHeight / 2, 34);
+
+      ctx.fillStyle = theme.textDark;
+      ctx.font = `500 ${Math.max(11, fontSizeFromTheme(theme, 13) - 2)}px Inter, sans-serif`;
+      ctx.fillText(item.title, left + 42, top + calendarChipHeight / 2, calendarChipWidth - 48);
+      left += calendarChipWidth + calendarChipGap;
+    }
+    if (cell.data.items.length > items.length && left + 30 <= visibleRight) {
+      ctx.fillStyle = theme.textMedium;
+      ctx.font = "700 11px Inter, sans-serif";
+      ctx.textAlign = "left";
+      ctx.textBaseline = "middle";
+      ctx.fillText(`+${cell.data.items.length - items.length}`, left + 2, rect.y + rect.height / 2);
     }
     ctx.restore();
   },
@@ -714,6 +836,17 @@ export function CrmTable({
           ? activeDraftRowTheme.flash
           : activeDraftRowTheme.idle
         : undefined;
+      if (column?.valueKind === "calendar") {
+        const items = cellCalendarItems(value);
+        return {
+          kind: GridCellKind.Custom,
+          data: { kind: "calendar-cell", items },
+          copyData: calendarCellDisplayData(items),
+          allowOverlay: false,
+          readonly: true,
+          themeOverride
+        };
+      }
       if (column?.valueKind === "documents") {
         const documents = cellDocuments(value);
         return {
@@ -742,10 +875,15 @@ export function CrmTable({
         };
       }
       const displayValue = value;
+      const displayData = Array.isArray(displayValue)
+        ? displayValue.every(isCalendarCellItem)
+          ? calendarCellDisplayData(displayValue)
+          : documentCellDisplayData(cellDocuments(displayValue))
+        : String(displayValue);
       return {
         kind: GridCellKind.Text,
-        data: Array.isArray(displayValue) ? documentCellDisplayData(displayValue) : String(displayValue),
-        displayData: Array.isArray(displayValue) ? documentCellDisplayData(displayValue) : String(displayValue),
+        data: displayData,
+        displayData,
         allowOverlay: true,
         readonly: false,
         themeOverride,
@@ -1067,7 +1205,15 @@ export function CrmTable({
     ([columnIndex, rowIndex]: Item, event: Parameters<NonNullable<ComponentProps<typeof DataEditor>["onCellClicked"]>>[1]) => {
       const column = configuredColumns[columnIndex];
       const row = filteredRows[rowIndex];
-      if (!column || !row || column.valueKind !== "documents") {
+      if (!column || !row) {
+        return;
+      }
+      if (column.valueKind === "calendar") {
+        event.preventDefault();
+        window.location.assign(`/today?leadId=${encodeURIComponent(row.id)}`);
+        return;
+      }
+      if (column.valueKind !== "documents") {
         return;
       }
       event.preventDefault();
@@ -1164,7 +1310,7 @@ export function CrmTable({
                     ...row,
                     values: {
                       ...row.values,
-                      documents: [...(Array.isArray(row.values.documents) ? row.values.documents : []), ...uploaded]
+                      documents: [...cellDocuments(row.values.documents), ...uploaded]
                     }
                   }
                 : row
@@ -1444,7 +1590,7 @@ export function CrmTable({
           onRowAppended={appendInlineRow}
           onCellEdited={([columnIndex, rowIndex], value) => editCell(columnIndex, rowIndex, value)}
           onCellClicked={handleCellClicked}
-          customRenderers={[documentCellRenderer]}
+          customRenderers={[documentCellRenderer, calendarCellRenderer]}
           drawCell={drawCell}
           getGroupDetails={(groupName) =>
             groupName === "Client"

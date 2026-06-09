@@ -1,4 +1,12 @@
-import type { CrmTableCellValue, CrmTableColumn, CrmTableRow, DocumentCellItem, DocumentCellValue } from "./CrmTable";
+import type {
+  CalendarCellItem,
+  CalendarCellValue,
+  CrmTableCellValue,
+  CrmTableColumn,
+  CrmTableRow,
+  DocumentCellItem,
+  DocumentCellValue
+} from "./CrmTable";
 
 export type SortDirection = "asc" | "desc";
 
@@ -79,6 +87,35 @@ export function normalizeDocumentCellValue(value: unknown): DocumentCellValue {
   });
 }
 
+export function normalizeCalendarCellValue(value: unknown): CalendarCellValue {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value.flatMap((item): CalendarCellItem[] => {
+    if (!isRecord(item)) {
+      return [];
+    }
+    const id = optionalString(item.id);
+    const kind = optionalString(item.kind);
+    const title = optionalString(item.title);
+    const startsAt = optionalString(item.startsAt);
+    if (!id || !title || !startsAt || (kind !== "reminder" && kind !== "event")) {
+      return [];
+    }
+    return [
+      {
+        id,
+        kind,
+        title,
+        startsAt,
+        endsAt: optionalString(item.endsAt),
+        status: optionalString(item.status),
+        sourceChannel: optionalString(item.sourceChannel)
+      }
+    ];
+  });
+}
+
 export function formatTableValue(value: unknown): CrmTableCellValue {
   if (value === null || value === undefined) {
     return null;
@@ -101,7 +138,13 @@ export function recordToRow(record: ApiRecord, columns: CrmTableColumn[]): CrmTa
     values: Object.fromEntries(
       columns.map((column) => {
         const value = valueAtPath(record, column.id);
-        return [column.id, column.valueKind === "documents" ? normalizeDocumentCellValue(value) : formatTableValue(value)];
+        if (column.valueKind === "documents") {
+          return [column.id, normalizeDocumentCellValue(value)];
+        }
+        if (column.valueKind === "calendar") {
+          return [column.id, normalizeCalendarCellValue(value)];
+        }
+        return [column.id, formatTableValue(value)];
       })
     )
   };
@@ -243,7 +286,11 @@ export function compactDocumentTitle(fileName: string, maxLength = 20): string {
 }
 
 function csvEscape(value: CrmTableCellValue | undefined): string {
-  const text = Array.isArray(value) ? value.map((item) => item.fileName).join("; ") : String(value ?? "");
+  const text = Array.isArray(value)
+    ? value
+        .map((item) => ("fileName" in item ? item.fileName : `${item.startsAt} ${item.title}`))
+        .join("; ")
+    : String(value ?? "");
   if (/[",\r\n]/.test(text)) {
     return `"${text.replaceAll('"', '""')}"`;
   }

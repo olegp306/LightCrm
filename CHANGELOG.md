@@ -2,6 +2,39 @@
 
 All notable LightCrm releases are documented here. Starting with `0.2.0`, every version bump must include a changelog entry.
 
+## 0.3.0 - 2026-06-09
+
+### Project Snapshot
+
+LightCrm now has the first operational calendar layer. The calendar is treated as a CRM scheduling surface rather than only a raw table: reminders and CRM calendar events can be viewed together on Today, and lead rows can expose their own upcoming calendar work directly inside the Leads table.
+
+### Added
+
+- Added `/api/crm/calendar-feed`, a normalized read-model API that combines `Reminder` and `CalendarEvent` records into one calendar feed.
+- Added support for calendar feed filtering by `leadId`, `clientId`, `coldTargetId`, `from`, and `to`.
+- Added related-record resolution in the calendar feed, including related entity type, id, display label, and href.
+- Added a dedicated `CrmCalendar` client component with Month, Week, Day, and Agenda views.
+- Replaced the `/today` table with a unified operational calendar for reminders, scheduled events, Telegram intake, and LangGraph agent work.
+- Added query-filtered Today calendars such as `/today?leadId=<id>`.
+- Added a `calendar` table value kind in the UI package.
+- Added a compact calendar-cell renderer for the Leads table, showing upcoming lead events/reminders as small chips.
+- Added calendar-feed enrichment to live table loading so lead rows can display related calendar work.
+- Added a calendar implementation plan at `docs/superpowers/plans/2026-06-09-crm-calendar-layer.md`.
+
+### Changed
+
+- Kept `/calendar` as the raw editable calendar-event table while `/today` becomes the higher-level schedule view.
+- Updated the Leads default table key to `leads.v3` so the new Calendar column appears in the default column order.
+- Improved table value handling so document arrays and calendar arrays are normalized, displayed, exported, and rendered separately.
+
+### Verification
+
+- `pnpm --filter @lightcrm/ui typecheck`
+- `pnpm --filter @lightcrm/web typecheck`
+- `pnpm --filter @lightcrm/ui test`
+- `pnpm build`
+- Local `/leads`, `/today?leadId=seed_lead_nora`, and `/api/crm/calendar-feed` routes respond successfully on the development server.
+
 ## 0.2.0 - 2026-06-09
 
 ### Project Snapshot
