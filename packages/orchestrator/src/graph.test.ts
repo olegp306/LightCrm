@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { runCrmOrchestration } from "./graph";
+import { LANGGRAPH_PRESETS } from "./settings";
 
 describe("runCrmOrchestration", () => {
   it("prioritizes explicit new lead intent over name similarity", async () => {
@@ -90,5 +91,45 @@ describe("runCrmOrchestration", () => {
       risk: "auto"
     });
     expect(result.facts.dueAt).toBe("2026-06-08T10:00:00.000Z");
+  });
+
+  it("applies a cautious runtime setting without a code change", async () => {
+    const result = await runCrmOrchestration(
+      {
+        workspaceId: "workspace-1",
+        messageId: "cautious-lead",
+        author: "Катя",
+        text: "Ещё новый лид: клиент хочет дом"
+      },
+      LANGGRAPH_PRESETS.find((preset) => preset.id === "riskAuditor")
+    );
+
+    expect(result.settings.id).toBe("riskAuditor");
+    expect(result.intent).toBe("create_new_lead");
+    expect(result.actions[0]).toMatchObject({
+      type: "request_review",
+      risk: "review"
+    });
+    expect(result.actions[0]?.reason).toContain("settings");
+  });
+
+  it("uses mail analyst phrases from runtime settings", async () => {
+    const result = await runCrmOrchestration(
+      {
+        workspaceId: "workspace-1",
+        messageId: "mail-thread",
+        author: "Катя",
+        text: "Разбор почты: клиент прислал ответ по проекту и вложил смету"
+      },
+      LANGGRAPH_PRESETS.find((preset) => preset.id === "mailAnalyst")
+    );
+
+    expect(result.settings.id).toBe("mailAnalyst");
+    expect(result.intent).toBe("update_existing_lead");
+    expect(result.actions[0]).toMatchObject({
+      type: "request_review",
+      risk: "review"
+    });
+    expect(result.explanations).toContain("Runtime settings matched mail-analysis wording.");
   });
 });

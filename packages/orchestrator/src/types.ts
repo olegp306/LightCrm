@@ -12,6 +12,37 @@ export type CrmIntent =
 
 export type RiskLevel = "auto" | "review" | "blocked";
 
+export type LangGraphPresetId =
+  | "leadHunter"
+  | "mailAnalyst"
+  | "riskAuditor"
+  | "fastOperator"
+  | "relationshipKeeper";
+
+export type LangGraphRuntimeSettings = {
+  id: LangGraphPresetId | "custom";
+  name: string;
+  description: string;
+  model: string;
+  temperature: number;
+  confidenceThreshold: number;
+  autoCreateLead: boolean;
+  autoCreateReminder: boolean;
+  reviewNameOnlyUpdates: boolean;
+  forceReviewIntents: CrmIntent[];
+  extraNewLeadPhrases: string[];
+  mailAnalysisPhrases: string[];
+  reminderPhrases: string[];
+  enabledNodes: {
+    normalizeMessage: boolean;
+    extractFacts: boolean;
+    classifyIntent: boolean;
+    resolveEntities: boolean;
+    riskCheck: boolean;
+    decideAction: boolean;
+  };
+};
+
 export type MessageEvidence = {
   sourceMessageId: string | null;
   author: string | null;
@@ -55,4 +86,5 @@ export type CrmOrchestrationResult = {
   actions: PlannedCrmAction[];
   risk: RiskLevel;
   explanations: string[];
+  settings: LangGraphRuntimeSettings;
 };

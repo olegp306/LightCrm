@@ -1,5 +1,6 @@
 import { config } from "dotenv";
 import type { IngestLeadIntakeInput, LeadIntakeAttachmentInput, UpsertLeadInput } from "@lightcrm/core";
+import type { CrmOrchestrationInput, CrmOrchestrationResult } from "@lightcrm/orchestrator";
 import { resolve } from "node:path";
 import {
   handleTelegramUpdate,
@@ -92,6 +93,10 @@ async function ingestLeadIntake(input: IngestLeadIntakeInput) {
   return crmCall<{ documents?: unknown[]; summary?: string }>("/api/crm/lead-intake", input);
 }
 
+async function orchestrate(input: CrmOrchestrationInput) {
+  return crmCall<CrmOrchestrationResult>("/api/crm/orchestrator/dry-run", input);
+}
+
 async function prepareAttachment(input: PrepareTelegramAttachmentInput): Promise<LeadIntakeAttachmentInput> {
   const fileInfo = await getFile(input.attachment.fileId);
   const bytes = await downloadTelegramFile(fileInfo.file_path);
@@ -122,6 +127,7 @@ async function runPolling() {
           allowedChatIds,
           workspaceId,
           sendMessage,
+          orchestrate,
           createLead,
           ingestLeadIntake,
           prepareAttachment

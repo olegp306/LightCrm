@@ -1,4 +1,13 @@
-import type { CrmIntent, CrmOrchestrationInput, ExtractedFacts, MessageEvidence, PlannedCrmAction, RiskLevel } from "./types";
+import { DEFAULT_LANGGRAPH_SETTINGS } from "./settings";
+import type {
+  CrmIntent,
+  CrmOrchestrationInput,
+  ExtractedFacts,
+  LangGraphRuntimeSettings,
+  MessageEvidence,
+  PlannedCrmAction,
+  RiskLevel
+} from "./types";
 
 const newLeadPhrases = [
   "новый клиент",
@@ -56,13 +65,20 @@ export function createEvidence(input: CrmOrchestrationInput, normalizedText: str
   };
 }
 
-export function classifyIntentByRules(text: string): CrmIntent {
+function includesAnyPhrase(normalizedText: string, phrases: string[]): boolean {
+  return phrases.some((phrase) => normalizedText.includes(phrase.toLowerCase()));
+}
+
+export function classifyIntentByRules(text: string, settings: LangGraphRuntimeSettings = DEFAULT_LANGGRAPH_SETTINGS): CrmIntent {
   const normalized = normalizeForRules(text);
   if (negatedNewLeadPatterns.some((pattern) => pattern.test(normalized))) {
     return "clarification";
   }
-  if (newLeadPhrases.some((phrase) => normalized.includes(phrase))) {
+  if (includesAnyPhrase(normalized, [...newLeadPhrases, ...settings.extraNewLeadPhrases])) {
     return "create_new_lead";
+  }
+  if (includesAnyPhrase(normalized, settings.mailAnalysisPhrases)) {
+    return "update_existing_lead";
   }
   if (riskyPhrases.some((phrase) => normalized.includes(phrase)) && /удал|delete|undo|отмени/.test(normalized)) {
     return "delete_or_undo";
@@ -70,7 +86,7 @@ export function classifyIntentByRules(text: string): CrmIntent {
   if (/имя клиента\s*[-:]/i.test(text)) {
     return "update_contact";
   }
-  if (/понедельник|фоллоу|follow|напомни|встреч/i.test(text)) {
+  if (/понедельник|фоллоу|follow|напомни|встреч/i.test(text) || includesAnyPhrase(normalized, settings.reminderPhrases)) {
     return "create_reminder";
   }
   if (/коммерческое предложение|offer|кп/i.test(text)) {
@@ -114,12 +130,26 @@ export function extractFactsByRules(input: CrmOrchestrationInput, normalizedText
   };
 }
 
-export function riskCheck(intent: CrmIntent, facts: ExtractedFacts, text: string): { risk: RiskLevel; reason: string } {
+export function riskCheck(
+  intent: CrmIntent,
+  facts: ExtractedFacts,
+  text: string,
+  settings: LangGraphRuntimeSettings = DEFAULT_LANGGRAPH_SETTINGS
+): { risk: RiskLevel; reason: string } {
   const normalized = normalizeForRules(text);
+  if (settings.forceReviewIntents.includes(intent)) {
+    return { risk: "review", reason: `Intent ${intent} is forced to review by runtime settings.` };
+  }
+  if (intent === "create_new_lead" && !settings.autoCreateLead) {
+    return { risk: "review", reason: "Auto lead creation is disabled by runtime settings." };
+  }
+  if (intent === "create_reminder" && !settings.autoCreateReminder) {
+    return { risk: "review", reason: "Auto reminder creation is disabled by runtime settings." };
+  }
   if (intent === "delete_or_undo" || intent === "generate_offer") {
     return { risk: "review", reason: "Risky CRM action requires human confirmation." };
   }
-  if (intent === "update_contact" && facts.contactName && normalized.startsWith("имя клиента")) {
+  if (settings.reviewNameOnlyUpdates && intent === "update_contact" && facts.contactName && normalized.startsWith("имя клиента")) {
     return { risk: "review", reason: "Name-only update can attach a person to the wrong recent lead." };
   }
   if (intent === "unknown") {
@@ -127,6 +157,9 @@ export function riskCheck(intent: CrmIntent, facts: ExtractedFacts, text: string
   }
   if (intent === "clarification") {
     return { risk: "review", reason: "Message negated a new-lead interpretation and needs human review." };
+  }
+  if (settings.confidenceThreshold >= 0.82) {
+    return { risk: "review", reason: "High confidence threshold keeps this action in review." };
   }
   return { risk: "auto", reason: "Low-risk CRM action." };
 }
@@ -178,4 +211,15 @@ export function newLeadExplanation(text: string): string | null {
   return newLeadPhrases.some((phrase) => normalized.includes(phrase))
     ? "Explicit new-lead phrase wins over similar contact names."
     : null;
+}
+
+export function settingsExplanation(intent: CrmIntent, text: string, settings: LangGraphRuntimeSettings): string | null {
+  const normalized = normalizeForRules(text);
+  if (intent === "update_existing_lead" && includesAnyPhrase(normalized, settings.mailAnalysisPhrases)) {
+    return "Runtime settings matched mail-analysis wording.";
+  }
+  if (intent === "create_new_lead" && includesAnyPhrase(normalized, settings.extraNewLeadPhrases)) {
+    return "Runtime settings matched extra new-lead wording.";
+  }
+  return null;
 }

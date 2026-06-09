@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { DEFAULT_LANGGRAPH_SETTINGS } from "@lightcrm/orchestrator";
 import { formatOrchestrationReply, handleTelegramUpdate, parseAllowedChatIds, uploadTelegramAttachmentToWeb } from "./bot-core";
 
 describe("telegram bot core", () => {
@@ -14,6 +15,7 @@ describe("telegram bot core", () => {
       intent: "create_new_lead",
       risk: "auto",
       explanations: ["Explicit new-lead phrase wins over similar contact names."],
+      settings: DEFAULT_LANGGRAPH_SETTINGS,
       facts: {
         contactName: "Максим Тютюник",
         projectName: null,
@@ -78,6 +80,7 @@ describe("telegram bot core", () => {
       intent: "update_contact",
       risk: "review",
       explanations: [],
+      settings: DEFAULT_LANGGRAPH_SETTINGS,
       facts: {
         contactName: "Максим Тютюник",
         projectName: null,
@@ -129,6 +132,7 @@ describe("telegram bot core", () => {
       intent: "create_new_lead",
       risk: "auto",
       explanations: [],
+      settings: DEFAULT_LANGGRAPH_SETTINGS,
       facts: {
         contactName: "Максим",
         projectName: "дом 140 м2",

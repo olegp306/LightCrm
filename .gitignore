@@ -2,6 +2,7 @@ node_modules
 .next
 .next-dev-*.log
 .telegram-bot*.log
+.local-storage
 dist
 coverage
 .turbo

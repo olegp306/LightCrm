@@ -12,6 +12,7 @@ const navItems = [
   ["Clients", "/clients"],
   ["Leads", "/leads"],
   ["Storage", "/storage"],
+  ["Settings", "/settings"],
   ["Cold Targets", "/cold-targets"],
   ["Outreach", "/outreach"],
   ["Calendar", "/calendar"]
