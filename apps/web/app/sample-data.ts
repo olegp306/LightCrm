@@ -1,4 +1,4 @@
-import type { CreateRecordConfig, CrmTableColumn, CrmTableRow } from "@lightcrm/ui";
+import type { ArchiveRecordEntity, CreateRecordConfig, CrmTableColumn, CrmTableRow } from "@lightcrm/ui";
 
 export type TableDefinition = {
   title: string;
@@ -6,6 +6,7 @@ export type TableDefinition = {
   columns: CrmTableColumn[];
   rows: CrmTableRow[];
   tableKey?: string;
+  archiveEntity?: ArchiveRecordEntity;
   createRecord?: CreateRecordConfig;
 };
 
@@ -13,6 +14,7 @@ export const tables: Record<string, TableDefinition> = {
   clients: {
     title: "Clients",
     description: "Warm and confirmed relationships with contact context.",
+    archiveEntity: "client",
     columns: [
       { id: "name", title: "Name", width: 190, mobilePriority: 1 },
       { id: "company", title: "Company", width: 180, mobilePriority: 2 },
@@ -42,6 +44,7 @@ export const tables: Record<string, TableDefinition> = {
     title: "Leads",
     description: "Potential opportunities, optionally linked to client records.",
     tableKey: "leads.v2",
+    archiveEntity: "lead",
     columns: [
       { id: "client.name", title: "Client", width: 190, mobilePriority: 1, group: "Client" },
       { id: "project", title: "Project", width: 240, mobilePriority: 2 },
@@ -68,7 +71,7 @@ export const tables: Record<string, TableDefinition> = {
     createRecord: {
       endpoint: "/api/crm/leads/upsert",
       workspaceId: "default",
-      payloadMap: { project: "company" },
+      payloadMap: { "client.name": "name", project: "company" },
       noteFields: {
         project: "Project",
         area: "Area",
@@ -79,7 +82,7 @@ export const tables: Record<string, TableDefinition> = {
         address: "Address"
       },
       fields: [
-        { id: "name", label: "Lead name", required: true },
+        { id: "client.name", label: "Client", required: true },
         { id: "project", label: "Project" },
         { id: "area", label: "Area" },
         { id: "description", label: "Description", multiline: true },
@@ -152,6 +155,7 @@ export const tables: Record<string, TableDefinition> = {
   coldTargets: {
     title: "Cold Targets",
     description: "Outbound people and companies before a warmer relationship exists.",
+    archiveEntity: "coldTarget",
     columns: [
       { id: "name", title: "Name", width: 190, mobilePriority: 1 },
       { id: "company", title: "Company", width: 180 },
@@ -180,6 +184,7 @@ export const tables: Record<string, TableDefinition> = {
     title: "Storage",
     description: "Document register for client and lead files stored in Cloudflare R2.",
     tableKey: "storage.v1",
+    archiveEntity: "documentFile",
     columns: [
       { id: "shortSummary", title: "Summary", width: 220, mobilePriority: 1 },
       { id: "longSummary", title: "Full summary", width: 360, mobilePriority: 2 },
@@ -247,6 +252,7 @@ export const tables: Record<string, TableDefinition> = {
   today: {
     title: "Today",
     description: "Operational queue for reminders and scheduled work.",
+    archiveEntity: "reminder",
     columns: [
       { id: "title", title: "Task", width: 260 },
       { id: "dueAt", title: "Due", width: 170 },

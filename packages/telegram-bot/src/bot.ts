@@ -1,7 +1,8 @@
 import { config } from "dotenv";
 import type { IngestLeadIntakeInput, LeadIntakeAttachmentInput, UpsertLeadInput } from "@lightcrm/core";
 import type { CrmOrchestrationInput, CrmOrchestrationResult } from "@lightcrm/orchestrator";
-import { resolve } from "node:path";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import {
   handleTelegramUpdate,
   parseAllowedChatIds,
@@ -10,7 +11,7 @@ import {
   uploadTelegramAttachmentToWeb
 } from "./bot-core";
 
-const repoRoot = resolve(process.cwd(), "../..");
+const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
 config({ path: resolve(repoRoot, ".env") });
 
 const token = process.env.TELEGRAM_BOT_TOKEN;

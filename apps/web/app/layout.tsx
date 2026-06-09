@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { ThemeToggle } from "./components/ThemeToggle";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -20,7 +21,15 @@ const navItems = [
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
+      <head>
+        <script
+          dangerouslySetInnerHTML={{
+            __html:
+              "try{var t=localStorage.getItem('lightcrm.colorTheme')||((matchMedia('(prefers-color-scheme: dark)').matches)?'dark':'light');document.documentElement.dataset.theme=t;document.documentElement.style.colorScheme=t;}catch(e){document.documentElement.dataset.theme='light';}"
+          }}
+        />
+      </head>
       <body>
         <div className="appShell">
           <aside className="sidebar">
@@ -37,8 +46,13 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                 </Link>
               ))}
             </nav>
+            <div className="sidebarFooter">
+              <ThemeToggle />
+            </div>
           </aside>
-          <main className="content">{children}</main>
+          <main className="mainShell">
+            <div className="content">{children}</div>
+          </main>
         </div>
         <div id="portal" style={{ position: "fixed", left: 0, top: 0, zIndex: 9999 }} />
       </body>

@@ -19,6 +19,7 @@ export type StoreCrmFileInput = {
   leadId?: string | null;
   clientId?: string | null;
   mimeType?: string | null;
+  storageKeySuffix?: string | null;
   env?: StorageEnv;
 };
 
@@ -90,7 +91,9 @@ function buildStorageKey(input: StoreCrmFileInput): string {
     : input.clientId
       ? `clients/${sanitizeStorageSegment(input.clientId)}`
       : "unlinked";
-  return `workspaces/${sanitizeStorageSegment(input.workspaceId)}/${scope}/${sanitizeStorageSegment(input.fileName)}`;
+  const fileNameSegment = sanitizeStorageSegment(input.fileName);
+  const suffix = input.storageKeySuffix ? `-${sanitizeStorageSegment(input.storageKeySuffix)}` : "";
+  return `workspaces/${sanitizeStorageSegment(input.workspaceId)}/${scope}/${suffix ? `${suffix.replace(/^-/, "")}-` : ""}${fileNameSegment}`;
 }
 
 function hasS3Config(env: StorageEnv): boolean {

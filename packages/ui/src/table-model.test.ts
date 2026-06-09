@@ -38,6 +38,21 @@ describe("table-model", () => {
     ]);
   });
 
+  it("keeps table color preference separate from column layout", () => {
+    expect(
+      applyTablePreferences(columns, {
+        order: ["client.name", "name"],
+        widths: { "client.name": 210 },
+        tableColor: "#bd7b8d"
+      }).map((column) => [column.id, column.width])
+    ).toEqual([
+      ["client.name", 210],
+      ["name", 180],
+      ["status", 120],
+      ["documents", 260]
+    ]);
+  });
+
   it("sorts rows by a selected column in both directions", () => {
     expect(sortRows(rows, { columnId: "name", direction: "asc" }).map((row) => row.id)).toEqual(["1", "2"]);
     expect(sortRows(rows, { columnId: "client.name", direction: "desc" }).map((row) => row.id)).toEqual(["2", "1"]);
@@ -108,6 +123,26 @@ describe("table-model", () => {
       name: "Максим",
       company: "Дом",
       notes: "Project: Дом\n\nDescription: 140 m2"
+    });
+  });
+
+  it("maps dotted create fields when a visible linked column is used as the entry point", () => {
+    expect(
+      buildCreateRecordPayload(
+        {
+          "client.name": "Katya Client",
+          project: "House brief"
+        },
+        {
+          payloadMap: { "client.name": "name", project: "company" },
+          noteFields: { project: "Project" }
+        }
+      )
+    ).toEqual({
+      workspaceId: "default",
+      name: "Katya Client",
+      company: "House brief",
+      notes: "Project: House brief"
     });
   });
 

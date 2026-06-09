@@ -14,9 +14,12 @@ function getMemoryRepository() {
 }
 
 export function getCrm() {
-  const repository = process.env.DATABASE_URL
-    ? createPrismaCrmRepository(getPrismaClient())
-    : getMemoryRepository();
+  const databaseUrl = process.env.DATABASE_URL;
+  const allowMemoryRepository = process.env.LIGHTCRM_REPOSITORY === "memory" || process.env.NODE_ENV === "test";
+  if (!databaseUrl && !allowMemoryRepository) {
+    throw new Error("DATABASE_URL is required. Set LIGHTCRM_REPOSITORY=memory only for explicit in-memory testing.");
+  }
+  const repository = databaseUrl ? createPrismaCrmRepository(getPrismaClient()) : getMemoryRepository();
   return createCrmService(repository);
 }
 

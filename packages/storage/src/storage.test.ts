@@ -45,6 +45,27 @@ describe("crm storage", () => {
     await expect(readFile(join(tempDir, stored.storageKey))).resolves.toEqual(Buffer.from([1, 2, 3]));
   });
 
+  it("keeps the display file name while adding an optional unique storage suffix", async () => {
+    tempDir = await mkdtemp(join(tmpdir(), "lightcrm-storage-"));
+
+    const stored = await storeCrmFile({
+      bytes: new Uint8Array([4, 5, 6]),
+      fileName: "photo.png",
+      workspaceId: "workspace-1",
+      leadId: "lead-1",
+      mimeType: "image/png",
+      storageKeySuffix: "batch-1",
+      env: {
+        STORAGE_PROVIDER: "local",
+        LOCAL_STORAGE_DIR: tempDir
+      }
+    });
+
+    expect(stored.fileName).toBe("photo.png");
+    expect(stored.storageKey).toBe("workspaces/workspace-1/leads/lead-1/batch-1-photo.png");
+    await expect(readFile(join(tempDir, stored.storageKey))).resolves.toEqual(Buffer.from([4, 5, 6]));
+  });
+
   it("rejects sibling paths that only share the storage root prefix", () => {
     expect(isPathInsideRoot("C:\\data\\.local-storage", "C:\\data\\.local-storage\\file.txt")).toBe(true);
     expect(isPathInsideRoot("C:\\data\\.local-storage", "C:\\data\\.local-storage-evil\\secret.txt")).toBe(false);

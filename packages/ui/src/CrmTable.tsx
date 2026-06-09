@@ -4,16 +4,20 @@ import "@glideapps/glide-data-grid/dist/index.css";
 import {
   DataEditor,
   GridCellKind,
+  CompactSelection,
   type CustomCell,
   type CustomRenderer,
+  type DataEditorRef,
   type GridCell,
   type GridColumn,
   type GridMouseEventArgs,
-  type Item
+  type GridSelection,
+  type Item,
+  type Theme
 } from "@glideapps/glide-data-grid";
-import { Check, Columns3, Download, Plus, Search } from "lucide-react";
-import type { ComponentProps, FormEvent } from "react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Check, Columns3, Download, Merge, Palette, Plus, Search, Trash2, X } from "lucide-react";
+import type { ChangeEvent, ComponentProps, FormEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   applyTablePreferences,
   buildCreateRecordPayload,
@@ -24,6 +28,7 @@ import {
   toCsv,
   updateRowCell,
   type ApiRecord,
+  type CreateRecordFieldValue,
   type CreateRecordPayloadConfig,
   type TablePreferences,
   type TableSort
@@ -47,6 +52,7 @@ export type DocumentCellItem = {
   downloadUrl: string | null;
   mimeType: string | null;
   sizeBytes: number | null;
+  createdAt?: string | null;
 };
 
 export type DocumentCellValue = DocumentCellItem[];
@@ -70,6 +76,8 @@ export type CreateRecordConfig = CreateRecordPayloadConfig & {
   fields: CreateRecordField[];
 };
 
+export type ArchiveRecordEntity = "client" | "lead" | "coldTarget" | "reminder" | "documentFile";
+
 export type CrmTableProps = {
   title: string;
   description: string;
@@ -77,21 +85,31 @@ export type CrmTableProps = {
   rows: CrmTableRow[];
   tableKey?: string;
   documentUploadEndpoint?: string;
+  archiveEntity?: ArchiveRecordEntity;
   createRecord?: CreateRecordConfig;
 };
 
 type DocumentsCustomCell = CustomCell<{
   kind: "documents-cell";
   documents: DocumentCellValue;
+  uploadPulse: number;
+  uploadingCount: number;
 }>;
 
 type DocumentCellAction = { type: "open"; index: number } | { type: "upload" } | null;
+type DocumentUploadTarget = {
+  rowId: string;
+  files: File[];
+};
+
+type BulkActionDialog = "delete" | "merge" | null;
 
 function defaultPreferences(columns: CrmTableColumn[]): TablePreferences {
   return {
     order: columns.map((column) => column.id),
     widths: Object.fromEntries(columns.map((column) => [column.id, column.width ?? 160])),
-    hidden: columns.filter((column) => column.defaultVisible === false).map((column) => column.id)
+    hidden: columns.filter((column) => column.defaultVisible === false).map((column) => column.id),
+    tableColor: defaultTableColor
   };
 }
 
@@ -126,39 +144,185 @@ function openTableLink(href: string) {
   window.open(href, "_blank", "noopener,noreferrer");
 }
 
-const relatedTableTheme = {
-  bgCell: "#edf8f2",
-  bgCellMedium: "#e2f2ea",
-  textDark: "#12352a",
-  textMedium: "#2f6b55"
-};
+const defaultTableColor = "#4da377";
 
-const relatedTableHeaderTheme = {
-  bgHeader: "#e1f2e9",
-  bgHeaderHovered: "#d3eadf",
-  textGroupHeader: "#0f6b46",
-  textHeader: "#0f6b46"
-};
+function hexToRgb(hex: string): { r: number; g: number; b: number } {
+  const normalized = hex.replace("#", "").trim();
+  const value = normalized.length === 3 ? normalized.split("").map((char) => `${char}${char}`).join("") : normalized;
+  const parsed = Number.parseInt(value, 16);
+  if (!Number.isFinite(parsed) || value.length !== 6) {
+    return { r: 77, g: 163, b: 119 };
+  }
+  return {
+    r: (parsed >> 16) & 255,
+    g: (parsed >> 8) & 255,
+    b: parsed & 255
+  };
+}
+
+function colorWithAlpha(hex: string, alpha: number): string {
+  const { r, g, b } = hexToRgb(hex);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
+function contrastTextColor(hex: string): string {
+  const { r, g, b } = hexToRgb(hex);
+  const luminance = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
+  return luminance > 0.55 ? "#1f3329" : "#f7fffb";
+}
+
+function relatedTableHeaderTheme(color: string, isDarkMode: boolean): Partial<Theme> {
+  return {
+    bgHeader: colorWithAlpha(color, isDarkMode ? 0.18 : 0.16),
+    bgHeaderHovered: colorWithAlpha(color, isDarkMode ? 0.28 : 0.22),
+    textGroupHeader: isDarkMode ? colorWithAlpha(color, 0.95) : colorWithAlpha(color, 0.98),
+    textHeader: isDarkMode ? "#e8f5ef" : "#24352d"
+  };
+}
 
 const groupHeaderHeight = 20;
 const rowMarkerWidth = 34;
-const tableTheme = {
-  headerFontStyle: "600 12px"
+const lightTableTheme: Partial<Theme> = {
+  headerFontStyle: "600 12px",
+  bgCell: "#ffffff",
+  bgCellMedium: "#f7f8fb",
+  bgHeader: "#f7f8fb",
+  bgHeaderHovered: "#eef2f7",
+  bgBubble: "#ffffff",
+  borderColor: "#d9dee8",
+  horizontalBorderColor: "#e5e7ee",
+  textDark: "#172033",
+  textMedium: "#667085",
+  textHeader: "#344054",
+  bgIconHeader: "#667085",
+  accentColor: "#6d63ff",
+  accentLight: "#ebe9ff"
 };
 
-const documentChipWidth = 84;
-const documentChipGap = 8;
-const documentChipHeight = 32;
-const documentUploadWidth = 30;
+const darkTableTheme: Partial<Theme> = {
+  headerFontStyle: "600 12px",
+  bgCell: "#1f1f24",
+  bgCellMedium: "#24242a",
+  bgHeader: "#222228",
+  bgHeaderHovered: "#30303a",
+  bgBubble: "#2a2a31",
+  borderColor: "#3a3a45",
+  horizontalBorderColor: "#34343d",
+  textDark: "#f4f5f8",
+  textMedium: "#b6bac8",
+  textHeader: "#d9dbe5",
+  bgIconHeader: "#8e93a6",
+  accentColor: "#8b8cff",
+  accentLight: "#323257"
+};
 
-function documentCellActionAt(x: number, documents: DocumentCellValue): DocumentCellAction {
-  const documentArea = documents.length * (documentChipWidth + documentChipGap);
-  if (x >= documentArea && x <= documentArea + documentUploadWidth) {
+const documentChipWidth = 106;
+const documentIconChipWidth = 26;
+const documentChipGap = 1;
+const documentChipHeight = 24;
+const documentIconWidth = 18;
+const documentIconHeight = 18;
+const documentUploadInset = 8;
+const documentUploadHitWidth = 40;
+const documentUploadPlusSize = 12;
+const tableFontScales = [1, 1.2, 1.4] as const;
+
+function documentChipDisplayWidth(documents: DocumentCellValue): number {
+  return documents.length > 3 ? documentIconChipWidth : documentChipWidth;
+}
+
+function normalizedFontScale(value: number | undefined): (typeof tableFontScales)[number] {
+  return tableFontScales.find((scale) => Math.abs(scale - (value ?? 1)) < 0.01) ?? 1;
+}
+
+function nextFontScale(value: number | undefined): (typeof tableFontScales)[number] {
+  const currentScale = normalizedFontScale(value);
+  const currentIndex = tableFontScales.indexOf(currentScale);
+  return tableFontScales[(currentIndex + 1) % tableFontScales.length];
+}
+
+function tableFontLabel(scale: number): string {
+  return `${Math.round(scale * 100)}%`;
+}
+
+function tableFontIcon(scale: number): string {
+  if (scale >= 1.39) {
+    return "A+";
+  }
+  if (scale >= 1.19) {
+    return "A";
+  }
+  return "a";
+}
+
+function selectedRowIndexes(selection: GridSelection, rowCount: number): number[] {
+  return selection.rows.toArray().filter((index) => index >= 0 && index < rowCount);
+}
+
+function rowSelection(indexes: number[]): GridSelection {
+  const uniqueIndexes = Array.from(new Set(indexes)).sort((left, right) => left - right);
+  return {
+    columns: CompactSelection.empty(),
+    rows: uniqueIndexes.reduce((selection, index) => selection.add(index), CompactSelection.empty())
+  };
+}
+
+function readSavedTableColor(key: string): string {
+  try {
+    const saved = window.localStorage.getItem(key);
+    if (!saved) {
+      return defaultTableColor;
+    }
+    const parsed = JSON.parse(saved) as TablePreferences;
+    return parsed.tableColor ?? defaultTableColor;
+  } catch {
+    return defaultTableColor;
+  }
+}
+
+function scaledTableTheme(theme: Partial<Theme>, scale: number): Partial<Theme> {
+  const cellFontSize = Math.round(13 * scale);
+  const headerFontSize = Math.round(12 * scale);
+  return {
+    ...theme,
+    baseFontStyle: `${cellFontSize}px`,
+    editorFontSize: `${cellFontSize}px`,
+    headerFontStyle: `600 ${headerFontSize}px`
+  };
+}
+
+function fontSizeFromTheme(theme: { baseFontStyle?: string }, fallback: number): number {
+  const fontSize = Number.parseFloat(theme.baseFontStyle ?? "");
+  return Number.isFinite(fontSize) ? fontSize : fallback;
+}
+
+function emptySelection(): GridSelection {
+  return {
+    columns: CompactSelection.empty(),
+    rows: CompactSelection.empty()
+  };
+}
+
+function cellSelection(cell: Item): GridSelection {
+  return {
+    columns: CompactSelection.empty(),
+    rows: CompactSelection.empty(),
+    current: {
+      cell,
+      range: { x: cell[0], y: cell[1], width: 1, height: 1 },
+      rangeStack: []
+    }
+  };
+}
+
+function documentCellActionAt(x: number, documents: DocumentCellValue, uploadStart: number): DocumentCellAction {
+  if (x >= uploadStart) {
     return { type: "upload" };
   }
-  const index = Math.floor(x / (documentChipWidth + documentChipGap));
-  const chipStart = index * (documentChipWidth + documentChipGap);
-  if (index >= 0 && index < documents.length && x >= chipStart && x <= chipStart + documentChipWidth) {
+  const chipWidth = documentChipDisplayWidth(documents);
+  const index = Math.floor(x / (chipWidth + documentChipGap));
+  const chipStart = index * (chipWidth + documentChipGap);
+  if (index >= 0 && index < documents.length && x >= chipStart && x <= chipStart + chipWidth) {
     return { type: "open", index };
   }
   return null;
@@ -172,11 +336,77 @@ function cellDocuments(value: CrmTableCellValue | undefined): DocumentCellValue 
   return Array.isArray(value) ? value : [];
 }
 
+function currentColorTheme(): "light" | "dark" {
+  if (typeof document === "undefined") {
+    return "light";
+  }
+  return document.documentElement.dataset.theme === "dark" ? "dark" : "light";
+}
+
+function useDarkModeEnabled(): boolean {
+  const [theme, setTheme] = useState<"light" | "dark">(() => currentColorTheme());
+
+  useEffect(() => {
+    const updateTheme = () => setTheme(currentColorTheme());
+    updateTheme();
+    window.addEventListener("lightcrm:theme-change", updateTheme);
+    const observer = new MutationObserver(updateTheme);
+    observer.observe(document.documentElement, { attributeFilter: ["data-theme"] });
+    return () => {
+      window.removeEventListener("lightcrm:theme-change", updateTheme);
+      observer.disconnect();
+    };
+  }, []);
+
+  return theme === "dark";
+}
+
 function mobileDisplayValue(value: CrmTableCellValue | undefined): string | number {
   if (Array.isArray(value)) {
     return value.length > 0 ? value.map((item) => compactDocumentTitle(item.fileName)).join(", ") : "n/a";
   }
   return value ?? "n/a";
+}
+
+function documentChipTitle(fileName: string): string {
+  const base = fileName.replace(/\.[^.]+$/, "");
+  return base.length <= 10 ? base : `${base.slice(0, 10)}...`;
+}
+
+function formatDocumentCreatedAt(value: string | null | undefined): string | null {
+  if (!value) {
+    return null;
+  }
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+  return date.toLocaleString(undefined, {
+    year: "numeric",
+    month: "short",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit"
+  });
+}
+
+function documentBadgeColor(extension: string): string {
+  if (extension === "PDF") {
+    return "#b42318";
+  }
+  if (extension === "XLS") {
+    return "#15803d";
+  }
+  if (extension === "IMG") {
+    return "#2563eb";
+  }
+  if (extension === "AUD") {
+    return "#7c3aed";
+  }
+  if (extension === "DOC") {
+    return "#1d4ed8";
+  }
+  return "#475467";
 }
 
 const documentCellRenderer: CustomRenderer<DocumentsCustomCell> = {
@@ -186,57 +416,99 @@ const documentCellRenderer: CustomRenderer<DocumentsCustomCell> = {
   needsHover: true,
   needsHoverPosition: true,
   draw: (args, cell) => {
-    const { ctx, rect, theme, hoverX } = args;
+    const { ctx, rect, theme, hoverAmount, hoverX } = args;
     const documents = cell.data.documents;
-    const top = rect.y + Math.max(5, Math.floor((rect.height - documentChipHeight) / 2));
+    const compactDocuments = documents.length > 3;
+    const chipWidth = documentChipDisplayWidth(documents);
+    const top = rect.y + Math.floor((rect.height - documentChipHeight) / 2);
+    const canvasWidth = ctx.canvas.getBoundingClientRect().width;
+    const visibleRight = Math.min(rect.x + rect.width, canvasWidth);
+    const uploadHitLeft = Math.max(rect.x + 8, visibleRight - documentUploadHitWidth - documentUploadInset);
+    const uploadStart = uploadHitLeft - rect.x - 8;
     let left = rect.x + 8;
     ctx.save();
     ctx.beginPath();
     ctx.rect(rect.x, rect.y, rect.width, rect.height);
     ctx.clip();
+    const localX = hoverX === undefined ? -1 : hoverX <= rect.width ? hoverX - 8 : hoverX - rect.x - 8;
+    const uploadHovered = documentCellActionAt(localX, documents, uploadStart)?.type === "upload";
+    if (hoverAmount > 0) {
+      ctx.globalAlpha = hoverAmount;
+      ctx.beginPath();
+      ctx.rect(rect.x + 1, rect.y + 1, rect.width, rect.height - 2);
+      ctx.fillStyle = uploadHovered ? theme.accentLight : theme.bgHeaderHovered;
+      ctx.fill();
+      ctx.globalAlpha = 1;
+    }
     for (const [index, document] of documents.entries()) {
-      const localX = hoverX === undefined ? -1 : hoverX - 8;
-      const action = documentCellActionAt(localX, documents);
+      const action = documentCellActionAt(localX, documents, uploadStart);
       const hovered = action?.type === "open" && action.index === index;
       const extension = documentExtensionLabel(document.fileName, document.mimeType);
-      ctx.fillStyle = hovered ? "#e6f4f1" : "#f8fafc";
-      ctx.strokeStyle = hovered ? "#0f766e" : "#d0d7e2";
-      ctx.lineWidth = 1;
+      ctx.fillStyle = hovered ? theme.bgHeaderHovered : theme.bgBubble;
+      ctx.strokeStyle = hovered ? theme.accentColor : theme.borderColor;
+      ctx.lineWidth = hovered ? 1.15 : 0.85;
       ctx.beginPath();
-      ctx.roundRect(left, top, documentChipWidth, documentChipHeight, 6);
+      ctx.roundRect(left, top, chipWidth, documentChipHeight, 7);
       ctx.fill();
       ctx.stroke();
 
-      ctx.fillStyle = extension === "PDF" ? "#b42318" : extension === "XLS" ? "#15803d" : "#475467";
+      const iconLeft = left + 4;
+      const iconTop = top + Math.floor((documentChipHeight - documentIconHeight) / 2);
+      ctx.fillStyle = documentBadgeColor(extension);
       ctx.beginPath();
-      ctx.roundRect(left + 6, top + 6, 26, 20, 4);
+      ctx.roundRect(iconLeft, iconTop, documentIconWidth, documentIconHeight, 4);
       ctx.fill();
       ctx.fillStyle = "#ffffff";
       ctx.font = "700 8px Inter, sans-serif";
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
-      ctx.fillText(extension.slice(0, 4), left + 19, top + 16);
+      ctx.fillText(extension.slice(0, 3), iconLeft + documentIconWidth / 2, iconTop + documentIconHeight / 2);
 
       ctx.fillStyle = theme.textDark;
-      ctx.font = "500 10px Inter, sans-serif";
+      ctx.font = `500 ${Math.max(12, fontSizeFromTheme(theme, 13) - 1)}px Inter, sans-serif`;
       ctx.textAlign = "left";
-      ctx.fillText(compactDocumentTitle(document.fileName), left + 38, top + 17, documentChipWidth - 42);
-      left += documentChipWidth + documentChipGap;
+      if (!compactDocuments) {
+        const titleLeft = iconLeft + documentIconWidth + 6;
+        ctx.fillText(documentChipTitle(document.fileName), titleLeft, top + documentChipHeight / 2, chipWidth - (titleLeft - left) - 7);
+      }
+      left += chipWidth + documentChipGap;
     }
 
-    const localX = hoverX === undefined ? -1 : hoverX - 8;
-    const uploadHovered = documentCellActionAt(localX, documents)?.type === "upload";
-    ctx.fillStyle = uploadHovered ? "#e6f4f1" : "#ffffff";
-    ctx.strokeStyle = uploadHovered ? "#0f766e" : "#d0d7e2";
-    ctx.beginPath();
-    ctx.roundRect(left, top + 3, 26, 26, 13);
-    ctx.fill();
-    ctx.stroke();
-    ctx.fillStyle = "#0f766e";
-    ctx.font = "600 16px Inter, sans-serif";
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.fillText("+", left + 13, top + 16);
+    if (cell.data.uploadingCount > 0) {
+      const spinnerCenterX = visibleRight - documentUploadInset - documentUploadPlusSize * 0.5;
+      const spinnerCenterY = rect.y + rect.height / 2;
+      const spinnerRadius = 7;
+      const start = cell.data.uploadPulse * Math.PI * 2;
+      ctx.beginPath();
+      ctx.arc(spinnerCenterX, spinnerCenterY, spinnerRadius, start, start + Math.PI * 1.45);
+      ctx.strokeStyle = theme.accentColor;
+      ctx.lineWidth = 2;
+      ctx.lineCap = "round";
+      ctx.stroke();
+      if (cell.data.uploadingCount > 1) {
+        ctx.fillStyle = theme.accentColor;
+        ctx.font = "700 8px Inter, sans-serif";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText(String(cell.data.uploadingCount), spinnerCenterX, spinnerCenterY);
+      }
+    } else if (hoverAmount > 0) {
+      const lineSize = hoverAmount * documentUploadPlusSize;
+      const xTranslate = (1 - hoverAmount) * documentUploadPlusSize * 0.5;
+      const plusCenterX = visibleRight - documentUploadInset - documentUploadPlusSize * 0.5 - xTranslate;
+      const plusCenterY = rect.y + rect.height / 2;
+      if (lineSize > 0) {
+        ctx.beginPath();
+        ctx.moveTo(plusCenterX - lineSize * 0.5, plusCenterY);
+        ctx.lineTo(plusCenterX + lineSize * 0.5, plusCenterY);
+        ctx.moveTo(plusCenterX, plusCenterY - lineSize * 0.5);
+        ctx.lineTo(plusCenterX, plusCenterY + lineSize * 0.5);
+        ctx.lineWidth = uploadHovered ? 2.2 : 2;
+        ctx.strokeStyle = uploadHovered ? theme.accentColor : theme.bgIconHeader;
+        ctx.lineCap = "round";
+        ctx.stroke();
+      }
+    }
     ctx.restore();
   },
   onPaste: (_value, cellData) => cellData
@@ -249,43 +521,142 @@ export function CrmTable({
   rows,
   tableKey = title.toLowerCase(),
   documentUploadEndpoint,
+  archiveEntity,
   createRecord
 }: CrmTableProps) {
   const [query, setQuery] = useState("");
+  const gridRef = useRef<DataEditorRef | null>(null);
+  const gridFrameRef = useRef<HTMLDivElement | null>(null);
   const storageKey = `lightcrm.table.${tableKey}`;
   const [preferences, setPreferences] = useState<TablePreferences>(() => defaultPreferences(columns));
+  const [loadedPreferencesKey, setLoadedPreferencesKey] = useState<string | null>(null);
   const [sort, setSort] = useState<TableSort | null>(null);
+  const [gridSelection, setGridSelection] = useState<GridSelection>(() => emptySelection());
   const [showColumnMenu, setShowColumnMenu] = useState(false);
   const [editableRows, setEditableRows] = useState<CrmTableRow[]>(rows);
-  const [relatedTooltip, setRelatedTooltip] = useState<{ left: number; top: number } | null>(null);
+  const [draftRowIds, setDraftRowIds] = useState<Set<string>>(() => new Set());
+  const [savingDraftIds, setSavingDraftIds] = useState<Set<string>>(() => new Set());
+  const [flashRowId, setFlashRowId] = useState<string | null>(null);
+  const [relatedTooltip, setRelatedTooltip] = useState<{ left: number; top: number; placement: "above" | "below" } | null>(null);
+  const [documentTooltip, setDocumentTooltip] = useState<{ left: number; top: number; document: DocumentCellItem } | null>(null);
   const [previewDocument, setPreviewDocument] = useState<DocumentCellItem | null>(null);
-  const [uploadTarget, setUploadTarget] = useState<{ rowId: string } | null>(null);
-  const [uploadSummary, setUploadSummary] = useState("");
+  const uploadFileInputRef = useRef<HTMLInputElement | null>(null);
+  const [uploadTarget, setUploadTarget] = useState<DocumentUploadTarget | null>(null);
+  const [uploadSummaries, setUploadSummaries] = useState<string[]>([]);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  const [pendingDocumentUploads, setPendingDocumentUploads] = useState<Record<string, number>>({});
+  const [uploadPulse, setUploadPulse] = useState(0);
   const [isUploading, setIsUploading] = useState(false);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [createValues, setCreateValues] = useState<Record<string, string>>({});
   const [createError, setCreateError] = useState<string | null>(null);
   const [isCreating, setIsCreating] = useState(false);
+  const [isColorPickerOpen, setIsColorPickerOpen] = useState(false);
+  const [linkedTableColor, setLinkedTableColor] = useState(defaultTableColor);
+  const [bulkActionDialog, setBulkActionDialog] = useState<BulkActionDialog>(null);
+  const isDarkMode = useDarkModeEnabled();
+  const tableFontScale = normalizedFontScale(preferences.fontScale);
+  const tableColor = preferences.tableColor ?? defaultTableColor;
+  const activeTableTheme = useMemo(
+    () => scaledTableTheme(isDarkMode ? darkTableTheme : lightTableTheme, tableFontScale),
+    [isDarkMode, tableFontScale]
+  );
+  const activeRelatedTableHeaderTheme = useMemo(
+    () => relatedTableHeaderTheme(linkedTableColor, isDarkMode),
+    [isDarkMode, linkedTableColor]
+  );
+  const activeDraftRowTheme = {
+    idle: isDarkMode
+      ? {
+          bgCell: "#2b281f",
+          bgCellMedium: "#443a20",
+          textDark: "#fff3ca",
+          textMedium: "#e1c978"
+        }
+      : {
+          bgCell: "#fffaf0",
+          bgCellMedium: "#fff1bf",
+          textDark: "#172033",
+          textMedium: "#6f4e00"
+        },
+    flash: isDarkMode
+      ? {
+          bgCell: "#343021",
+          bgCellMedium: "#443a20",
+          textDark: "#fff3ca",
+          textMedium: "#e1c978"
+        }
+      : {
+          bgCell: "#fff7d6",
+          bgCellMedium: "#fff1bf",
+          textDark: "#172033",
+          textMedium: "#6f4e00"
+        }
+  };
 
   useEffect(() => {
     setEditableRows(rows);
+    setDraftRowIds(new Set());
+    setSavingDraftIds(new Set());
+    setFlashRowId(null);
   }, [rows]);
 
   useEffect(() => {
+    const hasPendingUploads = Object.values(pendingDocumentUploads).some((count) => count > 0);
+    if (!hasPendingUploads) {
+      setUploadPulse(0);
+      return undefined;
+    }
+    const intervalId = window.setInterval(() => {
+      setUploadPulse((value) => (value + 0.08) % 1);
+    }, 80);
+    return () => window.clearInterval(intervalId);
+  }, [pendingDocumentUploads]);
+
+  useEffect(() => {
+    setLoadedPreferencesKey(null);
     const saved = window.localStorage.getItem(storageKey);
     if (saved) {
       setPreferences({ ...defaultPreferences(columns), ...(JSON.parse(saved) as TablePreferences) });
+      setLoadedPreferencesKey(storageKey);
       return;
     }
     setPreferences(defaultPreferences(columns));
+    setLoadedPreferencesKey(storageKey);
   }, [columns, storageKey]);
 
   useEffect(() => {
+    if (loadedPreferencesKey !== storageKey) {
+      return;
+    }
     window.localStorage.setItem(storageKey, JSON.stringify(preferences));
-  }, [preferences, storageKey]);
+  }, [loadedPreferencesKey, preferences, storageKey]);
+
+  useEffect(() => {
+    if (tableKey === "clients") {
+      setLinkedTableColor(tableColor);
+      return;
+    }
+    setLinkedTableColor(readSavedTableColor("lightcrm.table.clients"));
+  }, [tableColor, tableKey]);
 
   const configuredColumns = useMemo(() => applyTablePreferences(columns, preferences), [columns, preferences]);
+  const createTargetColumnIndex = useMemo(() => {
+    if (!createRecord) {
+      return 0;
+    }
+    const fieldIds = new Set(createRecord.fields.map((field) => field.id));
+    const fieldColumnIndex = configuredColumns.findIndex(
+      (column) => fieldIds.has(column.id) && column.valueKind !== "documents" && column.valueKind !== "link"
+    );
+    if (fieldColumnIndex >= 0) {
+      return fieldColumnIndex;
+    }
+    const editableColumnIndex = configuredColumns.findIndex(
+      (column) => column.valueKind !== "documents" && column.valueKind !== "link"
+    );
+    return Math.max(0, editableColumnIndex);
+  }, [configuredColumns, createRecord]);
   const visibleColumns = useMemo<GridColumn[]>(
     () =>
       configuredColumns.map((column) => ({
@@ -293,9 +664,10 @@ export function CrmTable({
         title: sort?.columnId === column.id ? `${column.title} ${sort.direction === "asc" ? "(asc)" : "(desc)"}` : column.title,
         width: column.width ?? 160,
         group: column.group,
-        hasMenu: true
+        hasMenu: true,
+        themeOverride: column.group === "Client" ? activeRelatedTableHeaderTheme : undefined
       })),
-    [configuredColumns, sort]
+    [activeRelatedTableHeaderTheme, configuredColumns, sort]
   );
   const filteredRows = useMemo(() => {
     const normalized = query.trim().toLowerCase();
@@ -306,18 +678,47 @@ export function CrmTable({
       : editableRows;
     return sortRows(searchedRows, sort);
   }, [editableRows, query, sort]);
+  const selectedIndexes = useMemo(() => selectedRowIndexes(gridSelection, filteredRows.length), [filteredRows.length, gridSelection]);
+  const selectedRows = useMemo(
+    () => selectedIndexes.flatMap((index) => (filteredRows[index] ? [filteredRows[index]] : [])),
+    [filteredRows, selectedIndexes]
+  );
+  const handleGridSelectionChange = useCallback(
+    (nextSelection: GridSelection) => {
+      const nextIndexes = selectedRowIndexes(nextSelection, filteredRows.length);
+      const currentIndexes = selectedRowIndexes(gridSelection, filteredRows.length);
+
+      if (nextIndexes.length === 1 && nextSelection.columns.length === 0) {
+        const nextIndex = nextIndexes[0];
+        const toggledIndexes = currentIndexes.includes(nextIndex)
+          ? currentIndexes.filter((index) => index !== nextIndex)
+          : [...currentIndexes, nextIndex];
+        setGridSelection(rowSelection(toggledIndexes));
+        return;
+      }
+
+      setGridSelection(nextSelection);
+    },
+    [filteredRows.length, gridSelection]
+  );
 
   const getCellContent = useCallback(
     ([col, row]: Item): GridCell => {
       const column = configuredColumns[col];
       const record = filteredRows[row];
       const value = record?.values[String(column?.id)] ?? "";
-      const themeOverride = column?.group === "Client" ? relatedTableTheme : undefined;
+      const isDraftRow = record ? draftRowIds.has(record.id) : false;
+      const isFlashing = record?.id === flashRowId;
+      const themeOverride = isDraftRow
+        ? isFlashing
+          ? activeDraftRowTheme.flash
+          : activeDraftRowTheme.idle
+        : undefined;
       if (column?.valueKind === "documents") {
         const documents = cellDocuments(value);
         return {
           kind: GridCellKind.Custom,
-          data: { kind: "documents-cell", documents },
+          data: { kind: "documents-cell", documents, uploadingCount: pendingDocumentUploads[record?.id ?? ""] ?? 0, uploadPulse },
           copyData: documentCellDisplayData(documents),
           allowOverlay: false,
           readonly: true,
@@ -340,28 +741,66 @@ export function CrmTable({
           }
         };
       }
+      const displayValue = value;
       return {
         kind: GridCellKind.Text,
-        data: Array.isArray(value) ? documentCellDisplayData(value) : String(value),
-        displayData: Array.isArray(value) ? documentCellDisplayData(value) : String(value),
+        data: Array.isArray(displayValue) ? documentCellDisplayData(displayValue) : String(displayValue),
+        displayData: Array.isArray(displayValue) ? documentCellDisplayData(displayValue) : String(displayValue),
         allowOverlay: true,
         readonly: false,
-        themeOverride
+        themeOverride,
+        contentAlign: column?.id === "interest" ? "center" : undefined
       };
     },
-    [configuredColumns, filteredRows]
+    [activeDraftRowTheme, configuredColumns, draftRowIds, filteredRows, pendingDocumentUploads, uploadPulse]
   );
 
   const handleItemHovered = useCallback((args: GridMouseEventArgs) => {
+    const frameBounds = gridFrameRef.current?.getBoundingClientRect();
+    if (!frameBounds) {
+      setRelatedTooltip(null);
+      setDocumentTooltip(null);
+      return;
+    }
     if (args.kind === "group-header" && args.group === "Client") {
+      setDocumentTooltip(null);
       setRelatedTooltip({
-        left: args.bounds.x + Math.min(args.bounds.width / 2, 180),
-        top: args.bounds.y + args.bounds.height + 8
+        left: args.bounds.x - frameBounds.left + args.bounds.width / 2,
+        top: args.bounds.y - frameBounds.top + args.bounds.height + 6,
+        placement: "below"
       });
       return;
     }
+    if (args.kind === "cell") {
+      const column = configuredColumns[args.location[0]];
+      const row = filteredRows[args.location[1]];
+      if (column?.valueKind === "documents" && row) {
+        const documents = cellDocuments(row.values[column.id]);
+        const relativeX =
+          args.localEventX <= args.bounds.width ? args.localEventX - 8 : args.localEventX - args.bounds.x - 8;
+        const visibleRight = Math.min(args.bounds.x + args.bounds.width, window.innerWidth);
+        const uploadStart = Math.max(0, visibleRight - args.bounds.x - documentUploadHitWidth - documentUploadInset - 8);
+        const action = documentCellActionAt(relativeX, documents, uploadStart);
+        if (action?.type === "open") {
+          setRelatedTooltip(null);
+          const hoveredDocument = documents[action.index];
+          if (!hoveredDocument) {
+            setDocumentTooltip(null);
+            return;
+          }
+          const tooltipLeft = args.bounds.x - frameBounds.left + Math.max(130, Math.min(relativeX + 20, args.bounds.width - 130));
+          setDocumentTooltip({
+            left: tooltipLeft,
+            top: Math.max(8, args.bounds.y - frameBounds.top - 8),
+            document: hoveredDocument
+          });
+          return;
+        }
+      }
+    }
     setRelatedTooltip(null);
-  }, []);
+    setDocumentTooltip(null);
+  }, [configuredColumns, filteredRows]);
 
   const toggleColumn = useCallback((columnId: string) => {
     setPreferences((current) => {
@@ -373,6 +812,10 @@ export function CrmTable({
       }
       return { ...current, hidden: [...hidden] };
     });
+  }, []);
+
+  const cycleTableFontScale = useCallback(() => {
+    setPreferences((current) => ({ ...current, fontScale: nextFontScale(current.fontScale) }));
   }, []);
 
   const moveColumn = useCallback((sourceIndex: number, targetIndex: number) => {
@@ -410,23 +853,166 @@ export function CrmTable({
     }
   }, [configuredColumns, resizeColumn]);
 
-  const editCell = useCallback((columnIndex: number, rowIndex: number, value: GridCell) => {
-    const column = configuredColumns[columnIndex];
-    const row = filteredRows[rowIndex];
-    if (!column || !row || (value.kind !== GridCellKind.Text && value.kind !== GridCellKind.Uri)) {
-      return;
-    }
-    setEditableRows((current) => updateRowCell(current, row.id, column.id, value.data));
-  }, [configuredColumns, filteredRows]);
+  const createPayloadValues = useCallback(
+    (row: CrmTableRow): Record<string, CreateRecordFieldValue> => {
+      if (!createRecord) {
+        return {};
+      }
+      return Object.fromEntries(
+        createRecord.fields.map((field) => {
+          const value = row.values[field.id];
+          return [field.id, typeof value === "string" || typeof value === "number" || value === null ? value : null];
+        })
+      );
+    },
+    [createRecord]
+  );
+
+  const saveDraftRow = useCallback(
+    async (row: CrmTableRow) => {
+      if (!createRecord || savingDraftIds.has(row.id)) {
+        return;
+      }
+      const hasRequiredValues = createRecord.fields
+        .filter((field) => field.required)
+        .every((field) => {
+          const value = row.values[field.id];
+          return typeof value === "number" || (typeof value === "string" && value.trim().length > 0);
+        });
+      if (!hasRequiredValues) {
+        return;
+      }
+      setSavingDraftIds((current) => new Set(current).add(row.id));
+      setCreateError(null);
+      try {
+        const payload = buildCreateRecordPayload(createPayloadValues(row), createRecord);
+        const response = await fetch(createRecord.endpoint, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+        const record = (await response.json()) as ApiRecord & { error?: string };
+        if (!response.ok) {
+          throw new Error(record.error ?? "Create record failed.");
+        }
+        const createdRow = recordToRow(record, columns);
+        setEditableRows((current) =>
+          current.map((currentRow) =>
+            currentRow.id === row.id
+              ? {
+                  ...createdRow,
+                  values: {
+                    ...createdRow.values,
+                    ...row.values
+                  }
+                }
+              : currentRow
+          )
+        );
+        setDraftRowIds((current) => {
+          const next = new Set(current);
+          next.delete(row.id);
+          return next;
+        });
+        setFlashRowId(createdRow.id);
+        window.setTimeout(() => setFlashRowId((current) => (current === createdRow.id ? null : current)), 1400);
+      } catch (error) {
+        setCreateError(error instanceof Error ? error.message : "Create record failed.");
+      } finally {
+        setSavingDraftIds((current) => {
+          const next = new Set(current);
+          next.delete(row.id);
+          return next;
+        });
+      }
+    },
+    [columns, createPayloadValues, createRecord, savingDraftIds]
+  );
+
+  const persistEditedRow = useCallback(
+    async (row: CrmTableRow) => {
+      if (!createRecord || row.id.startsWith("draft-")) {
+        return;
+      }
+      const payload = {
+        ...buildCreateRecordPayload(createPayloadValues(row), createRecord),
+        id: row.id
+      };
+      try {
+        const response = await fetch(createRecord.endpoint, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+        const record = (await response.json()) as ApiRecord & { error?: string };
+        if (!response.ok) {
+          throw new Error(record.error ?? "Update record failed.");
+        }
+        setCreateError(null);
+      } catch (error) {
+        setCreateError(error instanceof Error ? error.message : "Update record failed.");
+      }
+    },
+    [createPayloadValues, createRecord]
+  );
+
+  const editCell = useCallback(
+    (columnIndex: number, rowIndex: number, value: GridCell) => {
+      const column = configuredColumns[columnIndex];
+      const row = filteredRows[rowIndex];
+      if (!column || !row || (value.kind !== GridCellKind.Text && value.kind !== GridCellKind.Uri)) {
+        return;
+      }
+      const nextRow = {
+        ...row,
+        values: { ...row.values, [column.id]: value.data }
+      };
+      setEditableRows((current) => updateRowCell(current, row.id, column.id, value.data));
+      if (draftRowIds.has(row.id)) {
+        void saveDraftRow(nextRow);
+      } else if (createRecord?.fields.some((field) => field.id === column.id)) {
+        void persistEditedRow(nextRow);
+      }
+    },
+    [configuredColumns, createRecord, draftRowIds, filteredRows, persistEditedRow, saveDraftRow]
+  );
 
   const openCreateRecord = useCallback(() => {
     if (!createRecord) {
       return;
     }
+    if (!window.matchMedia("(max-width: 860px)").matches) {
+      void gridRef.current?.appendRow(createTargetColumnIndex, true);
+      return;
+    }
     setCreateValues(Object.fromEntries(createRecord.fields.map((field) => [field.id, ""])));
     setCreateError(null);
     setIsCreateOpen(true);
-  }, [createRecord]);
+  }, [createRecord, createTargetColumnIndex]);
+
+  const appendInlineRow = useCallback(async () => {
+    if (!createRecord) {
+      return undefined;
+    }
+    const rowId = `draft-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
+    const values = Object.fromEntries(columns.map((column) => [column.id, ""])) as Record<string, CrmTableCellValue>;
+    const nextRow: CrmTableRow = { id: rowId, values };
+    const nextRowIndex = editableRows.length;
+    setQuery("");
+    setSort(null);
+    setCreateError(null);
+    setEditableRows((current) => [...current, nextRow]);
+    setDraftRowIds((current) => new Set(current).add(rowId));
+    setFlashRowId(rowId);
+    window.setTimeout(() => setFlashRowId((current) => (current === rowId ? null : current)), 1600);
+    window.setTimeout(() => {
+      const cell: Item = [createTargetColumnIndex, nextRowIndex];
+      setGridSelection(cellSelection(cell));
+      gridRef.current?.scrollTo(createTargetColumnIndex, nextRowIndex);
+      gridRef.current?.focus();
+    }, 0);
+    return "bottom" as const;
+  }, [columns, createRecord, createTargetColumnIndex, editableRows.length]);
 
   const submitCreateRecord = useCallback(
     async (event: FormEvent<HTMLFormElement>) => {
@@ -488,18 +1074,58 @@ export function CrmTable({
       const documents = cellDocuments(row.values[column.id]);
       const relativeX =
         event.localEventX <= event.bounds.width ? event.localEventX - 8 : event.localEventX - event.bounds.x - 8;
-      const action = documentCellActionAt(relativeX, documents);
+      const visibleRight = Math.min(event.bounds.x + event.bounds.width, window.innerWidth);
+      const uploadStart = Math.max(0, visibleRight - event.bounds.x - documentUploadHitWidth - documentUploadInset - 8);
+      const action = documentCellActionAt(relativeX, documents, uploadStart);
       if (action?.type === "open") {
         setPreviewDocument(documents[action.index] ?? null);
       }
       if (action?.type === "upload") {
-        setUploadTarget({ rowId: row.id });
-        setUploadSummary("");
+        setUploadTarget({ rowId: row.id, files: [] });
+        setUploadSummaries([]);
         setUploadError(null);
+        window.setTimeout(() => uploadFileInputRef.current?.click(), 0);
       }
     },
     [configuredColumns, filteredRows]
   );
+
+  const closeDocumentUpload = useCallback(() => {
+    setUploadTarget(null);
+    setUploadSummaries([]);
+    setUploadError(null);
+    if (uploadFileInputRef.current) {
+      uploadFileInputRef.current.value = "";
+    }
+  }, []);
+
+  const handleDocumentFileChange = useCallback((event: ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(event.target.files ?? []);
+    if (files.length === 0) {
+      setUploadTarget(null);
+      return;
+    }
+    setUploadTarget((current) => (current ? { ...current, files } : current));
+    setUploadSummaries(files.map(() => ""));
+    setUploadError(null);
+  }, []);
+
+  const updateUploadSummary = useCallback((index: number, value: string) => {
+    setUploadSummaries((current) => current.map((summary, summaryIndex) => (summaryIndex === index ? value : summary)));
+  }, []);
+
+  const decrementPendingDocumentUploads = useCallback((rowId: string, count: number) => {
+    setPendingDocumentUploads((current) => {
+      const nextCount = Math.max(0, (current[rowId] ?? 0) - count);
+      const next = { ...current };
+      if (nextCount === 0) {
+        delete next[rowId];
+      } else {
+        next[rowId] = nextCount;
+      }
+      return next;
+    });
+  }, []);
 
   const submitDocumentUpload = useCallback(
     async (event: FormEvent<HTMLFormElement>) => {
@@ -507,28 +1133,30 @@ export function CrmTable({
       if (!uploadTarget || !documentUploadEndpoint) {
         return;
       }
-      const form = event.currentTarget;
-      const fileInput = form.elements.namedItem("file") as HTMLInputElement | null;
-      const file = fileInput?.files?.[0];
-      if (!file) {
-        setUploadError("Choose a file.");
+      if (uploadTarget.files.length === 0) {
+        setUploadError("Choose at least one file.");
         return;
       }
       const body = new FormData();
       body.set("leadId", uploadTarget.rowId);
-      body.set("summary", uploadSummary);
       body.set("sourceChannel", "web");
-      body.set("file", file);
-      setIsUploading(true);
+      uploadTarget.files.forEach((file, index) => {
+        body.append("files", file);
+        body.append("summaries", uploadSummaries[index] ?? "");
+      });
+      const uploadRowId = uploadTarget.rowId;
+      const uploadCount = uploadTarget.files.length;
+      setPendingDocumentUploads((current) => ({ ...current, [uploadRowId]: (current[uploadRowId] ?? 0) + uploadCount }));
       setUploadError(null);
+      closeDocumentUpload();
       try {
         const response = await fetch(documentUploadEndpoint, { method: "POST", body });
         const payload = (await response.json()) as { documents?: DocumentCellValue; error?: string };
         if (!response.ok) {
           throw new Error(payload.error ?? "Upload failed.");
         }
-        const uploaded = payload.documents?.[0];
-        if (uploaded) {
+        const uploaded = payload.documents ?? [];
+        if (uploaded.length > 0) {
           setEditableRows((current) =>
             current.map((row) =>
               row.id === uploadTarget.rowId
@@ -536,23 +1164,97 @@ export function CrmTable({
                     ...row,
                     values: {
                       ...row.values,
-                      documents: [...(Array.isArray(row.values.documents) ? row.values.documents : []), uploaded]
+                      documents: [...(Array.isArray(row.values.documents) ? row.values.documents : []), ...uploaded]
                     }
                   }
                 : row
             )
           );
         }
-        setUploadTarget(null);
-        setUploadSummary("");
+        closeDocumentUpload();
       } catch (error) {
-        setUploadError(error instanceof Error ? error.message : "Upload failed.");
+        setCreateError(error instanceof Error ? `Upload failed: ${error.message}` : "Upload failed.");
       } finally {
-        setIsUploading(false);
+        decrementPendingDocumentUploads(uploadRowId, uploadCount);
       }
     },
-    [documentUploadEndpoint, uploadSummary, uploadTarget]
+    [closeDocumentUpload, decrementPendingDocumentUploads, documentUploadEndpoint, uploadSummaries, uploadTarget]
   );
+
+  const drawCell = useCallback<NonNullable<ComponentProps<typeof DataEditor>["drawCell"]>>(
+    (args, drawContent) => {
+      drawContent();
+      if (args.row < 0) {
+        return;
+      }
+      const column = configuredColumns[args.col];
+      if (column?.group !== "Client") {
+        return;
+      }
+
+      const { ctx, rect } = args;
+      const edgeColor = colorWithAlpha(linkedTableColor, isDarkMode ? 0.52 : 0.42);
+      const innerFog = colorWithAlpha(linkedTableColor, isDarkMode ? 0.12 : 0.08);
+      const outerFog = colorWithAlpha(linkedTableColor, isDarkMode ? 0.2 : 0.14);
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(rect.x, rect.y, rect.width, rect.height);
+      ctx.clip();
+
+      const leftGradient = ctx.createLinearGradient(rect.x, rect.y, rect.x + 18, rect.y);
+      leftGradient.addColorStop(0, outerFog);
+      leftGradient.addColorStop(1, "rgba(255, 255, 255, 0)");
+      ctx.fillStyle = leftGradient;
+      ctx.fillRect(rect.x, rect.y + 1, 18, rect.height - 2);
+
+      const rightGradient = ctx.createLinearGradient(rect.x + rect.width - 18, rect.y, rect.x + rect.width, rect.y);
+      rightGradient.addColorStop(0, "rgba(255, 255, 255, 0)");
+      rightGradient.addColorStop(1, innerFog);
+      ctx.fillStyle = rightGradient;
+      ctx.fillRect(rect.x + rect.width - 18, rect.y + 1, 18, rect.height - 2);
+
+      ctx.strokeStyle = edgeColor;
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(rect.x + 1.5, rect.y + 3);
+      ctx.lineTo(rect.x + 1.5, rect.y + rect.height - 3);
+      ctx.moveTo(rect.x + rect.width - 1.5, rect.y + 3);
+      ctx.lineTo(rect.x + rect.width - 1.5, rect.y + rect.height - 3);
+      ctx.stroke();
+      ctx.restore();
+    },
+    [configuredColumns, isDarkMode, linkedTableColor]
+  );
+
+  const confirmDeleteSelectedRows = useCallback(async () => {
+    const selectedIds = new Set(selectedRows.map((row) => row.id));
+    if (archiveEntity) {
+      const response = await fetch("/api/crm/archive", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ entity: archiveEntity, ids: [...selectedIds] })
+      });
+      if (!response.ok) {
+        const payload = (await response.json()) as { error?: string };
+        setCreateError(payload.error ? `Delete failed: ${payload.error}` : "Delete failed.");
+        setBulkActionDialog(null);
+        return;
+      }
+    }
+    setEditableRows((current) => current.filter((row) => !selectedIds.has(row.id)));
+    setDraftRowIds((current) => {
+      const next = new Set(current);
+      selectedIds.forEach((id) => next.delete(id));
+      return next;
+    });
+    setSavingDraftIds((current) => {
+      const next = new Set(current);
+      selectedIds.forEach((id) => next.delete(id));
+      return next;
+    });
+    setGridSelection(emptySelection());
+    setBulkActionDialog(null);
+  }, [archiveEntity, selectedRows]);
 
   const visibleColumnIds = new Set(configuredColumns.map((column) => column.id));
   const allColumnsByPreference = applyTablePreferences(columns, { ...preferences, hidden: [] });
@@ -569,6 +1271,29 @@ export function CrmTable({
           <p>{description}</p>
         </div>
         <div className="toolbar" aria-label={`${title} actions`}>
+          {selectedRows.length > 0 ? (
+            <div className="bulkActionBar" role="status" aria-live="polite">
+              <span>
+                {selectedRows.length} {selectedRows.length === 1 ? "record" : "records"} selected
+              </span>
+              <div>
+                {selectedRows.length === 1 ? (
+                  <button type="button" className="danger" onClick={() => setBulkActionDialog("delete")}>
+                    <Trash2 size={13} />
+                    Delete
+                  </button>
+                ) : (
+                  <button type="button" onClick={() => setBulkActionDialog("merge")}>
+                    <Merge size={15} />
+                    Try to merge
+                  </button>
+                )}
+                <button type="button" className="clearSelectionButton" aria-label="Clear row selection" onClick={() => setGridSelection(emptySelection())}>
+                  <X size={13} />
+                </button>
+              </div>
+            </div>
+          ) : null}
           <label className="searchBox">
             <Search size={16} aria-hidden="true" />
             <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search" />
@@ -592,12 +1317,63 @@ export function CrmTable({
           </button>
           <button
             type="button"
+            className="fontScaleButton"
+            title={`Table font ${tableFontLabel(tableFontScale)}`}
+            aria-label={`Table font ${tableFontLabel(tableFontScale)}`}
+            onClick={cycleTableFontScale}
+          >
+            <span aria-hidden="true">{tableFontIcon(tableFontScale)}</span>
+          </button>
+          <button
+            type="button"
             title="Export CSV"
             aria-label="Export CSV"
             onClick={() => downloadCsv(`${tableKey}.csv`, toCsv(configuredColumns, filteredRows))}
           >
             <Download size={16} />
           </button>
+          <div className="tableColorControl">
+            <button
+              type="button"
+              className="tableColorButton"
+              title="Table relation color"
+              aria-label="Table relation color"
+              aria-expanded={isColorPickerOpen}
+              onClick={() => setIsColorPickerOpen((value) => !value)}
+              style={{ "--table-color": tableColor, "--table-color-text": contrastTextColor(tableColor) } as ComponentProps<"button">["style"]}
+            >
+              <Palette size={14} />
+            </button>
+            {isColorPickerOpen ? (
+              <div className="tableColorPopover" role="dialog" aria-label="Choose table relation color">
+                <label>
+                  <span>Relation color</span>
+                  <input
+                    type="color"
+                    value={tableColor}
+                    onChange={(event) =>
+                      setPreferences((current) => ({
+                        ...current,
+                        tableColor: event.target.value
+                      }))
+                    }
+                  />
+                </label>
+                <div className="tableColorPresets" aria-label="Preset colors">
+                  {["#4da377", "#bd7b8d", "#8d88c6", "#c08b62", "#6e94af"].map((color) => (
+                    <button
+                      type="button"
+                      key={color}
+                      aria-label={`Use ${color}`}
+                      className={tableColor.toLowerCase() === color ? "active" : ""}
+                      style={{ "--table-color": color } as ComponentProps<"button">["style"]}
+                      onClick={() => setPreferences((current) => ({ ...current, tableColor: color }))}
+                    />
+                  ))}
+                </div>
+              </div>
+            ) : null}
+          </div>
         </div>
       </header>
       {showColumnMenu ? (
@@ -626,17 +1402,36 @@ export function CrmTable({
           })}
         </div>
       ) : null}
-      <div className="gridFrame" onMouseLeave={() => setRelatedTooltip(null)}>
+      {createError && !isCreateOpen ? <div className="tableNotice error">{createError}</div> : null}
+      <div className="gridFrame" ref={gridFrameRef} onMouseLeave={() => {
+        setRelatedTooltip(null);
+        setDocumentTooltip(null);
+      }}>
         {relatedTooltip ? (
-          <div className="relatedTableTooltip" style={{ left: relatedTooltip.left, top: relatedTooltip.top }}>
+          <div
+            className={`relatedTableTooltip ${relatedTooltip.placement === "below" ? "relatedTableTooltipBelow" : ""}`}
+            style={{ left: relatedTooltip.left, top: relatedTooltip.top }}
+          >
             <strong>Related table</strong>
             <span>These columns show fields from the linked client record.</span>
           </div>
         ) : null}
+      {documentTooltip ? (
+        <div className="relatedTableTooltip documentCellTooltip" style={{ left: documentTooltip.left, top: documentTooltip.top }}>
+          <strong>{documentTooltip.document.fileName}</strong>
+          {formatDocumentCreatedAt(documentTooltip.document.createdAt) ? (
+            <span>Added {formatDocumentCreatedAt(documentTooltip.document.createdAt)}</span>
+          ) : null}
+          <span>{documentTooltip.document.shortSummary}</span>
+        </div>
+      ) : null}
         <DataEditor
+          ref={gridRef}
           columns={visibleColumns}
           rows={filteredRows.length}
           getCellContent={getCellContent}
+          gridSelection={gridSelection}
+          onGridSelectionChange={handleGridSelectionChange}
           onHeaderClicked={(columnIndex) => {
             const column = configuredColumns[columnIndex];
             if (column) {
@@ -646,14 +1441,16 @@ export function CrmTable({
           onHeaderMenuClick={() => setShowColumnMenu((value) => !value)}
           onColumnMoved={moveColumn}
           onColumnResize={(_, width, columnIndex) => resizeColumnAtIndex(columnIndex, width)}
+          onRowAppended={appendInlineRow}
           onCellEdited={([columnIndex, rowIndex], value) => editCell(columnIndex, rowIndex, value)}
           onCellClicked={handleCellClicked}
           customRenderers={[documentCellRenderer]}
+          drawCell={drawCell}
           getGroupDetails={(groupName) =>
             groupName === "Client"
               ? {
                   name: "Client",
-                  overrideTheme: relatedTableHeaderTheme
+                  overrideTheme: activeRelatedTableHeaderTheme
                 }
               : { name: groupName }
           }
@@ -664,8 +1461,8 @@ export function CrmTable({
           width="100%"
           height="100%"
           rowMarkerWidth={rowMarkerWidth}
-          rowMarkers="number"
-          theme={tableTheme}
+          rowMarkers={{ kind: "both", checkboxStyle: "square", width: rowMarkerWidth }}
+          theme={activeTableTheme}
           cellActivationBehavior="double-click"
           smoothScrollX
           smoothScrollY
@@ -683,6 +1480,57 @@ export function CrmTable({
           </article>
         ))}
       </div>
+      {bulkActionDialog === "merge" ? (
+        <div className="documentModalBackdrop" role="presentation" onMouseDown={() => setBulkActionDialog(null)}>
+          <section className="bulkActionDialog" role="dialog" aria-modal="true" onMouseDown={(event) => event.stopPropagation()}>
+            <header>
+              <div>
+                <span>Try to merge</span>
+                <h2>Merge is not implemented yet</h2>
+              </div>
+              <button type="button" onClick={() => setBulkActionDialog(null)} aria-label="Close merge dialog">
+                <X size={18} />
+              </button>
+            </header>
+            <p>
+              You selected {selectedRows.length} records. The merge assistant is not connected yet, so no data was changed.
+            </p>
+            <footer>
+              <button type="button" onClick={() => setBulkActionDialog(null)}>
+                OK
+              </button>
+            </footer>
+          </section>
+        </div>
+      ) : null}
+      {bulkActionDialog === "delete" ? (
+        <div className="documentModalBackdrop" role="presentation" onMouseDown={() => setBulkActionDialog(null)}>
+          <section className="bulkActionDialog" role="dialog" aria-modal="true" onMouseDown={(event) => event.stopPropagation()}>
+            <header>
+              <div>
+                <span>Delete record</span>
+                <h2>Delete this record?</h2>
+              </div>
+              <button type="button" onClick={() => setBulkActionDialog(null)} aria-label="Close delete dialog">
+                <X size={18} />
+              </button>
+            </header>
+            <p>
+              {archiveEntity
+                ? "This archives the selected record after confirmation."
+                : "This removes the selected row from the current table view. This table does not have a server archive action yet."}
+            </p>
+            <footer>
+              <button type="button" onClick={() => setBulkActionDialog(null)}>
+                Cancel
+              </button>
+              <button type="button" className="danger" onClick={confirmDeleteSelectedRows}>
+                Delete
+              </button>
+            </footer>
+          </section>
+        </div>
+      ) : null}
       {previewDocument ? (
         <div className="documentModalBackdrop" role="presentation" onMouseDown={() => setPreviewDocument(null)}>
           <section className="documentModal" role="dialog" aria-modal="true" onMouseDown={(event) => event.stopPropagation()}>
@@ -730,7 +1578,7 @@ export function CrmTable({
               </button>
             </header>
             {createRecord.fields.map((field) => (
-              <label key={field.id}>
+              <label className={field.multiline ? "formField wide" : "formField"} key={field.id}>
                 <span>{field.label}</span>
                 {field.multiline ? (
                   <textarea
@@ -760,38 +1608,46 @@ export function CrmTable({
           </form>
         </div>
       ) : null}
-      {uploadTarget ? (
-        <div className="documentModalBackdrop" role="presentation" onMouseDown={() => setUploadTarget(null)}>
+      <input
+        ref={uploadFileInputRef}
+        className="hiddenFileInput"
+        type="file"
+        multiple
+        onChange={handleDocumentFileChange}
+      />
+      {uploadTarget && uploadTarget.files.length > 0 ? (
+        <div className="documentModalBackdrop" role="presentation" onMouseDown={closeDocumentUpload}>
           <form className="documentModal documentUploadForm" onSubmit={submitDocumentUpload} onMouseDown={(event) => event.stopPropagation()}>
             <header>
               <div>
                 <span>ADD</span>
-                <h2>Add document</h2>
+                <h2>Add documents</h2>
               </div>
-              <button type="button" onClick={() => setUploadTarget(null)} aria-label="Close upload form">
+              <button type="button" onClick={closeDocumentUpload} aria-label="Close upload form">
                 ×
               </button>
             </header>
-            <label>
-              <span>File</span>
-              <input name="file" type="file" required />
-            </label>
-            <label>
-              <span>Summary</span>
-              <textarea
-                value={uploadSummary}
-                onChange={(event) => setUploadSummary(event.target.value)}
-                placeholder="Short file summary"
-                rows={3}
-              />
-            </label>
+            <div className="selectedUploadFiles">
+              {uploadTarget.files.map((file, index) => (
+                <label className="selectedUploadFile" key={`${file.name}-${file.size}-${index}`}>
+                  <span>File {index + 1}</span>
+                  <strong>{file.name}</strong>
+                  <textarea
+                    value={uploadSummaries[index] ?? ""}
+                    onChange={(event) => updateUploadSummary(index, event.target.value)}
+                    placeholder="Short file summary"
+                    rows={2}
+                  />
+                </label>
+              ))}
+            </div>
             {uploadError ? <p className="documentUploadError">{uploadError}</p> : null}
             <footer>
-              <button type="button" onClick={() => setUploadTarget(null)}>
+              <button type="button" onClick={closeDocumentUpload}>
                 Cancel
               </button>
               <button type="submit" disabled={isUploading || !documentUploadEndpoint}>
-                {isUploading ? "Uploading" : "Upload"}
+                {isUploading ? "Uploading" : `Upload ${uploadTarget.files.length}`}
               </button>
             </footer>
           </form>

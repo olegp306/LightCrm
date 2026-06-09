@@ -11,6 +11,8 @@ export type TablePreferences = {
   order?: string[];
   widths?: Record<string, number>;
   hidden?: string[];
+  fontScale?: number;
+  tableColor?: string;
 };
 
 export type ApiRecord = Record<string, unknown> & {
@@ -60,17 +62,20 @@ export function normalizeDocumentCellValue(value: unknown): DocumentCellValue {
     if (!id || !fileName) {
       return [];
     }
-    return [
-      {
-        id,
-        fileName,
-        shortSummary: shortSummary ?? fileName,
-        longSummary: optionalString(item.longSummary),
-        downloadUrl: optionalString(item.downloadUrl),
-        mimeType: optionalString(item.mimeType),
-        sizeBytes: optionalNumber(item.sizeBytes)
-      }
-    ];
+    const document: DocumentCellItem = {
+      id,
+      fileName,
+      shortSummary: shortSummary ?? fileName,
+      longSummary: optionalString(item.longSummary),
+      downloadUrl: optionalString(item.downloadUrl),
+      mimeType: optionalString(item.mimeType),
+      sizeBytes: optionalNumber(item.sizeBytes)
+    };
+    const createdAt = optionalString(item.createdAt);
+    if (createdAt) {
+      document.createdAt = createdAt;
+    }
+    return [document];
   });
 }
 

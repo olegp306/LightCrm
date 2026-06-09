@@ -1,5 +1,5 @@
 export { CrmTable } from "./CrmTable";
-export type { CreateRecordConfig, CreateRecordField, CrmTableColumn, CrmTableProps, CrmTableRow } from "./CrmTable";
+export type { ArchiveRecordEntity, CreateRecordConfig, CreateRecordField, CrmTableColumn, CrmTableProps, CrmTableRow } from "./CrmTable";
 export {
   applyTablePreferences,
   buildCreateRecordPayload,

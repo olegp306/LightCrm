@@ -28,7 +28,7 @@ export function TablePage({ endpoint, rows, columns, ...props }: LiveTablePagePr
         }
         return response.json() as Promise<ApiRecord[]>;
       })
-      .then((records) => setLiveRows(records.length > 0 ? recordsToRows(records, columns) : rows))
+      .then((records) => setLiveRows(recordsToRows(records, columns)))
       .catch((error: unknown) => {
         if (error instanceof DOMException && error.name === "AbortError") {
           return;
