@@ -34,6 +34,8 @@ import {
   type TableSort
 } from "./table-model";
 
+type DrawCellArgs = Parameters<NonNullable<ComponentProps<typeof DataEditor>["drawCell"]>>[0];
+
 export type CrmTableColumn = {
   id: string;
   title: string;
@@ -313,6 +315,72 @@ function scaledTableTheme(theme: Partial<Theme>, scale: number): Partial<Theme> 
 function fontSizeFromTheme(theme: { baseFontStyle?: string }, fallback: number): number {
   const fontSize = Number.parseFloat(theme.baseFontStyle ?? "");
   return Number.isFinite(fontSize) ? fontSize : fallback;
+}
+
+function drawSearchMatchHighlight(args: DrawCellArgs, query: string, isDarkMode: boolean): void {
+  const needle = query.trim();
+  if (!needle || args.row < 0 || args.cell.kind !== GridCellKind.Text) {
+    return;
+  }
+
+  const text = args.cell.displayData ?? args.cell.data;
+  if (!text) {
+    return;
+  }
+
+  const normalizedText = text.toLocaleLowerCase();
+  const normalizedNeedle = needle.toLocaleLowerCase();
+  const matchIndex = normalizedText.indexOf(normalizedNeedle);
+  if (matchIndex < 0) {
+    return;
+  }
+
+  const { ctx, rect, theme } = args;
+  const matchText = text.slice(matchIndex, matchIndex + needle.length);
+  const beforeText = text.slice(0, matchIndex);
+  const fontSize = fontSizeFromTheme(theme, 13);
+  const padding = theme.cellHorizontalPadding ?? 8;
+  const fontFamily = theme.fontFamily ?? "Inter, sans-serif";
+  const cellFont = `${theme.baseFontStyle ?? `${fontSize}px`} ${fontFamily}`;
+
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(rect.x + 2, rect.y + 1, rect.width - 4, rect.height - 2);
+  ctx.clip();
+  ctx.font = cellFont;
+  ctx.textBaseline = "middle";
+
+  const fullWidth = ctx.measureText(text).width;
+  const beforeWidth = ctx.measureText(beforeText).width;
+  const matchWidth = ctx.measureText(matchText).width;
+  const align = args.cell.contentAlign ?? "left";
+  const textStart =
+    align === "right"
+      ? rect.x + rect.width - padding - fullWidth
+      : align === "center"
+        ? rect.x + rect.width / 2 - fullWidth / 2
+        : rect.x + padding;
+
+  const x = textStart + beforeWidth;
+  const maxX = rect.x + rect.width - 4;
+  if (x >= maxX || x + matchWidth <= rect.x + 4) {
+    ctx.restore();
+    return;
+  }
+
+  const highlightHeight = Math.max(16, Math.min(rect.height - 6, fontSize + 6));
+  const highlightX = Math.max(rect.x + 3, x - 2);
+  const highlightY = rect.y + (rect.height - highlightHeight) / 2;
+  const highlightWidth = Math.min(matchWidth + 4, maxX - highlightX);
+
+  ctx.fillStyle = isDarkMode ? "rgba(154, 140, 255, 0.34)" : "rgba(124, 91, 255, 0.18)";
+  ctx.beginPath();
+  ctx.roundRect(highlightX, highlightY, highlightWidth, highlightHeight, 4);
+  ctx.fill();
+
+  ctx.fillStyle = theme.textDark;
+  ctx.fillText(matchText, x, rect.y + rect.height / 2);
+  ctx.restore();
 }
 
 function emptySelection(): GridSelection {
@@ -1330,6 +1398,7 @@ export function CrmTable({
   const drawCell = useCallback<NonNullable<ComponentProps<typeof DataEditor>["drawCell"]>>(
     (args, drawContent) => {
       drawContent();
+      drawSearchMatchHighlight(args, query, isDarkMode);
       if (args.row < 0) {
         return;
       }
@@ -1369,7 +1438,7 @@ export function CrmTable({
       ctx.stroke();
       ctx.restore();
     },
-    [configuredColumns, isDarkMode, linkedTableColor]
+    [configuredColumns, isDarkMode, linkedTableColor, query]
   );
 
   const confirmDeleteSelectedRows = useCallback(async () => {
@@ -1440,7 +1509,7 @@ export function CrmTable({
               </div>
             </div>
           ) : null}
-          <label className="searchBox">
+          <label className={`searchBox ${query.trim() ? "active" : ""}`}>
             <Search size={16} aria-hidden="true" />
             <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search" />
           </label>

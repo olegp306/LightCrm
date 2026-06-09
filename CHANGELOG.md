@@ -2,6 +2,24 @@
 
 All notable LightCrm releases are documented here. Starting with `0.2.0`, every version bump must include a changelog entry.
 
+## 0.3.1 - 2026-06-10
+
+### Project Snapshot
+
+LightCrm now has a clearer table search experience. When users search inside CRM tables, the search field visually indicates the active filtered state, and matching text fragments are highlighted directly inside table cells without coloring the entire cell.
+
+### Changed
+
+- Improved the table search control so active searches use stronger text weight, larger input text, and an accent focus glow.
+- Added inline search-result highlighting in Glide Data Grid text cells, including dark-mode-aware highlight colors.
+- Kept search highlighting scoped to the matched text fragment rather than the whole table cell.
+
+### Verification
+
+- `pnpm --filter @lightcrm/ui typecheck`
+- `pnpm --filter @lightcrm/web typecheck`
+- Local `/clients` and `/leads` routes respond successfully on the development server.
+
 ## 0.3.0 - 2026-06-09
 
 ### Project Snapshot

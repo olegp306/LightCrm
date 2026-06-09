@@ -793,16 +793,48 @@ input {
   gap: 8px;
   height: 36px;
   padding: 0 10px;
+  transition:
+    background 160ms ease,
+    border-color 160ms ease,
+    box-shadow 160ms ease,
+    color 160ms ease;
   width: 250px;
+}
+
+.searchBox:focus-within,
+.searchBox.active {
+  background: var(--panel-raised);
+  border-color: color-mix(in srgb, var(--accent) 58%, var(--line));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 15%, transparent);
+  color: var(--accent);
 }
 
 .searchBox input {
   background: transparent;
   border: 0;
   color: var(--ink);
+  font-size: 13px;
+  font-weight: 450;
   min-width: 0;
   outline: 0;
+  transition:
+    color 160ms ease,
+    font-size 160ms ease,
+    font-weight 160ms ease;
   width: 100%;
+}
+
+.searchBox:focus-within input,
+.searchBox.active input {
+  color: var(--ink);
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.searchBox input::placeholder {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 400;
 }
 
 .gridFrame {
