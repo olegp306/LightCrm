@@ -29,17 +29,28 @@ export async function GET(request: Request) {
     const workspaceId = url.searchParams.get("workspaceId") ?? defaultWorkspaceId;
     const includeArchived = url.searchParams.get("includeArchived") === "true";
     const crm = getCrm();
-    const [leads, clients] = await Promise.all([
+    const [leads, clients, documents] = await Promise.all([
       crm.listRecords({ entity: "lead", workspaceId, includeArchived }),
-      crm.listRecords({ entity: "client", workspaceId, includeArchived: true })
+      crm.listRecords({ entity: "client", workspaceId, includeArchived: true }),
+      crm.listRecords({ entity: "documentFile", workspaceId, includeArchived: true })
     ]);
     const clientsById = new Map(clients.map((client) => [client.id, client]));
+    const documentsByLeadId = new Map<string, typeof documents>();
+    for (const document of documents) {
+      if (!document.leadId || document.archivedAt) {
+        continue;
+      }
+      const leadDocuments = documentsByLeadId.get(document.leadId) ?? [];
+      leadDocuments.push(document);
+      documentsByLeadId.set(document.leadId, leadDocuments);
+    }
     return NextResponse.json(
       leads.map((lead) => {
         const client = lead.clientId ? clientsById.get(lead.clientId) ?? null : null;
         return {
           ...lead,
           client,
+          documents: documentsByLeadId.get(lead.id) ?? [],
           project: readNoteField(lead.notes, noteFields.project) ?? lead.company,
           area: readNoteField(lead.notes, noteFields.area),
           description: readNoteField(lead.notes, noteFields.description) ?? lead.notes,

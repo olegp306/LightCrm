@@ -35,8 +35,9 @@ export const tables: Record<string, TableDefinition> = {
       { id: "project", title: "Project", width: 240, mobilePriority: 2 },
       { id: "area", title: "Area", width: 120, mobilePriority: 3 },
       { id: "description", title: "Description", width: 280, mobilePriority: 4 },
-      { id: "interest", title: "Interest", width: 120, mobilePriority: 5 },
-      { id: "urgency", title: "Urgency", width: 120, mobilePriority: 6 },
+      { id: "documents", title: "Documents", width: 300, mobilePriority: 5, valueKind: "documents" },
+      { id: "interest", title: "Interest", width: 120, mobilePriority: 6 },
+      { id: "urgency", title: "Urgency", width: 120 },
       { id: "todo", title: "Todo", width: 180 },
       { id: "address", title: "Address", width: 210 },
       { id: "client.phone", title: "Phone", width: 150, group: "Client" },
@@ -70,6 +71,26 @@ export const tables: Record<string, TableDefinition> = {
           sourceChannel: "telegram",
           clientProjects: 1,
           budgetEur: 0,
+          documents: [
+            {
+              id: "sample-doc-1",
+              fileName: "northwind-brief.pdf",
+              shortSummary: "Initial project brief",
+              longSummary: "Detailed request brief extracted from the first lead intake documents.",
+              downloadUrl: "https://example.com/download/brief.pdf",
+              mimeType: "application/pdf",
+              sizeBytes: 204800
+            },
+            {
+              id: "sample-doc-2",
+              fileName: "budget-table.xlsx",
+              shortSummary: "Budget table",
+              longSummary: "Early budget estimate spreadsheet.",
+              downloadUrl: "https://example.com/download/budget.xlsx",
+              mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+              sizeBytes: 78400
+            }
+          ],
           name: "Nora Prospect",
           status: "qualified"
         }

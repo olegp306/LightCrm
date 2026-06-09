@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   applyTablePreferences,
+  compactDocumentTitle,
+  documentExtensionLabel,
   recordsToRows,
   sortRows,
   toCsv,
@@ -11,7 +13,8 @@ import type { CrmTableColumn, CrmTableRow } from "./CrmTable";
 const columns: CrmTableColumn[] = [
   { id: "name", title: "Name", width: 180 },
   { id: "client.name", title: "Client name", width: 180 },
-  { id: "status", title: "Status", width: 120 }
+  { id: "status", title: "Status", width: 120 },
+  { id: "documents", title: "Documents", width: 260, valueKind: "documents" }
 ];
 
 const rows: CrmTableRow[] = [
@@ -25,7 +28,7 @@ describe("table-model", () => {
       applyTablePreferences(columns, {
         order: ["status", "name"],
         widths: { name: 260 },
-        hidden: ["client.name"]
+        hidden: ["client.name", "documents"]
       })
     ).toEqual([
       { id: "status", title: "Status", width: 120 },
@@ -39,6 +42,16 @@ describe("table-model", () => {
   });
 
   it("maps nested linked records to dotted table columns", () => {
+    const document = {
+      id: "doc-1",
+      fileName: "architectural-layout-final-version.pdf",
+      shortSummary: "Floor plan",
+      longSummary: "Detailed layout package.",
+      downloadUrl: "/api/files/doc-1",
+      mimeType: "application/pdf",
+      sizeBytes: 1024
+    };
+
     expect(
       recordsToRows(
         [
@@ -46,7 +59,8 @@ describe("table-model", () => {
             id: "lead-1",
             name: "Lead Person",
             status: "new",
-            client: { name: "Client Person" }
+            client: { name: "Client Person" },
+            documents: [document]
           }
         ],
         columns
@@ -56,9 +70,17 @@ describe("table-model", () => {
       values: {
         name: "Lead Person",
         "client.name": "Client Person",
-        status: "new"
+        status: "new",
+        documents: [document]
       }
     });
+  });
+
+  it("formats document titles and extension labels for compact cells", () => {
+    expect(documentExtensionLabel("brief.pdf", "application/pdf")).toBe("PDF");
+    expect(documentExtensionLabel("budget.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")).toBe("XLS");
+    expect(compactDocumentTitle("architectural-layout-final-version.pdf")).toBe("architectu…l-version");
+    expect(compactDocumentTitle("brief.pdf")).toBe("brief");
   });
 
   it("exports visible columns and sorted rows to CSV", () => {
