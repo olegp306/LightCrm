@@ -33,15 +33,15 @@ describe("semantic orchestrator schemas", () => {
     expect(parsed.secondaryIntents).toEqual(["create_reminder"]);
   });
 
-  it("rejects invented entity fields without evidence", () => {
-    expect(() =>
-      EntityExtractionSchema.parse({
-        fields: {
-          clientName: { value: "Maxim", confidence: 0.9, evidence: "", sourceMessageIds: ["msg-1"] }
-        },
-        missingData: []
-      })
-    ).toThrow();
+  it("normalizes invented entity fields with blank evidence instead of failing intake", () => {
+    const parsed = EntityExtractionSchema.parse({
+      fields: {
+        clientName: { value: "Maxim", confidence: 0.9, evidence: "", sourceMessageIds: ["msg-1"] }
+      },
+      missingData: []
+    });
+
+    expect(parsed.fields.clientName?.evidence).toBe("No evidence provided.");
   });
 
   it("accepts target resolution that asks clarification", () => {
@@ -55,6 +55,37 @@ describe("semantic orchestrator schemas", () => {
     });
 
     expect(parsed.needsClarification).toBe(true);
+  });
+
+  it("normalizes nullable optional strings in LLM target candidates", () => {
+    const parsed = TargetResolutionSchema.parse({
+      targetType: "none",
+      targetId: null,
+      confidence: 0.5,
+      candidates: [{ id: null, label: null, score: 0.3, reason: null }],
+      needsClarification: true,
+      clarificationQuestion: null
+    });
+
+    expect(parsed.candidates[0]).toMatchObject({ id: "", label: "", reason: "" });
+    expect(parsed.clarificationQuestion).toBeNull();
+  });
+
+  it("normalizes blank required evidence strings from LLM output", () => {
+    const parsed = EntityExtractionSchema.parse({
+      fields: {
+        clientName: {
+          value: "Maxim",
+          confidence: 0.8,
+          evidence: "",
+          sourceMessageIds: ["m-1"]
+        }
+      },
+      missingData: [],
+      notes: []
+    });
+
+    expect(parsed.fields.clientName?.evidence).toBe("No evidence provided.");
   });
 
   it("accepts validation decision with human confirmation", () => {
@@ -629,6 +660,193 @@ describe("semantic crm orchestration", () => {
     expect(result.facts.contactName).toBeNull();
     expect(result.facts.projectType).toBe("private_house");
     expect(result.facts.location).toBe("Lake Road 10");
+  });
+
+  it("creates a needs-data lead when offer validation says the offer itself is not ready", async () => {
+    const result = await runSemanticCrmOrchestration(
+      {
+        workspaceId: "default",
+        messageId: "m-7",
+        author: "architect",
+        text: "Prepare an offer for LP 1-9 in Konz bei Trier, client name is still missing.",
+        sourceChannel: "telegram"
+      },
+      {
+        llmProvider: {
+          async callJson(input) {
+            if (input.system.includes("Classify")) {
+              return {
+                primaryIntent: "generate_offer_task",
+                secondaryIntents: [],
+                confidence: 0.95,
+                reason: "The message asks for an offer.",
+                evidence: ["Prepare an offer"]
+              };
+            }
+            if (input.system.includes("Resolve")) {
+              return {
+                targetType: "project",
+                targetId: null,
+                confidence: 0.82,
+                candidates: [],
+                needsClarification: true,
+                clarificationQuestion: "What is the client name?"
+              };
+            }
+            if (input.system.includes("Extract")) {
+              return {
+                fields: {
+                  requestType: { value: "LP 1-9", confidence: 0.91, evidence: "LP 1-9", sourceMessageIds: ["m-7"] },
+                  projectAddress: {
+                    value: "Konz bei Trier",
+                    confidence: 0.9,
+                    evidence: "Konz bei Trier",
+                    sourceMessageIds: ["m-7"]
+                  }
+                },
+                missingData: ["clientName"],
+                notes: []
+              };
+            }
+            return {
+              approved: false,
+              riskLevel: "medium",
+              reason: "Missing clientName for final offer generation.",
+              needsHumanConfirmation: true
+            };
+          }
+        }
+      }
+    );
+
+    expect(result.risk).toBe("auto");
+    expect(result.actions[0]).toMatchObject({ type: "create_lead", risk: "auto" });
+    expect(result.facts.contactName).toBeNull();
+    expect(result.facts.projectType).toBe("LP 1-9");
+    expect(result.facts.location).toBe("Konz bei Trier");
+  });
+
+  it("keeps project-only offer intake in review when project fields have no evidence", async () => {
+    const result = await runSemanticCrmOrchestration(
+      {
+        workspaceId: "default",
+        messageId: "m-8",
+        author: "architect",
+        text: "Prepare an offer, but the extracted project facts are not evidenced.",
+        sourceChannel: "telegram"
+      },
+      {
+        llmProvider: {
+          async callJson(input) {
+            if (input.system.includes("Classify")) {
+              return {
+                primaryIntent: "generate_offer_task",
+                secondaryIntents: [],
+                confidence: 0.95,
+                reason: "The message asks for an offer.",
+                evidence: ["Prepare an offer"]
+              };
+            }
+            if (input.system.includes("Resolve")) {
+              return {
+                targetType: "lead",
+                targetId: null,
+                confidence: 0.82,
+                candidates: [],
+                needsClarification: true,
+                clarificationQuestion: "What is the client name?"
+              };
+            }
+            if (input.system.includes("Extract")) {
+              return {
+                fields: {
+                  requestType: { value: "LP 1-9", confidence: 0.91, evidence: "", sourceMessageIds: [] }
+                },
+                missingData: ["clientName"],
+                notes: []
+              };
+            }
+            return {
+              approved: false,
+              riskLevel: "medium",
+              reason: "Missing clientName for final offer generation.",
+              needsHumanConfirmation: true
+            };
+          }
+        }
+      }
+    );
+
+    expect(result.risk).toBe("review");
+    expect(result.actions[0]).toMatchObject({ type: "request_review", risk: "review" });
+  });
+
+  it("creates a needs-data lead from evidenced lead intake even when contacts are missing", async () => {
+    const result = await runSemanticCrmOrchestration(
+      {
+        workspaceId: "default",
+        messageId: "m-9",
+        author: "architect",
+        text: "New lead: Maxim wants a private house in Switzerland, contacts are missing.",
+        sourceChannel: "telegram"
+      },
+      {
+        llmProvider: {
+          async callJson(input) {
+            if (input.system.includes("Classify")) {
+              return {
+                primaryIntent: "create_lead",
+                secondaryIntents: [],
+                confidence: 0.95,
+                reason: "The message describes a new lead.",
+                evidence: ["New lead: Maxim wants a private house"]
+              };
+            }
+            if (input.system.includes("Resolve")) {
+              return {
+                targetType: "lead",
+                targetId: null,
+                confidence: 0.9,
+                candidates: [],
+                needsClarification: false,
+                clarificationQuestion: null
+              };
+            }
+            if (input.system.includes("Extract")) {
+              return {
+                fields: {
+                  clientName: { value: "Maxim", confidence: 0.95, evidence: "New lead: Maxim", sourceMessageIds: ["m-9"] },
+                  requestType: {
+                    value: "private house",
+                    confidence: 0.94,
+                    evidence: "wants a private house",
+                    sourceMessageIds: ["m-9"]
+                  },
+                  projectAddress: {
+                    value: "Switzerland",
+                    confidence: 0.9,
+                    evidence: "in Switzerland",
+                    sourceMessageIds: ["m-9"]
+                  }
+                },
+                missingData: ["phone", "email"],
+                notes: []
+              };
+            }
+            return {
+              approved: false,
+              riskLevel: "medium",
+              reason: "Contacts are missing.",
+              needsHumanConfirmation: true
+            };
+          }
+        }
+      }
+    );
+
+    expect(result.risk).toBe("auto");
+    expect(result.actions[0]).toMatchObject({ type: "create_lead", risk: "auto" });
+    expect(result.facts.contactName).toBe("Maxim");
   });
 
   it("sets top-level risk to review when executable mapping falls back to review", async () => {

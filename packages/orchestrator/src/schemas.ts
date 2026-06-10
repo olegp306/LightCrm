@@ -1,5 +1,18 @@
 import { z } from "zod";
 
+const OptionalStringSchema = z.preprocess((value) => (value === null || value === undefined ? "" : value), z.string());
+const RequiredStringSchema = z.preprocess(
+  (value) =>
+    value === null || value === undefined || (typeof value === "string" && value.trim() === "")
+      ? "No evidence provided."
+      : value,
+  z.string().min(1)
+);
+const StringListSchema = z
+  .array(OptionalStringSchema)
+  .default([])
+  .transform((values) => values.map((value) => value.trim()).filter(Boolean));
+
 export const SemanticIntentSchema = z.enum([
   "create_lead",
   "update_lead",
@@ -17,21 +30,21 @@ export const IntentClassificationSchema = z.object({
   primaryIntent: SemanticIntentSchema,
   secondaryIntents: z.array(SemanticIntentSchema),
   confidence: z.number().min(0).max(1),
-  reason: z.string().min(1),
-  evidence: z.array(z.string().min(1))
+  reason: RequiredStringSchema,
+  evidence: StringListSchema.pipe(z.array(z.string().min(1)).min(1))
 });
 
 const FieldEvidenceSchema = z.object({
   value: z.union([z.string(), z.number(), z.boolean(), z.null()]),
   confidence: z.number().min(0).max(1),
-  evidence: z.string().min(1),
-  sourceMessageIds: z.array(z.string())
+  evidence: RequiredStringSchema,
+  sourceMessageIds: StringListSchema
 });
 
 export const EntityExtractionSchema = z.object({
   fields: z.record(FieldEvidenceSchema),
-  missingData: z.array(z.string()),
-  notes: z.array(z.string()).default([])
+  missingData: StringListSchema,
+  notes: StringListSchema
 });
 
 export const TargetResolutionSchema = z.object({
@@ -40,19 +53,19 @@ export const TargetResolutionSchema = z.object({
   confidence: z.number().min(0).max(1),
   candidates: z.array(
     z.object({
-      id: z.string(),
-      label: z.string(),
+      id: OptionalStringSchema,
+      label: OptionalStringSchema,
       score: z.number().min(0).max(1),
-      reason: z.string()
+      reason: OptionalStringSchema
     })
   ),
   needsClarification: z.boolean(),
-  clarificationQuestion: z.string().nullable()
+  clarificationQuestion: OptionalStringSchema.nullable()
 });
 
 export const ValidationDecisionSchema = z.object({
   approved: z.boolean(),
   riskLevel: z.enum(["low", "medium", "high"]),
-  reason: z.string().min(1),
+  reason: RequiredStringSchema,
   needsHumanConfirmation: z.boolean()
 });

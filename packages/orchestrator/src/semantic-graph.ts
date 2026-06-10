@@ -291,13 +291,43 @@ function hasEntityValue(state: SemanticOrchestrationState, fieldName: string): b
   return value !== null && value !== undefined && value !== "";
 }
 
+function hasEvidencedEntityValue(state: SemanticOrchestrationState, fieldName: string): boolean {
+  const field = state.entities.fields[fieldName];
+  const evidence = field?.evidence.trim();
+  return (
+    hasEntityValue(state, fieldName) &&
+    Boolean(evidence) &&
+    evidence !== "No evidence provided." &&
+    field.sourceMessageIds.length > 0
+  );
+}
+
 function shouldCreateLeadFromOfferIntake(state: SemanticOrchestrationState): boolean {
+  const hasLikelyDuplicate = state.target.candidates.some(
+    (candidate) => candidate.score >= state.settings.thresholds.duplicateCandidate
+  );
+
   return (
     state.intent === "generate_offer_task" &&
-    state.target.targetType === "none" &&
     state.target.targetId === null &&
-    !state.target.needsClarification &&
-    (hasEntityValue(state, "requestType") || hasEntityValue(state, "projectAddress"))
+    !hasLikelyDuplicate &&
+    (state.target.targetType === "none" || state.target.targetType === "project" || state.target.targetType === "lead") &&
+    (hasEvidencedEntityValue(state, "requestType") || hasEvidencedEntityValue(state, "projectAddress"))
+  );
+}
+
+function shouldCreateLeadFromLeadIntake(state: SemanticOrchestrationState): boolean {
+  const hasLikelyDuplicate = state.target.candidates.some(
+    (candidate) => candidate.score >= state.settings.thresholds.duplicateCandidate
+  );
+
+  return (
+    state.intent === "create_lead" &&
+    state.target.targetId === null &&
+    !hasLikelyDuplicate &&
+    (state.target.targetType === "none" || state.target.targetType === "project" || state.target.targetType === "lead") &&
+    hasEvidencedEntityValue(state, "clientName") &&
+    (hasEvidencedEntityValue(state, "requestType") || hasEvidencedEntityValue(state, "projectAddress"))
   );
 }
 
@@ -306,6 +336,31 @@ function planAction(state: SemanticOrchestrationState): Partial<SemanticOrchestr
     state.target.clarificationQuestion ??
     state.validation.reason ??
     "Semantic orchestration requires human review before execution.";
+
+  if (shouldCreateLeadFromOfferIntake(state) || shouldCreateLeadFromLeadIntake(state)) {
+    if (!state.settings.confirmationPolicy.allowAutoCreateLead) {
+      return {
+        risk: "review",
+        facts: compatibilityFacts(state),
+        actions: [createReviewAction(state, "Runtime settings do not allow automatic lead creation.")]
+      };
+    }
+
+    return {
+      risk: "auto",
+      facts: compatibilityFacts(state),
+      actions: [
+        {
+          type: "create_lead",
+          risk: "auto",
+          reason:
+            "The final project workflow is not ready yet, but the message contains enough evidenced intake data to create a needs-data lead.",
+          payload: semanticPayload(state)
+        }
+      ],
+      explanations: ["Converted project-only offer intake into a needs-data lead."]
+    };
+  }
 
   if (state.risk !== "auto" || state.intent === "ask_clarification" || state.target.needsClarification) {
     return {

@@ -7,6 +7,7 @@ import type {
   UpsertLeadInput
 } from "@lightcrm/core";
 import { runCrmOrchestration, type CrmOrchestrationInput, type CrmOrchestrationResult } from "@lightcrm/orchestrator";
+import { createHash } from "node:crypto";
 
 export type TelegramUser = {
   first_name?: string;
@@ -144,7 +145,7 @@ function helpText(): string {
   return [
     "LightCrm bot is running.",
     "Send a lead/update/reminder message and I will return a LangGraph dry-run plan.",
-    "Current mode: no CRM writes, only intent/facts/risk/action preview."
+    "Current mode: auto-safe lead/client writes are enabled; review-risk actions stay as previews."
   ].join("\n");
 }
 
@@ -201,6 +202,39 @@ export function extractTelegramAttachments(message: TelegramMessage): TelegramAt
 function actionPayload(result: CrmOrchestrationResult): Record<string, unknown> {
   const payload = result.actions[0]?.payload;
   return payload && typeof payload === "object" ? payload : {};
+}
+
+function stableTelegramClientId(workspaceId: string, contactName: string): string {
+  const normalized = contactName.trim().toLocaleLowerCase();
+  const digest = createHash("sha1").update(`${workspaceId}:${normalized}`).digest("hex").slice(0, 16);
+  return `telegram-client-${digest}`;
+}
+
+function leadNameFromFacts(result: CrmOrchestrationResult, fallbackText: string): string {
+  if (result.facts.contactName) {
+    return result.facts.contactName;
+  }
+  if (result.facts.projectName) {
+    return result.facts.projectName;
+  }
+  const projectParts = [result.facts.projectType, result.facts.location].filter(Boolean);
+  if (projectParts.length > 0) {
+    return projectParts.join(" - ").slice(0, 120);
+  }
+  return fallbackText.slice(0, 80) || "Telegram lead";
+}
+
+function crmNoteFields(result: CrmOrchestrationResult, rawText: string): string[] {
+  const fields = [
+    ["Project", result.facts.projectType],
+    ["Address", result.facts.location],
+    ["Area", result.facts.areaM2 === null ? null : String(result.facts.areaM2)],
+    ["Budget EUR", result.facts.budgetEur === null ? null : String(result.facts.budgetEur)],
+    ["Raw input", rawText]
+  ];
+  return fields
+    .filter((entry): entry is [string, string] => Boolean(entry[1]))
+    .map(([label, value]) => `${label}: ${value}`);
 }
 
 type LeadIntakeUploadResponse = {
@@ -278,10 +312,11 @@ async function maybeCreateLead(
   const name =
     typeof payload.name === "string" && payload.name.trim()
       ? payload.name.trim()
-      : result.facts.contactName ?? result.facts.projectName ?? text.slice(0, 80) ?? "Telegram lead";
+      : leadNameFromFacts(result, text);
   const client =
     deps.createClient && result.facts.contactName
       ? await deps.createClient({
+          id: stableTelegramClientId(deps.workspaceId, result.facts.contactName),
           workspaceId: deps.workspaceId,
           name: result.facts.contactName,
           phone: result.facts.phone,
@@ -289,7 +324,7 @@ async function maybeCreateLead(
           sourceChannel: "telegram",
           externalThreadId: String(message.chat.id),
           externalMessageId: String(message.message_id),
-          notes: [`Telegram author: ${author ?? "unknown"}`, text].join("\n")
+          notes: [`Telegram author: ${author ?? "unknown"}`, ...crmNoteFields(result, text)].join("\n\n")
         })
       : null;
   return deps.createLead({
@@ -301,7 +336,7 @@ async function maybeCreateLead(
     sourceChannel: "telegram",
     externalThreadId: String(message.chat.id),
     externalMessageId: String(message.message_id),
-    notes: [`Telegram author: ${author ?? "unknown"}`, text].join("\n")
+    notes: [`Telegram author: ${author ?? "unknown"}`, ...crmNoteFields(result, text)].join("\n\n")
   });
 }
 

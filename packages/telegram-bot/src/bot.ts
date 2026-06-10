@@ -1,5 +1,5 @@
 import { config } from "dotenv";
-import type { IngestLeadIntakeInput, LeadIntakeAttachmentInput, UpsertLeadInput } from "@lightcrm/core";
+import type { IngestLeadIntakeInput, LeadIntakeAttachmentInput, UpsertClientInput, UpsertLeadInput } from "@lightcrm/core";
 import type { CrmOrchestrationInput, CrmOrchestrationResult } from "@lightcrm/orchestrator";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -90,6 +90,10 @@ async function createLead(input: UpsertLeadInput) {
   return crmCall<{ id: string; name: string }>("/api/crm/leads/upsert", input);
 }
 
+async function createClient(input: UpsertClientInput) {
+  return crmCall<{ id: string; name: string }>("/api/crm/clients/upsert", input);
+}
+
 async function ingestLeadIntake(input: IngestLeadIntakeInput) {
   return crmCall<{ documents?: unknown[]; summary?: string }>("/api/crm/lead-intake", input);
 }
@@ -129,6 +133,7 @@ async function runPolling() {
           workspaceId,
           sendMessage,
           orchestrate,
+          createClient,
           createLead,
           ingestLeadIntake,
           prepareAttachment
