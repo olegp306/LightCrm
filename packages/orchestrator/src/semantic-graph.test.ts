@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { buildOrchestrationContext } from "./context";
 import { createJsonLlmClient, createOpenAiJsonProvider } from "./llm";
 import {
   IntentClassificationSchema,
@@ -158,6 +159,32 @@ describe("semantic runtime settings", () => {
     expect(LANGGRAPH_PRESETS.find((preset) => preset.id === "leadHunter")?.taxonomy.entityFields).not.toContain(
       "mutatedField"
     );
+  });
+});
+
+describe("orchestration context", () => {
+  it("builds relationship memory without hardcoded names", async () => {
+    const context = await buildOrchestrationContext({
+      input: {
+        workspaceId: "default",
+        messageId: "m-1",
+        author: "architect",
+        text: "это снова Максим, нужно подготовить предложение",
+        sourceChannel: "telegram"
+      },
+      recentLeads: [
+        {
+          id: "lead-1",
+          label: "L-2026-009 Maxim T.",
+          summary: "Private house in Munich",
+          lastTouchedAt: "2026-06-10T10:00:00.000Z"
+        }
+      ],
+      recentMessages: [{ id: "m-0", text: "Maxim asked about a private house", createdAt: "2026-06-10T09:00:00.000Z" }]
+    });
+
+    expect(context.recentLeads[0].id).toBe("lead-1");
+    expect(context.relationshipHints).toContain("Previous related CRM activity is available.");
   });
 });
 

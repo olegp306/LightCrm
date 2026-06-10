@@ -103,6 +103,32 @@ export type CrmOrchestrationInput = {
   sourceChannel?: "telegram" | "manual" | "import";
 };
 
+export type ContextLeadCandidate = {
+  id: string;
+  label: string;
+  summary: string | null;
+  lastTouchedAt: string | null;
+};
+
+export type ContextMessage = {
+  id: string;
+  text: string;
+  createdAt: string;
+};
+
+export type OrchestrationContextInput = {
+  input: CrmOrchestrationInput;
+  recentLeads?: ContextLeadCandidate[];
+  recentMessages?: ContextMessage[];
+};
+
+export type OrchestrationContext = {
+  source: CrmOrchestrationInput;
+  recentLeads: ContextLeadCandidate[];
+  recentMessages: ContextMessage[];
+  relationshipHints: string[];
+};
+
 export type CrmOrchestrationResult = {
   workspaceId: string;
   normalizedText: string;
