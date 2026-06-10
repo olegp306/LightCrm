@@ -240,6 +240,65 @@ describe("telegram bot core", () => {
     expect(sendMessage).toHaveBeenCalledWith(111111, expect.stringContaining("Intake: saved 1 attachment"));
   });
 
+  it("creates and links a client when auto lead facts include a contact name", async () => {
+    const sendMessage = vi.fn();
+    const orchestrate = vi.fn().mockResolvedValue({
+      workspaceId: "default",
+      normalizedText: "New lead: Maria, private house",
+      intent: "create_lead",
+      risk: "auto",
+      explanations: [],
+      settings: DEFAULT_LANGGRAPH_SETTINGS,
+      facts: {
+        contactName: "Maria",
+        projectName: null,
+        projectType: "private_house",
+        location: null,
+        areaM2: null,
+        phone: "+491234",
+        budgetEur: null,
+        dueAt: null,
+        sourceMessageId: "201",
+        evidence: { sourceMessageId: "201", author: "Katya", sourceChannel: "telegram", textSnippet: "New lead: Maria" }
+      },
+      actions: [{ type: "create_lead", risk: "auto", reason: "Low-risk CRM action.", payload: {} }]
+    });
+    const createClient = vi.fn().mockResolvedValue({ id: "client-1", name: "Maria" });
+    const createLead = vi.fn().mockResolvedValue({ id: "lead-1", name: "Maria" });
+
+    await handleTelegramUpdate(
+      {
+        update_id: 4,
+        message: {
+          message_id: 201,
+          text: "New lead: Maria, private house",
+          chat: { id: 111111 },
+          from: { first_name: "Katya" }
+        }
+      },
+      {
+        allowedChatIds: new Set([111111]),
+        workspaceId: "default",
+        sendMessage,
+        orchestrate,
+        createClient,
+        createLead
+      }
+    );
+
+    expect(createClient).toHaveBeenCalledWith(
+      expect.objectContaining({
+        workspaceId: "default",
+        name: "Maria",
+        phone: "+491234",
+        sourceChannel: "telegram",
+        externalThreadId: "111111",
+        externalMessageId: "201"
+      })
+    );
+    expect(createLead).toHaveBeenCalledWith(expect.objectContaining({ clientId: "client-1" }));
+  });
+
   it("uploads telegram attachment bytes through the web upload API", async () => {
     const fetchImpl = vi.fn().mockResolvedValue({
       ok: true,

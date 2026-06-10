@@ -286,6 +286,21 @@ function semanticPayload(state: SemanticOrchestrationState): Record<string, unkn
   };
 }
 
+function hasEntityValue(state: SemanticOrchestrationState, fieldName: string): boolean {
+  const value = state.entities.fields[fieldName]?.value;
+  return value !== null && value !== undefined && value !== "";
+}
+
+function shouldCreateLeadFromOfferIntake(state: SemanticOrchestrationState): boolean {
+  return (
+    state.intent === "generate_offer_task" &&
+    state.target.targetType === "none" &&
+    state.target.targetId === null &&
+    !state.target.needsClarification &&
+    (hasEntityValue(state, "requestType") || hasEntityValue(state, "projectAddress"))
+  );
+}
+
 function planAction(state: SemanticOrchestrationState): Partial<SemanticOrchestrationState> {
   const reviewReason =
     state.target.clarificationQuestion ??
@@ -294,6 +309,7 @@ function planAction(state: SemanticOrchestrationState): Partial<SemanticOrchestr
 
   if (state.risk !== "auto" || state.intent === "ask_clarification" || state.target.needsClarification) {
     return {
+      risk: "review",
       facts: compatibilityFacts(state),
       actions: [createReviewAction(state, reviewReason)]
     };
@@ -301,6 +317,7 @@ function planAction(state: SemanticOrchestrationState): Partial<SemanticOrchestr
 
   const actionByIntent: Partial<Record<SemanticIntent, PlannedCrmAction["type"]>> = {
     create_lead: "create_lead",
+    generate_offer_task: shouldCreateLeadFromOfferIntake(state) ? "create_lead" : undefined,
     create_reminder: "create_reminder",
     add_lead_note: "update_lead",
     update_lead: "update_lead"
@@ -309,6 +326,7 @@ function planAction(state: SemanticOrchestrationState): Partial<SemanticOrchestr
 
   if (!actionType) {
     return {
+      risk: "review",
       facts: compatibilityFacts(state),
       actions: [createReviewAction(state, `No executable CRM action is mapped for semantic intent ${state.intent}.`)]
     };

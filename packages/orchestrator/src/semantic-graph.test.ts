@@ -125,10 +125,17 @@ describe("semantic runtime settings", () => {
     expect(settings.thresholds.autoExecute).toBe(0.58);
     expect(settings.thresholds.duplicateCandidate).toBe(0.81);
     expect(settings.taxonomy.intents).toContain("create_lead");
-    expect(settings.taxonomy.requiredFieldsByAction.create_lead).toEqual(["clientName"]);
+    expect(settings.taxonomy.requiredFieldsByAction.create_lead).toEqual([]);
     expect(settings.taxonomy.requiredFieldsByAction.create_task).toEqual(["notes"]);
     expect(settings.confirmationPolicy.requireConfirmationForWrites).toBe(true);
     expect(settings.confirmationPolicy.allowAutoCreateLead).toBe(true);
+  });
+
+  it("allows project-only lead creation while keeping offer readiness strict", () => {
+    const settings = mergeLangGraphSettings({ id: "leadHunter" });
+
+    expect(settings.taxonomy.requiredFieldsByAction.create_lead).toEqual([]);
+    expect(settings.taxonomy.requiredFieldsByAction.generate_offer_task).toEqual(["clientName", "requestType"]);
   });
 
   it("returns cloned preset settings without shared mutable nested objects", () => {
@@ -150,7 +157,7 @@ describe("semantic runtime settings", () => {
 
     expect(mailAnalyst.prompts.intentClassifier).not.toBe("Changed");
     expect(mailAnalyst.taxonomy.entityFields).not.toContain("mutatedField");
-    expect(mailAnalyst.taxonomy.requiredFieldsByAction.create_lead).toEqual(["clientName"]);
+    expect(mailAnalyst.taxonomy.requiredFieldsByAction.create_lead).toEqual([]);
     expect(mailAnalyst.enabledNodes.riskCheck).toBe(true);
     expect(mailAnalyst.extraNewLeadPhrases).toEqual([]);
 
@@ -429,7 +436,13 @@ describe("json llm client", () => {
 
 describe("semantic crm orchestration", () => {
   function semanticProviderFor(options: {
-    intent: "create_lead" | "add_lead_note";
+    intent: "create_lead" | "add_lead_note" | "generate_offer_task";
+    target?: {
+      targetType: "lead" | "client" | "project" | "task" | "none";
+      targetId: string | null;
+      needsClarification?: boolean;
+      clarificationQuestion?: string | null;
+    };
     fields?: Record<string, { value: string | number | boolean | null; confidence: number; evidence: string; sourceMessageIds: string[] }>;
   }) {
     return {
@@ -444,13 +457,19 @@ describe("semantic crm orchestration", () => {
           };
         }
         if (input.system.includes("Resolve")) {
-          return {
+          const target = options.target ?? {
             targetType: options.intent === "create_lead" ? "none" : "lead",
             targetId: options.intent === "create_lead" ? null : "lead-maxim",
-            confidence: 0.86,
-            candidates: [],
             needsClarification: false,
             clarificationQuestion: null
+          };
+          return {
+            targetType: target.targetType,
+            targetId: target.targetId,
+            confidence: 0.86,
+            candidates: [],
+            needsClarification: target.needsClarification ?? false,
+            clarificationQuestion: target.clarificationQuestion ?? null
           };
         }
         if (input.system.includes("Extract")) {
@@ -582,5 +601,55 @@ describe("semantic crm orchestration", () => {
 
     expect(result.facts.contactName).toBe("Maria");
     expect(result.facts.areaM2).toBe(120);
+  });
+
+  it("creates a needs-data lead for project-only generate offer intake", async () => {
+    const result = await runSemanticCrmOrchestration(
+      {
+        workspaceId: "default",
+        messageId: "m-5",
+        author: "architect",
+        text: "Prepare an offer for a private house at Lake Road 10.",
+        sourceChannel: "telegram"
+      },
+      {
+        llmProvider: semanticProviderFor({
+          intent: "generate_offer_task",
+          target: { targetType: "none", targetId: null },
+          fields: {
+            requestType: { value: "private_house", confidence: 0.91, evidence: "private house", sourceMessageIds: ["m-5"] },
+            projectAddress: { value: "Lake Road 10", confidence: 0.88, evidence: "Lake Road 10", sourceMessageIds: ["m-5"] }
+          }
+        })
+      }
+    );
+
+    expect(result.intent).toBe("generate_offer_task");
+    expect(result.actions[0]).toMatchObject({ type: "create_lead", risk: "auto" });
+    expect(result.facts.contactName).toBeNull();
+    expect(result.facts.projectType).toBe("private_house");
+    expect(result.facts.location).toBe("Lake Road 10");
+  });
+
+  it("sets top-level risk to review when executable mapping falls back to review", async () => {
+    const result = await runSemanticCrmOrchestration(
+      {
+        workspaceId: "default",
+        messageId: "m-6",
+        author: "architect",
+        text: "Please schedule a meeting tomorrow.",
+        sourceChannel: "telegram"
+      },
+      {
+        llmProvider: semanticProviderFor({
+          intent: "generate_offer_task",
+          target: { targetType: "none", targetId: null },
+          fields: {}
+        })
+      }
+    );
+
+    expect(result.actions[0]).toMatchObject({ type: "request_review", risk: "review" });
+    expect(result.risk).toBe("review");
   });
 });

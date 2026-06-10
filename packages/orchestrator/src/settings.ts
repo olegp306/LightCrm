@@ -74,7 +74,7 @@ function createDefaultTaxonomy(): LangGraphRuntimeSettings["taxonomy"] {
       "notes"
     ],
     requiredFieldsByAction: {
-      create_lead: ["clientName"],
+      create_lead: [],
       update_lead: [],
       create_meeting: ["meetingDateTime"],
       create_reminder: ["reminderDateTime"],

@@ -1,4 +1,11 @@
-import type { IngestLeadIntakeInput, Lead, LeadIntakeAttachmentInput, UpsertLeadInput } from "@lightcrm/core";
+import type {
+  Client,
+  IngestLeadIntakeInput,
+  Lead,
+  LeadIntakeAttachmentInput,
+  UpsertClientInput,
+  UpsertLeadInput
+} from "@lightcrm/core";
 import { runCrmOrchestration, type CrmOrchestrationInput, type CrmOrchestrationResult } from "@lightcrm/orchestrator";
 
 export type TelegramUser = {
@@ -78,6 +85,7 @@ export type TelegramBotDeps = {
   workspaceId: string;
   sendMessage: (chatId: number, text: string) => Promise<unknown> | unknown;
   orchestrate?: (input: CrmOrchestrationInput) => Promise<CrmOrchestrationResult>;
+  createClient?: (input: UpsertClientInput) => Promise<Pick<Client, "id" | "name">>;
   createLead?: (input: UpsertLeadInput) => Promise<Pick<Lead, "id" | "name">>;
   ingestLeadIntake?: (input: IngestLeadIntakeInput) => Promise<{ documents?: unknown[]; summary?: string }>;
   prepareAttachment?: (input: PrepareTelegramAttachmentInput) => Promise<LeadIntakeAttachmentInput>;
@@ -271,8 +279,22 @@ async function maybeCreateLead(
     typeof payload.name === "string" && payload.name.trim()
       ? payload.name.trim()
       : result.facts.contactName ?? result.facts.projectName ?? text.slice(0, 80) ?? "Telegram lead";
+  const client =
+    deps.createClient && result.facts.contactName
+      ? await deps.createClient({
+          workspaceId: deps.workspaceId,
+          name: result.facts.contactName,
+          phone: result.facts.phone,
+          company: result.facts.projectName,
+          sourceChannel: "telegram",
+          externalThreadId: String(message.chat.id),
+          externalMessageId: String(message.message_id),
+          notes: [`Telegram author: ${author ?? "unknown"}`, text].join("\n")
+        })
+      : null;
   return deps.createLead({
     workspaceId: deps.workspaceId,
+    clientId: client?.id ?? null,
     name,
     phone: result.facts.phone,
     company: result.facts.projectName,
