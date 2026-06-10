@@ -88,3 +88,61 @@ export type CrmOrchestrationResult = {
   explanations: string[];
   settings: LangGraphRuntimeSettings;
 };
+
+export type SemanticIntent =
+  | "create_lead"
+  | "update_lead"
+  | "create_task"
+  | "create_reminder"
+  | "create_meeting"
+  | "attach_document"
+  | "generate_offer_task"
+  | "add_lead_note"
+  | "ask_clarification"
+  | "no_action";
+
+export type SemanticNodeName =
+  | "collectInput"
+  | "buildContext"
+  | "classifyIntent"
+  | "resolveTarget"
+  | "extractEntities"
+  | "validateAction"
+  | "planAction"
+  | "executionGate";
+
+export type FieldEvidence<T = string | number | boolean | null> = {
+  value: T;
+  confidence: number;
+  evidence: string;
+  sourceMessageIds: string[];
+};
+
+export type SemanticExtractedEntities = {
+  fields: Record<string, FieldEvidence>;
+  missingData: string[];
+  notes: string[];
+};
+
+export type ResolvedTargetCandidate = {
+  id: string;
+  label: string;
+  score: number;
+  reason: string;
+};
+
+export type ResolvedTarget = {
+  targetType: "lead" | "client" | "project" | "task" | "none";
+  targetId: string | null;
+  confidence: number;
+  candidates: ResolvedTargetCandidate[];
+  needsClarification: boolean;
+  clarificationQuestion: string | null;
+};
+
+export type SemanticValidationDecision = {
+  approved: boolean;
+  riskLevel: "low" | "medium" | "high";
+  reason: string;
+  needsHumanConfirmation: boolean;
+};
