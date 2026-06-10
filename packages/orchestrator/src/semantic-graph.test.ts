@@ -8,6 +8,15 @@ import {
 } from "./schemas";
 import { LANGGRAPH_PRESETS, mergeLangGraphSettings } from "./settings";
 
+function restoreOpenAiApiKey(originalApiKey: string | undefined) {
+  if (originalApiKey === undefined) {
+    delete process.env.OPENAI_API_KEY;
+    return;
+  }
+
+  process.env.OPENAI_API_KEY = originalApiKey;
+}
+
 describe("semantic orchestrator schemas", () => {
   it("accepts intent classification with evidence and confidence", () => {
     const parsed = IntentClassificationSchema.parse({
@@ -226,7 +235,33 @@ describe("json llm client", () => {
         })
       ).rejects.toThrow("OPENAI_API_KEY is required for semantic LangGraph mode.");
     } finally {
-      process.env.OPENAI_API_KEY = originalApiKey;
+      restoreOpenAiApiKey(originalApiKey);
+    }
+  });
+
+  it("parses successful OpenAI message content JSON", async () => {
+    const originalApiKey = process.env.OPENAI_API_KEY;
+    process.env.OPENAI_API_KEY = "test-key";
+
+    const fetchImpl: typeof fetch = async () =>
+      ({
+        ok: true,
+        json: async () => ({ choices: [{ message: { content: "{\"result\":\"ok\"}" } }] })
+      }) as unknown as Response;
+
+    try {
+      const provider = createOpenAiJsonProvider(fetchImpl);
+
+      const result = await provider.callJson({
+        system: "system",
+        user: "user",
+        model: "fake",
+        temperature: 0
+      });
+
+      expect(result).toEqual({ result: "ok" });
+    } finally {
+      restoreOpenAiApiKey(originalApiKey);
     }
   });
 
@@ -254,7 +289,7 @@ describe("json llm client", () => {
         })
       ).rejects.toThrow("OpenAI JSON call failed.");
     } finally {
-      process.env.OPENAI_API_KEY = originalApiKey;
+      restoreOpenAiApiKey(originalApiKey);
     }
   });
 
@@ -280,7 +315,7 @@ describe("json llm client", () => {
         })
       ).rejects.toThrow("OpenAI JSON call returned no content.");
     } finally {
-      process.env.OPENAI_API_KEY = originalApiKey;
+      restoreOpenAiApiKey(originalApiKey);
     }
   });
 
@@ -306,7 +341,7 @@ describe("json llm client", () => {
         })
       ).rejects.toThrow("OpenAI JSON call returned invalid JSON.");
     } finally {
-      process.env.OPENAI_API_KEY = originalApiKey;
+      restoreOpenAiApiKey(originalApiKey);
     }
   });
 });
