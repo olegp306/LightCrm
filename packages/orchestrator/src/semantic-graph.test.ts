@@ -5,6 +5,7 @@ import {
   TargetResolutionSchema,
   ValidationDecisionSchema
 } from "./schemas";
+import { mergeLangGraphSettings } from "./settings";
 
 describe("semantic orchestrator schemas", () => {
   it("accepts intent classification with evidence and confidence", () => {
@@ -53,5 +54,31 @@ describe("semantic orchestrator schemas", () => {
     });
 
     expect(parsed.approved).toBe(false);
+  });
+});
+
+describe("semantic runtime settings", () => {
+  it("keeps prompts and thresholds in runtime settings", () => {
+    const settings = mergeLangGraphSettings({
+      id: "custom",
+      semanticMode: true,
+      prompts: {
+        systemRole: "You are an AI Chief of Staff for an architecture bureau.",
+        intentClassifier: "Classify the business meaning and return JSON.",
+        entityExtractor: "Extract only explicit fields with evidence.",
+        targetResolver: "Resolve CRM target or ask clarification.",
+        validationGuard: "Reject duplicates and hallucinated fields.",
+        actionPlanner: "Plan safe CRM actions."
+      },
+      thresholds: {
+        autoExecute: 0.82,
+        askConfirmation: 0.55,
+        duplicateCandidate: 0.72
+      }
+    });
+
+    expect(settings.semanticMode).toBe(true);
+    expect(settings.prompts.intentClassifier).toContain("business meaning");
+    expect(settings.thresholds.duplicateCandidate).toBe(0.72);
   });
 });

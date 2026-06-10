@@ -30,6 +30,31 @@ export type LangGraphRuntimeSettings = {
   autoCreateReminder: boolean;
   reviewNameOnlyUpdates: boolean;
   forceReviewIntents: CrmIntent[];
+  semanticMode: boolean;
+  prompts: {
+    systemRole: string;
+    intentClassifier: string;
+    entityExtractor: string;
+    targetResolver: string;
+    validationGuard: string;
+    actionPlanner: string;
+  };
+  taxonomy: {
+    intents: SemanticIntent[];
+    entityFields: string[];
+    requiredFieldsByAction: Record<string, string[]>;
+  };
+  thresholds: {
+    autoExecute: number;
+    askConfirmation: number;
+    duplicateCandidate: number;
+  };
+  confirmationPolicy: {
+    requireConfirmationForWrites: boolean;
+    requireConfirmationForDuplicateCandidates: boolean;
+    allowAutoCreateLead: boolean;
+    allowAutoCreateReminder: boolean;
+  };
   extraNewLeadPhrases: string[];
   mailAnalysisPhrases: string[];
   reminderPhrases: string[];

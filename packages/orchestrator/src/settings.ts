@@ -9,10 +9,92 @@ const enabledNodes = {
   decideAction: true
 };
 
+const defaultPrompts: LangGraphRuntimeSettings["prompts"] = {
+  systemRole:
+    "You are an operational AI Chief of Staff for an architecture bureau. Understand the whole message before deciding CRM actions. Return only valid JSON for the requested schema.",
+  intentClassifier:
+    "Classify the business meaning of the message. Do not rely on isolated keywords. If the message negates an action, classify the negated meaning. If uncertain, choose ask_clarification.",
+  entityExtractor:
+    "Extract only data explicitly stated or directly implied by the message and context. Every field must include evidence and confidence. Do not invent missing values.",
+  targetResolver:
+    "Resolve whether the message refers to an existing CRM entity or a new opportunity. Use candidates and context. If ambiguous, ask a clarification question.",
+  validationGuard:
+    "Reject unsafe actions: duplicate creation, writes without resolved target, hallucinated fields, missing required offer fields, or destructive operations without confirmation.",
+  actionPlanner: "Plan CRM actions only after intent, target, extracted entities, and validation are available."
+};
+
+const defaultTaxonomy: LangGraphRuntimeSettings["taxonomy"] = {
+  intents: [
+    "create_lead",
+    "update_lead",
+    "create_task",
+    "create_reminder",
+    "create_meeting",
+    "attach_document",
+    "generate_offer_task",
+    "add_lead_note",
+    "ask_clarification",
+    "no_action"
+  ],
+  entityFields: [
+    "clientName",
+    "company",
+    "requestType",
+    "projectAddress",
+    "areaM2",
+    "budgetEur",
+    "phone",
+    "email",
+    "desiredStart",
+    "desiredMoveIn",
+    "meetingDateTime",
+    "reminderDateTime",
+    "notes"
+  ],
+  requiredFieldsByAction: {
+    create_lead: ["clientName"],
+    update_lead: [],
+    create_meeting: ["meetingDateTime"],
+    create_reminder: ["reminderDateTime"],
+    generate_offer_task: ["clientName", "requestType"]
+  }
+};
+
+function thresholds(autoExecute: number, askConfirmation = 0.55): LangGraphRuntimeSettings["thresholds"] {
+  return {
+    autoExecute,
+    askConfirmation,
+    duplicateCandidate: 0.72
+  };
+}
+
+function confirmationPolicy(
+  allowAutoCreateLead: boolean,
+  allowAutoCreateReminder: boolean,
+  requireConfirmationForWrites = false
+): LangGraphRuntimeSettings["confirmationPolicy"] {
+  return {
+    requireConfirmationForWrites,
+    requireConfirmationForDuplicateCandidates: true,
+    allowAutoCreateLead,
+    allowAutoCreateReminder
+  };
+}
+
 function cloneSettings(settings: LangGraphRuntimeSettings): LangGraphRuntimeSettings {
   return {
     ...settings,
     forceReviewIntents: [...settings.forceReviewIntents],
+    prompts: { ...settings.prompts },
+    taxonomy: {
+      intents: [...settings.taxonomy.intents],
+      entityFields: [...settings.taxonomy.entityFields],
+      requiredFieldsByAction: Object.fromEntries(
+        Object.entries(settings.taxonomy.requiredFieldsByAction).map(([action, fields]) => [action, [...fields]])
+      )
+    },
+    thresholds: { ...settings.thresholds },
+    confirmationPolicy: { ...settings.confirmationPolicy },
     extraNewLeadPhrases: [...settings.extraNewLeadPhrases],
     mailAnalysisPhrases: [...settings.mailAnalysisPhrases],
     reminderPhrases: [...settings.reminderPhrases],
@@ -32,9 +114,14 @@ export const LANGGRAPH_PRESETS: LangGraphRuntimeSettings[] = [
     autoCreateReminder: true,
     reviewNameOnlyUpdates: true,
     forceReviewIntents: ["delete_or_undo", "generate_offer"],
-    extraNewLeadPhrases: ["заявка", "новая заявка", "запрос на проект", "хочет построить"],
+    semanticMode: true,
+    prompts: defaultPrompts,
+    taxonomy: defaultTaxonomy,
+    thresholds: thresholds(0.58),
+    confirmationPolicy: confirmationPolicy(true, true),
+    extraNewLeadPhrases: [],
     mailAnalysisPhrases: [],
-    reminderPhrases: ["фоллоу", "follow", "напомни"],
+    reminderPhrases: [],
     enabledNodes
   },
   {
@@ -48,9 +135,14 @@ export const LANGGRAPH_PRESETS: LangGraphRuntimeSettings[] = [
     autoCreateReminder: true,
     reviewNameOnlyUpdates: true,
     forceReviewIntents: ["create_new_lead", "delete_or_undo", "generate_offer", "update_existing_lead"],
+    semanticMode: true,
+    prompts: defaultPrompts,
+    taxonomy: defaultTaxonomy,
+    thresholds: thresholds(0.72),
+    confirmationPolicy: confirmationPolicy(false, true),
     extraNewLeadPhrases: [],
-    mailAnalysisPhrases: ["разбор почты", "письмо", "email", "mail", "inbox", "ответ по проекту"],
-    reminderPhrases: ["follow up", "ответить", "напомни"],
+    mailAnalysisPhrases: [],
+    reminderPhrases: [],
     enabledNodes
   },
   {
@@ -64,6 +156,11 @@ export const LANGGRAPH_PRESETS: LangGraphRuntimeSettings[] = [
     autoCreateReminder: false,
     reviewNameOnlyUpdates: true,
     forceReviewIntents: ["create_new_lead", "create_reminder", "delete_or_undo", "generate_offer", "update_existing_lead"],
+    semanticMode: true,
+    prompts: defaultPrompts,
+    taxonomy: defaultTaxonomy,
+    thresholds: thresholds(0.86, 0.75),
+    confirmationPolicy: confirmationPolicy(false, false, true),
     extraNewLeadPhrases: [],
     mailAnalysisPhrases: [],
     reminderPhrases: [],
@@ -80,9 +177,14 @@ export const LANGGRAPH_PRESETS: LangGraphRuntimeSettings[] = [
     autoCreateReminder: true,
     reviewNameOnlyUpdates: false,
     forceReviewIntents: ["delete_or_undo"],
-    extraNewLeadPhrases: ["заявка", "следующий", "клиент пишет"],
-    mailAnalysisPhrases: ["письмо"],
-    reminderPhrases: ["позже", "созвон", "напомни"],
+    semanticMode: true,
+    prompts: defaultPrompts,
+    taxonomy: defaultTaxonomy,
+    thresholds: thresholds(0.48),
+    confirmationPolicy: confirmationPolicy(true, true),
+    extraNewLeadPhrases: [],
+    mailAnalysisPhrases: [],
+    reminderPhrases: [],
     enabledNodes
   },
   {
@@ -96,9 +198,14 @@ export const LANGGRAPH_PRESETS: LangGraphRuntimeSettings[] = [
     autoCreateReminder: true,
     reviewNameOnlyUpdates: true,
     forceReviewIntents: ["delete_or_undo", "generate_offer", "update_existing_lead"],
-    extraNewLeadPhrases: ["знакомый привел", "клиент рекомендует"],
-    mailAnalysisPhrases: ["переписка", "чат", "ответил"],
-    reminderPhrases: ["договорились", "мячик", "обещала", "напомни"],
+    semanticMode: true,
+    prompts: defaultPrompts,
+    taxonomy: defaultTaxonomy,
+    thresholds: thresholds(0.68),
+    confirmationPolicy: confirmationPolicy(true, true),
+    extraNewLeadPhrases: [],
+    mailAnalysisPhrases: [],
+    reminderPhrases: [],
     enabledNodes
   }
 ];
@@ -112,9 +219,36 @@ export function mergeLangGraphSettings(
     value?.id && value.id !== "custom"
       ? LANGGRAPH_PRESETS.find((preset) => preset.id === value.id) ?? DEFAULT_LANGGRAPH_SETTINGS
       : DEFAULT_LANGGRAPH_SETTINGS;
+  const mergedTaxonomy = {
+    ...base.taxonomy,
+    ...(value?.taxonomy ?? {})
+  };
+
   return {
     ...cloneSettings(base),
     ...value,
+    prompts: {
+      ...base.prompts,
+      ...(value?.prompts ?? {})
+    },
+    taxonomy: {
+      intents: [...mergedTaxonomy.intents],
+      entityFields: [...mergedTaxonomy.entityFields],
+      requiredFieldsByAction: Object.fromEntries(
+        Object.entries({
+          ...base.taxonomy.requiredFieldsByAction,
+          ...(value?.taxonomy?.requiredFieldsByAction ?? {})
+        }).map(([action, fields]) => [action, [...fields]])
+      )
+    },
+    thresholds: {
+      ...base.thresholds,
+      ...(value?.thresholds ?? {})
+    },
+    confirmationPolicy: {
+      ...base.confirmationPolicy,
+      ...(value?.confirmationPolicy ?? {})
+    },
     enabledNodes: {
       ...base.enabledNodes,
       ...(value?.enabledNodes ?? {})
