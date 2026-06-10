@@ -2,7 +2,8 @@ import {
   DEFAULT_LANGGRAPH_SETTINGS,
   LANGGRAPH_PRESETS,
   mergeLangGraphSettings,
-  type LangGraphRuntimeSettings
+  type LangGraphRuntimeSettings,
+  type LangGraphRuntimeSettingsInput
 } from "@lightcrm/orchestrator";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
@@ -16,7 +17,7 @@ const settingsPath = join(resolve(process.cwd(), "../.."), ".local-storage", "la
 async function readStoredSettings(): Promise<LangGraphRuntimeSettings | null> {
   try {
     const raw = await readFile(settingsPath, "utf8");
-    return mergeLangGraphSettings(JSON.parse(raw) as Partial<LangGraphRuntimeSettings>);
+    return mergeLangGraphSettings(JSON.parse(raw) as LangGraphRuntimeSettingsInput);
   } catch {
     return null;
   }
@@ -38,7 +39,7 @@ export async function getLangGraphSettings(): Promise<LangGraphRuntimeSettings> 
 }
 
 export async function updateLangGraphSettings(
-  value: Partial<LangGraphRuntimeSettings>
+  value: LangGraphRuntimeSettingsInput
 ): Promise<LangGraphRuntimeSettings> {
   const settings = mergeLangGraphSettings(value);
   globalForSettings.lightCrmLangGraphSettings = settings;

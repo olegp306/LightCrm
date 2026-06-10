@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import type { LangGraphRuntimeSettings } from "@lightcrm/orchestrator";
 import { handleRouteError, parseJson } from "../../_shared";
 import { getLangGraphPresets, getLangGraphSettings, updateLangGraphSettings } from "../settings-store";
 
@@ -17,6 +16,19 @@ const CrmIntent = z.enum([
   "delete_or_undo",
   "clarification",
   "unknown"
+]);
+
+const SemanticIntent = z.enum([
+  "create_lead",
+  "update_lead",
+  "create_task",
+  "create_reminder",
+  "create_meeting",
+  "attach_document",
+  "generate_offer_task",
+  "add_lead_note",
+  "ask_clarification",
+  "no_action"
 ]);
 
 const RuntimeSettingsInput = z.object({
@@ -40,9 +52,9 @@ const RuntimeSettingsInput = z.object({
     actionPlanner: z.string().min(1)
   }),
   taxonomy: z.object({
-    intents: z.array(z.string().min(1)),
+    intents: z.array(SemanticIntent),
     entityFields: z.array(z.string().min(1)),
-    requiredFieldsByAction: z.record(z.array(z.string()))
+    requiredFieldsByAction: z.record(SemanticIntent, z.array(z.string().min(1)))
   }),
   thresholds: z.object({
     autoExecute: z.number().min(0).max(1),
@@ -83,7 +95,7 @@ export async function PUT(request: Request) {
   try {
     const input = await parseJson(request, RuntimeSettingsInput);
     return NextResponse.json({
-      settings: await updateLangGraphSettings(input as Partial<LangGraphRuntimeSettings>),
+      settings: await updateLangGraphSettings(input),
       presets: getLangGraphPresets()
     });
   } catch (error) {

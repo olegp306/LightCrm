@@ -1,5 +1,5 @@
 import { Annotation, END, START, StateGraph } from "@langchain/langgraph";
-import { DEFAULT_LANGGRAPH_SETTINGS, mergeLangGraphSettings } from "./settings";
+import { DEFAULT_LANGGRAPH_SETTINGS, mergeLangGraphSettings, type LangGraphRuntimeSettingsInput } from "./settings";
 import {
   classifyIntentByRules,
   extractFactsByRules,
@@ -143,7 +143,7 @@ const graph = createCrmOrchestratorGraph();
 
 export async function runCrmOrchestration(
   input: CrmOrchestrationInput,
-  settingsInput?: Partial<LangGraphRuntimeSettings> | null
+  settingsInput?: LangGraphRuntimeSettingsInput | null
 ): Promise<CrmOrchestrationResult> {
   const settings = mergeLangGraphSettings(settingsInput ?? DEFAULT_LANGGRAPH_SETTINGS);
   const result = await graph.invoke({

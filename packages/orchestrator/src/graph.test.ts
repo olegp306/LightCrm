@@ -113,7 +113,7 @@ describe("runCrmOrchestration", () => {
     expect(result.actions[0]?.reason).toContain("settings");
   });
 
-  it("uses mail analyst phrases from runtime settings", async () => {
+  it("uses mail analyst semantic runtime settings without legacy phrase behavior", async () => {
     const result = await runCrmOrchestration(
       {
         workspaceId: "workspace-1",
@@ -125,11 +125,15 @@ describe("runCrmOrchestration", () => {
     );
 
     expect(result.settings.id).toBe("mailAnalyst");
-    expect(result.intent).toBe("update_existing_lead");
+    expect(result.settings.semanticMode).toBe(true);
+    expect(result.settings.mailAnalysisPhrases).toEqual([]);
+    expect(result.settings.prompts.intentClassifier).toContain("business meaning");
+    expect(result.settings.thresholds.autoExecute).toBe(0.72);
+    expect(result.intent).toBe("unknown");
     expect(result.actions[0]).toMatchObject({
       type: "request_review",
       risk: "review"
     });
-    expect(result.explanations).toContain("Runtime settings matched mail-analysis wording.");
+    expect(result.explanations).not.toContain("Runtime settings matched mail-analysis wording.");
   });
 });

@@ -1,6 +1,21 @@
 import type { LangGraphRuntimeSettings } from "./types";
 
-const enabledNodes = {
+export type LangGraphRuntimeSettingsInput = Partial<
+  Omit<
+    LangGraphRuntimeSettings,
+    "prompts" | "taxonomy" | "thresholds" | "confirmationPolicy" | "enabledNodes"
+  >
+> & {
+  prompts?: Partial<LangGraphRuntimeSettings["prompts"]>;
+  taxonomy?: Partial<Omit<LangGraphRuntimeSettings["taxonomy"], "requiredFieldsByAction">> & {
+    requiredFieldsByAction?: Record<string, string[]>;
+  };
+  thresholds?: Partial<LangGraphRuntimeSettings["thresholds"]>;
+  confirmationPolicy?: Partial<LangGraphRuntimeSettings["confirmationPolicy"]>;
+  enabledNodes?: Partial<LangGraphRuntimeSettings["enabledNodes"]>;
+};
+
+const defaultEnabledNodes: LangGraphRuntimeSettings["enabledNodes"] = {
   normalizeMessage: true,
   extractFacts: true,
   classifyIntent: true,
@@ -9,56 +24,64 @@ const enabledNodes = {
   decideAction: true
 };
 
-const defaultPrompts: LangGraphRuntimeSettings["prompts"] = {
-  systemRole:
-    "You are an operational AI Chief of Staff for an architecture bureau. Understand the whole message before deciding CRM actions. Return only valid JSON for the requested schema.",
-  intentClassifier:
-    "Classify the business meaning of the message. Do not rely on isolated keywords. If the message negates an action, classify the negated meaning. If uncertain, choose ask_clarification.",
-  entityExtractor:
-    "Extract only data explicitly stated or directly implied by the message and context. Every field must include evidence and confidence. Do not invent missing values.",
-  targetResolver:
-    "Resolve whether the message refers to an existing CRM entity or a new opportunity. Use candidates and context. If ambiguous, ask a clarification question.",
-  validationGuard:
-    "Reject unsafe actions: duplicate creation, writes without resolved target, hallucinated fields, missing required offer fields, or destructive operations without confirmation.",
-  actionPlanner: "Plan CRM actions only after intent, target, extracted entities, and validation are available."
-};
+function createEnabledNodes(): LangGraphRuntimeSettings["enabledNodes"] {
+  return { ...defaultEnabledNodes };
+}
 
-const defaultTaxonomy: LangGraphRuntimeSettings["taxonomy"] = {
-  intents: [
-    "create_lead",
-    "update_lead",
-    "create_task",
-    "create_reminder",
-    "create_meeting",
-    "attach_document",
-    "generate_offer_task",
-    "add_lead_note",
-    "ask_clarification",
-    "no_action"
-  ],
-  entityFields: [
-    "clientName",
-    "company",
-    "requestType",
-    "projectAddress",
-    "areaM2",
-    "budgetEur",
-    "phone",
-    "email",
-    "desiredStart",
-    "desiredMoveIn",
-    "meetingDateTime",
-    "reminderDateTime",
-    "notes"
-  ],
-  requiredFieldsByAction: {
-    create_lead: ["clientName"],
-    update_lead: [],
-    create_meeting: ["meetingDateTime"],
-    create_reminder: ["reminderDateTime"],
-    generate_offer_task: ["clientName", "requestType"]
-  }
-};
+function createDefaultPrompts(): LangGraphRuntimeSettings["prompts"] {
+  return {
+    systemRole:
+      "You are an operational AI Chief of Staff for an architecture bureau. Understand the whole message before deciding CRM actions. Return only valid JSON for the requested schema.",
+    intentClassifier:
+      "Classify the business meaning of the message. Do not rely on isolated keywords. If the message negates an action, classify the negated meaning. If uncertain, choose ask_clarification.",
+    entityExtractor:
+      "Extract only data explicitly stated or directly implied by the message and context. Every field must include evidence and confidence. Do not invent missing values.",
+    targetResolver:
+      "Resolve whether the message refers to an existing CRM entity or a new opportunity. Use candidates and context. If ambiguous, ask a clarification question.",
+    validationGuard:
+      "Reject unsafe actions: duplicate creation, writes without resolved target, hallucinated fields, missing required offer fields, or destructive operations without confirmation.",
+    actionPlanner: "Plan CRM actions only after intent, target, extracted entities, and validation are available."
+  };
+}
+
+function createDefaultTaxonomy(): LangGraphRuntimeSettings["taxonomy"] {
+  return {
+    intents: [
+      "create_lead",
+      "update_lead",
+      "create_task",
+      "create_reminder",
+      "create_meeting",
+      "attach_document",
+      "generate_offer_task",
+      "add_lead_note",
+      "ask_clarification",
+      "no_action"
+    ],
+    entityFields: [
+      "clientName",
+      "company",
+      "requestType",
+      "projectAddress",
+      "areaM2",
+      "budgetEur",
+      "phone",
+      "email",
+      "desiredStart",
+      "desiredMoveIn",
+      "meetingDateTime",
+      "reminderDateTime",
+      "notes"
+    ],
+    requiredFieldsByAction: {
+      create_lead: ["clientName"],
+      update_lead: [],
+      create_meeting: ["meetingDateTime"],
+      create_reminder: ["reminderDateTime"],
+      generate_offer_task: ["clientName", "requestType"]
+    }
+  };
+}
 
 function thresholds(autoExecute: number, askConfirmation = 0.55): LangGraphRuntimeSettings["thresholds"] {
   return {
@@ -115,14 +138,14 @@ export const LANGGRAPH_PRESETS: LangGraphRuntimeSettings[] = [
     reviewNameOnlyUpdates: true,
     forceReviewIntents: ["delete_or_undo", "generate_offer"],
     semanticMode: true,
-    prompts: defaultPrompts,
-    taxonomy: defaultTaxonomy,
+    prompts: createDefaultPrompts(),
+    taxonomy: createDefaultTaxonomy(),
     thresholds: thresholds(0.58),
     confirmationPolicy: confirmationPolicy(true, true),
     extraNewLeadPhrases: [],
     mailAnalysisPhrases: [],
     reminderPhrases: [],
-    enabledNodes
+    enabledNodes: createEnabledNodes()
   },
   {
     id: "mailAnalyst",
@@ -136,14 +159,14 @@ export const LANGGRAPH_PRESETS: LangGraphRuntimeSettings[] = [
     reviewNameOnlyUpdates: true,
     forceReviewIntents: ["create_new_lead", "delete_or_undo", "generate_offer", "update_existing_lead"],
     semanticMode: true,
-    prompts: defaultPrompts,
-    taxonomy: defaultTaxonomy,
+    prompts: createDefaultPrompts(),
+    taxonomy: createDefaultTaxonomy(),
     thresholds: thresholds(0.72),
     confirmationPolicy: confirmationPolicy(false, true),
     extraNewLeadPhrases: [],
     mailAnalysisPhrases: [],
     reminderPhrases: [],
-    enabledNodes
+    enabledNodes: createEnabledNodes()
   },
   {
     id: "riskAuditor",
@@ -157,14 +180,14 @@ export const LANGGRAPH_PRESETS: LangGraphRuntimeSettings[] = [
     reviewNameOnlyUpdates: true,
     forceReviewIntents: ["create_new_lead", "create_reminder", "delete_or_undo", "generate_offer", "update_existing_lead"],
     semanticMode: true,
-    prompts: defaultPrompts,
-    taxonomy: defaultTaxonomy,
+    prompts: createDefaultPrompts(),
+    taxonomy: createDefaultTaxonomy(),
     thresholds: thresholds(0.86, 0.75),
     confirmationPolicy: confirmationPolicy(false, false, true),
     extraNewLeadPhrases: [],
     mailAnalysisPhrases: [],
     reminderPhrases: [],
-    enabledNodes
+    enabledNodes: createEnabledNodes()
   },
   {
     id: "fastOperator",
@@ -178,14 +201,14 @@ export const LANGGRAPH_PRESETS: LangGraphRuntimeSettings[] = [
     reviewNameOnlyUpdates: false,
     forceReviewIntents: ["delete_or_undo"],
     semanticMode: true,
-    prompts: defaultPrompts,
-    taxonomy: defaultTaxonomy,
+    prompts: createDefaultPrompts(),
+    taxonomy: createDefaultTaxonomy(),
     thresholds: thresholds(0.48),
     confirmationPolicy: confirmationPolicy(true, true),
     extraNewLeadPhrases: [],
     mailAnalysisPhrases: [],
     reminderPhrases: [],
-    enabledNodes
+    enabledNodes: createEnabledNodes()
   },
   {
     id: "relationshipKeeper",
@@ -199,21 +222,21 @@ export const LANGGRAPH_PRESETS: LangGraphRuntimeSettings[] = [
     reviewNameOnlyUpdates: true,
     forceReviewIntents: ["delete_or_undo", "generate_offer", "update_existing_lead"],
     semanticMode: true,
-    prompts: defaultPrompts,
-    taxonomy: defaultTaxonomy,
+    prompts: createDefaultPrompts(),
+    taxonomy: createDefaultTaxonomy(),
     thresholds: thresholds(0.68),
     confirmationPolicy: confirmationPolicy(true, true),
     extraNewLeadPhrases: [],
     mailAnalysisPhrases: [],
     reminderPhrases: [],
-    enabledNodes
+    enabledNodes: createEnabledNodes()
   }
 ];
 
-export const DEFAULT_LANGGRAPH_SETTINGS = LANGGRAPH_PRESETS[0];
+export const DEFAULT_LANGGRAPH_SETTINGS = cloneSettings(LANGGRAPH_PRESETS[0]);
 
 export function mergeLangGraphSettings(
-  value: Partial<LangGraphRuntimeSettings> | null | undefined
+  value: LangGraphRuntimeSettingsInput | null | undefined
 ): LangGraphRuntimeSettings {
   const base =
     value?.id && value.id !== "custom"

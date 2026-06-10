@@ -5,7 +5,7 @@ import {
   TargetResolutionSchema,
   ValidationDecisionSchema
 } from "./schemas";
-import { mergeLangGraphSettings } from "./settings";
+import { LANGGRAPH_PRESETS, mergeLangGraphSettings } from "./settings";
 
 describe("semantic orchestrator schemas", () => {
   it("accepts intent classification with evidence and confidence", () => {
@@ -80,5 +80,73 @@ describe("semantic runtime settings", () => {
     expect(settings.semanticMode).toBe(true);
     expect(settings.prompts.intentClassifier).toContain("business meaning");
     expect(settings.thresholds.duplicateCandidate).toBe(0.72);
+  });
+
+  it("keeps legacy phrase arrays empty in every preset", () => {
+    for (const preset of LANGGRAPH_PRESETS) {
+      expect(preset.extraNewLeadPhrases).toEqual([]);
+      expect(preset.mailAnalysisPhrases).toEqual([]);
+      expect(preset.reminderPhrases).toEqual([]);
+    }
+  });
+
+  it("preserves semantic defaults when merging partial nested settings", () => {
+    const settings = mergeLangGraphSettings({
+      prompts: {
+        intentClassifier: "Classify by business outcome."
+      },
+      thresholds: {
+        duplicateCandidate: 0.81
+      },
+      taxonomy: {
+        requiredFieldsByAction: {
+          create_task: ["notes"]
+        }
+      },
+      confirmationPolicy: {
+        requireConfirmationForWrites: true
+      }
+    });
+
+    expect(settings.prompts.intentClassifier).toBe("Classify by business outcome.");
+    expect(settings.prompts.entityExtractor).toContain("explicitly stated");
+    expect(settings.thresholds.autoExecute).toBe(0.58);
+    expect(settings.thresholds.duplicateCandidate).toBe(0.81);
+    expect(settings.taxonomy.intents).toContain("create_lead");
+    expect(settings.taxonomy.requiredFieldsByAction.create_lead).toEqual(["clientName"]);
+    expect(settings.taxonomy.requiredFieldsByAction.create_task).toEqual(["notes"]);
+    expect(settings.confirmationPolicy.requireConfirmationForWrites).toBe(true);
+    expect(settings.confirmationPolicy.allowAutoCreateLead).toBe(true);
+  });
+
+  it("returns cloned preset settings without shared mutable nested objects", () => {
+    expect(LANGGRAPH_PRESETS[0]?.prompts).not.toBe(LANGGRAPH_PRESETS[1]?.prompts);
+    expect(LANGGRAPH_PRESETS[0]?.taxonomy).not.toBe(LANGGRAPH_PRESETS[1]?.taxonomy);
+    expect(LANGGRAPH_PRESETS[0]?.taxonomy.requiredFieldsByAction).not.toBe(
+      LANGGRAPH_PRESETS[1]?.taxonomy.requiredFieldsByAction
+    );
+    expect(LANGGRAPH_PRESETS[0]?.enabledNodes).not.toBe(LANGGRAPH_PRESETS[1]?.enabledNodes);
+
+    const leadHunter = mergeLangGraphSettings({ id: "leadHunter" });
+    const mailAnalyst = mergeLangGraphSettings({ id: "mailAnalyst" });
+
+    leadHunter.prompts.intentClassifier = "Changed";
+    leadHunter.taxonomy.entityFields.push("mutatedField");
+    leadHunter.taxonomy.requiredFieldsByAction.create_lead.push("mutatedRequiredField");
+    leadHunter.enabledNodes.riskCheck = false;
+    leadHunter.extraNewLeadPhrases.push("legacy");
+
+    expect(mailAnalyst.prompts.intentClassifier).not.toBe("Changed");
+    expect(mailAnalyst.taxonomy.entityFields).not.toContain("mutatedField");
+    expect(mailAnalyst.taxonomy.requiredFieldsByAction.create_lead).toEqual(["clientName"]);
+    expect(mailAnalyst.enabledNodes.riskCheck).toBe(true);
+    expect(mailAnalyst.extraNewLeadPhrases).toEqual([]);
+
+    expect(LANGGRAPH_PRESETS.find((preset) => preset.id === "leadHunter")?.prompts.intentClassifier).not.toBe(
+      "Changed"
+    );
+    expect(LANGGRAPH_PRESETS.find((preset) => preset.id === "leadHunter")?.taxonomy.entityFields).not.toContain(
+      "mutatedField"
+    );
   });
 });
