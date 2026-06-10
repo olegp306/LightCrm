@@ -1,14 +1,7 @@
 import { Annotation, END, START, StateGraph } from "@langchain/langgraph";
 import { DEFAULT_LANGGRAPH_SETTINGS, mergeLangGraphSettings, type LangGraphRuntimeSettingsInput } from "./settings";
 import { runSemanticCrmOrchestration } from "./semantic-graph";
-import {
-  classifyIntentByRules,
-  extractFactsByRules,
-  newLeadExplanation,
-  planActions,
-  riskCheck,
-  settingsExplanation
-} from "./rules";
+import { reviewAction } from "./rules";
 import type {
   CrmIntent,
   CrmOrchestrationInput,
@@ -68,57 +61,31 @@ function emptyFacts(state: OrchestrationState): ExtractedFacts {
 
 function extractFacts(state: OrchestrationState): Partial<OrchestrationState> {
   return {
-    facts: state.settings.enabledNodes.extractFacts ? extractFactsByRules(state.input, state.normalizedText) : emptyFacts(state)
+    facts: emptyFacts(state)
   };
 }
 
 function classifyIntent(state: OrchestrationState): Partial<OrchestrationState> {
-  const intent = state.settings.enabledNodes.classifyIntent ? classifyIntentByRules(state.normalizedText, state.settings) : "unknown";
   return {
-    intent,
-    explanations: [newLeadExplanation(state.normalizedText), settingsExplanation(intent, state.normalizedText, state.settings)].filter(
-      (value): value is string => Boolean(value)
-    )
+    intent: "unknown",
+    explanations: ["Legacy rule parser is disabled. Enable semantic mode for CRM orchestration."]
   };
 }
 
 function resolveEntities(state: OrchestrationState): Partial<OrchestrationState> {
-  if (!state.settings.enabledNodes.resolveEntities) {
-    return {};
-  }
-  if (state.intent === "create_new_lead") {
-    return {
-      explanations: ["Entity resolution will not reuse the latest lead when a new-lead phrase is explicit."]
-    };
-  }
   return {};
 }
 
 function checkRisk(state: OrchestrationState): Partial<OrchestrationState> {
-  const result = state.settings.enabledNodes.riskCheck
-    ? riskCheck(state.intent, state.facts, state.normalizedText, state.settings)
-    : { risk: "review" as RiskLevel, reason: "Risk node is disabled by runtime settings." };
   return {
-    risk: result.risk,
-    riskReason: result.reason
+    risk: "review",
+    riskReason: "Legacy rule parser is disabled."
   };
 }
 
 function decideAction(state: OrchestrationState): Partial<OrchestrationState> {
-  if (!state.settings.enabledNodes.decideAction) {
-    return {
-      actions: [
-        {
-          type: "request_review",
-          risk: "review",
-          reason: "Action node is disabled by runtime settings.",
-          payload: { intent: state.intent, facts: state.facts }
-        }
-      ]
-    };
-  }
   return {
-    actions: planActions(state.intent, state.facts, state.risk, state.riskReason)
+    actions: [reviewAction(state.riskReason, { intent: state.intent, facts: state.facts })]
   };
 }
 

@@ -29,7 +29,7 @@ describe("runCrmOrchestration", () => {
     }
   });
 
-  it("keeps the legacy rule graph available only when semantic mode is disabled", async () => {
+  it("keeps semantic-disabled fallback in review without parsing business meaning", async () => {
     const result = await runCrmOrchestration(
       {
         workspaceId: "workspace-1",
@@ -38,16 +38,16 @@ describe("runCrmOrchestration", () => {
         text: "Please handle this fresh opportunity."
       },
       {
-        semanticMode: false,
-        extraNewLeadPhrases: ["fresh opportunity"]
+        semanticMode: false
       }
     );
 
     expect(result.settings.semanticMode).toBe(false);
-    expect(result.intent).toBe("create_new_lead");
+    expect(result.intent).toBe("unknown");
     expect(result.actions[0]).toMatchObject({
-      type: "create_lead",
-      risk: "auto"
+      type: "request_review",
+      risk: "review"
     });
+    expect(result.explanations).toContain("Legacy rule parser is disabled. Enable semantic mode for CRM orchestration.");
   });
 });
