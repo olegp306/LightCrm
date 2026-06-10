@@ -76,10 +76,54 @@ function semanticSystemPrompt(state: SemanticOrchestrationState, nodeInstruction
   return [state.settings.prompts.systemRole, nodeInstruction].join("\n\n");
 }
 
+const intentJsonContract = [
+  "Return exactly this JSON shape:",
+  "{",
+  '  "primaryIntent": "create_lead | update_lead | create_task | create_reminder | create_meeting | attach_document | generate_offer_task | add_lead_note | ask_clarification | no_action",',
+  '  "secondaryIntents": [],',
+  '  "confidence": 0.0,',
+  '  "reason": "short explanation",',
+  '  "evidence": ["short source quote or observation"]',
+  "}"
+].join("\n");
+
+const targetJsonContract = [
+  "Return exactly this JSON shape:",
+  "{",
+  '  "targetType": "lead | client | project | task | none",',
+  '  "targetId": null,',
+  '  "confidence": 0.0,',
+  '  "candidates": [{"id": "candidate id", "label": "candidate label", "score": 0.0, "reason": "why this candidate"}],',
+  '  "needsClarification": false,',
+  '  "clarificationQuestion": null',
+  "}"
+].join("\n");
+
+const entitiesJsonContract = [
+  "Return exactly this JSON shape:",
+  "{",
+  '  "fields": {',
+  '    "fieldName": {"value": "string, number, boolean, or null", "confidence": 0.0, "evidence": "short source quote", "sourceMessageIds": ["message id"]}',
+  "  },",
+  '  "missingData": [],',
+  '  "notes": []',
+  "}"
+].join("\n");
+
+const validationJsonContract = [
+  "Return exactly this JSON shape:",
+  "{",
+  '  "approved": false,',
+  '  "riskLevel": "low | medium | high",',
+  '  "reason": "short explanation",',
+  '  "needsHumanConfirmation": true',
+  "}"
+].join("\n");
+
 async function classifyIntent(state: SemanticOrchestrationState): Promise<Partial<SemanticOrchestrationState>> {
   const result = await state.llm.runJson({
     schema: IntentClassificationSchema,
-    system: semanticSystemPrompt(state, `Classify intent.\n${state.settings.prompts.intentClassifier}`),
+    system: semanticSystemPrompt(state, `Classify intent.\n${state.settings.prompts.intentClassifier}\n\n${intentJsonContract}`),
     user: contextToPrompt(state.context),
     model: state.settings.model,
     temperature: state.settings.temperature
@@ -95,7 +139,7 @@ async function classifyIntent(state: SemanticOrchestrationState): Promise<Partia
 async function resolveTarget(state: SemanticOrchestrationState): Promise<Partial<SemanticOrchestrationState>> {
   const result = await state.llm.runJson({
     schema: TargetResolutionSchema,
-    system: semanticSystemPrompt(state, `Resolve CRM target.\n${state.settings.prompts.targetResolver}`),
+    system: semanticSystemPrompt(state, `Resolve CRM target.\n${state.settings.prompts.targetResolver}\n\n${targetJsonContract}`),
     user: JSON.stringify(
       {
         context: JSON.parse(contextToPrompt(state.context)),
@@ -117,7 +161,7 @@ async function resolveTarget(state: SemanticOrchestrationState): Promise<Partial
 async function extractEntities(state: SemanticOrchestrationState): Promise<Partial<SemanticOrchestrationState>> {
   const result = await state.llm.runJson({
     schema: EntityExtractionSchema,
-    system: semanticSystemPrompt(state, `Extract entities.\n${state.settings.prompts.entityExtractor}`),
+    system: semanticSystemPrompt(state, `Extract entities.\n${state.settings.prompts.entityExtractor}\n\n${entitiesJsonContract}`),
     user: JSON.stringify(
       {
         context: JSON.parse(contextToPrompt(state.context)),
@@ -158,7 +202,7 @@ function riskFromValidation(state: SemanticOrchestrationState, validation: Seman
 async function validateAction(state: SemanticOrchestrationState): Promise<Partial<SemanticOrchestrationState>> {
   const validation = await state.llm.runJson({
     schema: ValidationDecisionSchema,
-    system: semanticSystemPrompt(state, `Validate planned CRM action.\n${state.settings.prompts.validationGuard}`),
+    system: semanticSystemPrompt(state, `Validate planned CRM action.\n${state.settings.prompts.validationGuard}\n\n${validationJsonContract}`),
     user: JSON.stringify(
       {
         intent: state.intentClassification,

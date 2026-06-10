@@ -2,6 +2,42 @@
 
 All notable LightCrm releases are documented here. Starting with `0.2.0`, every version bump must include a changelog entry.
 
+## 0.3.2 - 2026-06-10
+
+### Project Snapshot
+
+LightCrm now routes CRM intake through a semantic LangGraph orchestration layer. The orchestrator reads the whole message, resolves target context, extracts fields with evidence, validates safety, and plans CRM actions from structured JSON instead of hardcoded phrase matching.
+
+### Added
+
+- Added a semantic LangGraph pipeline with `collect_input`, `build_context`, `classify_intent`, `resolve_target`, `extract_entities`, `validate_action`, `plan_action`, and `execution_gate` nodes.
+- Added strict Zod schemas for semantic intent classification, target resolution, entity extraction, and validation decisions.
+- Added an OpenAI-compatible JSON LLM provider with schema validation and clean error handling.
+- Added runtime Settings UI for semantic prompts, taxonomy, required fields, thresholds, and confirmation policy.
+- Added relationship context plumbing for recent CRM leads/messages.
+- Added Telegram dry-run formatting for semantic intents and target ids.
+- Added guard coverage to prevent the old hardcoded rule parser from returning.
+- Added `docs/langgraph-semantic-settings.md` explaining each semantic setting.
+
+### Changed
+
+- Routed default CRM orchestration through semantic mode.
+- Kept `semanticMode: false` as a safe review-only fallback rather than a phrase parser.
+- Moved lead/reminder auto-create policy into semantic confirmation settings.
+- Populated legacy compatibility facts from semantic extracted entities when type-safe.
+- Removed visible Settings UI controls for old new-lead, mail-analysis, and reminder phrase lists.
+
+### Removed
+
+- Removed active Russian phrase arrays, person/city lists, and regex-based business intent/fact extraction from the orchestrator.
+
+### Verification
+
+- `pnpm --filter @lightcrm/orchestrator test`
+- `pnpm --filter @lightcrm/orchestrator typecheck`
+- `pnpm --filter @lightcrm/telegram-bot test`
+- `pnpm --filter @lightcrm/web typecheck`
+
 ## 0.3.1 - 2026-06-10
 
 ### Project Snapshot
