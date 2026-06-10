@@ -1400,6 +1400,17 @@ input {
   padding: 0;
 }
 
+.settingsFieldGrid,
+.requiredFieldsGrid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.requiredFieldsGrid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
 .switchRow {
   align-items: center;
   cursor: pointer;
@@ -1521,6 +1532,11 @@ input {
 
   .settingsPanel.wide {
     grid-column: span 1;
+  }
+
+  .settingsFieldGrid,
+  .requiredFieldsGrid {
+    grid-template-columns: 1fr;
   }
 
   .columnDropdown {

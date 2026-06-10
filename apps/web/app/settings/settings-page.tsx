@@ -1,6 +1,6 @@
 "use client";
 
-import type { CrmIntent, LangGraphRuntimeSettings } from "@lightcrm/orchestrator";
+import type { CrmIntent, LangGraphRuntimeSettings, SemanticIntent } from "@lightcrm/orchestrator";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 type SettingsResponse = {
@@ -30,11 +30,11 @@ const nodeLabels: Record<keyof LangGraphRuntimeSettings["enabledNodes"], string>
   decideAction: "Action"
 };
 
-function phraseText(values: string[]) {
+function listText(values: string[]) {
   return values.join("\n");
 }
 
-function parsePhrases(value: string) {
+function parseLines(value: string) {
   return value
     .split("\n")
     .map((line) => line.trim())
@@ -43,6 +43,10 @@ function parsePhrases(value: string) {
 
 function percent(value: number) {
   return `${Math.round(value * 100)}%`;
+}
+
+function stableSettingsJson(value: LangGraphRuntimeSettings) {
+  return JSON.stringify(value);
 }
 
 export function LangGraphSettingsPage() {
@@ -86,6 +90,7 @@ export function LangGraphSettingsPage() {
       return;
     }
     const controller = new AbortController();
+    const snapshot = stableSettingsJson(settings);
     const timeout = window.setTimeout(() => {
       setStatus("saving");
       fetch("/api/crm/orchestrator/settings", {
@@ -99,7 +104,9 @@ export function LangGraphSettingsPage() {
           if (!response.ok) {
             throw new Error(payload.error ?? "Settings save failed");
           }
-          setSettings(payload.settings);
+          if (stableSettingsJson(payload.settings) !== snapshot) {
+            setSettings(payload.settings);
+          }
           setPresets(payload.presets);
           setError(null);
           setStatus("saved");
@@ -150,6 +157,58 @@ export function LangGraphSettingsPage() {
     });
   }
 
+  function patchPrompts(value: Partial<LangGraphRuntimeSettings["prompts"]>) {
+    if (!settings) {
+      return;
+    }
+    patchSettings({
+      prompts: {
+        ...settings.prompts,
+        ...value
+      }
+    });
+  }
+
+  function patchTaxonomy(value: Partial<LangGraphRuntimeSettings["taxonomy"]>) {
+    if (!settings) {
+      return;
+    }
+    patchSettings({
+      taxonomy: {
+        ...settings.taxonomy,
+        ...value,
+        requiredFieldsByAction: {
+          ...settings.taxonomy.requiredFieldsByAction,
+          ...(value.requiredFieldsByAction ?? {})
+        }
+      }
+    });
+  }
+
+  function patchThresholds(value: Partial<LangGraphRuntimeSettings["thresholds"]>) {
+    if (!settings) {
+      return;
+    }
+    patchSettings({
+      thresholds: {
+        ...settings.thresholds,
+        ...value
+      }
+    });
+  }
+
+  function patchConfirmationPolicy(value: Partial<LangGraphRuntimeSettings["confirmationPolicy"]>) {
+    if (!settings) {
+      return;
+    }
+    patchSettings({
+      confirmationPolicy: {
+        ...settings.confirmationPolicy,
+        ...value
+      }
+    });
+  }
+
   if (!settings) {
     return (
       <section className="settingsSurface">
@@ -193,6 +252,14 @@ export function LangGraphSettingsPage() {
       <div className="settingsGrid">
         <section className="settingsPanel">
           <h2>Runtime</h2>
+          <label className="switchRow">
+            <input
+              checked={settings.semanticMode}
+              type="checkbox"
+              onChange={(event) => patchSettings({ semanticMode: event.target.checked })}
+            />
+            <span>Semantic mode</span>
+          </label>
           <label>
             <span>Name</span>
             <input value={settings.name} onChange={(event) => patchSettings({ name: event.target.value })} />
@@ -227,6 +294,73 @@ export function LangGraphSettingsPage() {
 
         <section className="settingsPanel">
           <h2>Gates</h2>
+          <label>
+            <span>Auto execute {percent(settings.thresholds.autoExecute)}</span>
+            <input
+              max="1"
+              min="0"
+              step="0.01"
+              type="range"
+              value={settings.thresholds.autoExecute}
+              onChange={(event) => patchThresholds({ autoExecute: Number(event.target.value) })}
+            />
+          </label>
+          <label>
+            <span>Ask confirmation {percent(settings.thresholds.askConfirmation)}</span>
+            <input
+              max="1"
+              min="0"
+              step="0.01"
+              type="range"
+              value={settings.thresholds.askConfirmation}
+              onChange={(event) => patchThresholds({ askConfirmation: Number(event.target.value) })}
+            />
+          </label>
+          <label>
+            <span>Duplicate candidate {percent(settings.thresholds.duplicateCandidate)}</span>
+            <input
+              max="1"
+              min="0"
+              step="0.01"
+              type="range"
+              value={settings.thresholds.duplicateCandidate}
+              onChange={(event) => patchThresholds({ duplicateCandidate: Number(event.target.value) })}
+            />
+          </label>
+          <label className="switchRow">
+            <input
+              checked={settings.confirmationPolicy.requireConfirmationForWrites}
+              type="checkbox"
+              onChange={(event) => patchConfirmationPolicy({ requireConfirmationForWrites: event.target.checked })}
+            />
+            <span>Confirm all writes</span>
+          </label>
+          <label className="switchRow">
+            <input
+              checked={settings.confirmationPolicy.requireConfirmationForDuplicateCandidates}
+              type="checkbox"
+              onChange={(event) =>
+                patchConfirmationPolicy({ requireConfirmationForDuplicateCandidates: event.target.checked })
+              }
+            />
+            <span>Confirm duplicate candidates</span>
+          </label>
+          <label className="switchRow">
+            <input
+              checked={settings.confirmationPolicy.allowAutoCreateLead}
+              type="checkbox"
+              onChange={(event) => patchConfirmationPolicy({ allowAutoCreateLead: event.target.checked })}
+            />
+            <span>Allow semantic lead creation</span>
+          </label>
+          <label className="switchRow">
+            <input
+              checked={settings.confirmationPolicy.allowAutoCreateReminder}
+              type="checkbox"
+              onChange={(event) => patchConfirmationPolicy({ allowAutoCreateReminder: event.target.checked })}
+            />
+            <span>Allow semantic reminders</span>
+          </label>
           <label className="switchRow">
             <input
               checked={settings.autoCreateLead}
@@ -266,31 +400,64 @@ export function LangGraphSettingsPage() {
         </section>
 
         <section className="settingsPanel wide">
-          <h2>Language</h2>
-          <label>
-            <span>New lead phrases</span>
-            <textarea
-              rows={5}
-              value={phraseText(settings.extraNewLeadPhrases)}
-              onChange={(event) => patchSettings({ extraNewLeadPhrases: parsePhrases(event.target.value) })}
-            />
-          </label>
-          <label>
-            <span>Mail analysis phrases</span>
-            <textarea
-              rows={5}
-              value={phraseText(settings.mailAnalysisPhrases)}
-              onChange={(event) => patchSettings({ mailAnalysisPhrases: parsePhrases(event.target.value) })}
-            />
-          </label>
-          <label>
-            <span>Reminder phrases</span>
-            <textarea
-              rows={5}
-              value={phraseText(settings.reminderPhrases)}
-              onChange={(event) => patchSettings({ reminderPhrases: parsePhrases(event.target.value) })}
-            />
-          </label>
+          <h2>Semantic Prompts</h2>
+          {(
+            [
+              ["systemRole", "System role"],
+              ["intentClassifier", "Intent classifier"],
+              ["entityExtractor", "Entity extractor"],
+              ["targetResolver", "Target resolver"],
+              ["validationGuard", "Validation guard"],
+              ["actionPlanner", "Action planner"]
+            ] as Array<[keyof LangGraphRuntimeSettings["prompts"], string]>
+          ).map(([key, label]) => (
+            <label key={key}>
+              <span>{label}</span>
+              <textarea rows={5} value={settings.prompts[key]} onChange={(event) => patchPrompts({ [key]: event.target.value })} />
+            </label>
+          ))}
+        </section>
+
+        <section className="settingsPanel wide">
+          <h2>Taxonomy</h2>
+          <div className="settingsFieldGrid">
+            <label>
+              <span>Allowed intents</span>
+              <textarea
+                rows={8}
+                value={listText(settings.taxonomy.intents)}
+                onChange={(event) => patchTaxonomy({ intents: parseLines(event.target.value) as SemanticIntent[] })}
+              />
+            </label>
+            <label>
+              <span>Entity fields</span>
+              <textarea
+                rows={8}
+                value={listText(settings.taxonomy.entityFields)}
+                onChange={(event) => patchTaxonomy({ entityFields: parseLines(event.target.value) })}
+              />
+            </label>
+          </div>
+          <div className="requiredFieldsGrid">
+            {Object.entries(settings.taxonomy.requiredFieldsByAction).map(([action, fields]) => (
+              <label key={action}>
+                <span>{action}</span>
+                <input
+                  value={fields.join(", ")}
+                  onChange={(event) =>
+                    patchTaxonomy({
+                      requiredFieldsByAction: {
+                        [action]: event.target.value
+                          .split(",")
+                          .map((field) => field.trim())
+                          .filter(Boolean)
+                      }
+                    })
+                  }
+                />
+              </label>
+            ))}
+          </div>
         </section>
 
         <section className="settingsPanel wide">
