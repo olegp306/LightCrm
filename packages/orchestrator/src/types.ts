@@ -132,7 +132,7 @@ export type OrchestrationContext = {
 export type CrmOrchestrationResult = {
   workspaceId: string;
   normalizedText: string;
-  intent: CrmIntent;
+  intent: CrmIntent | SemanticIntent;
   facts: ExtractedFacts;
   actions: PlannedCrmAction[];
   risk: RiskLevel;

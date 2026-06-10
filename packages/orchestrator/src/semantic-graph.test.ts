@@ -8,6 +8,7 @@ import {
   ValidationDecisionSchema
 } from "./schemas";
 import { LANGGRAPH_PRESETS, mergeLangGraphSettings } from "./settings";
+import { runSemanticCrmOrchestration } from "./semantic-graph";
 
 function restoreOpenAiApiKey(originalApiKey: string | undefined) {
   if (originalApiKey === undefined) {
@@ -423,5 +424,65 @@ describe("json llm client", () => {
     } finally {
       restoreOpenAiApiKey(originalApiKey);
     }
+  });
+});
+
+describe("semantic crm orchestration", () => {
+  it("uses meaning-based intent, target resolution, extraction, and validation", async () => {
+    const calls: string[] = [];
+    const result = await runSemanticCrmOrchestration(
+      {
+        workspaceId: "default",
+        messageId: "m-2",
+        author: "architect",
+        text: "Нет, это не новый лид. Это информация по Максиму, добавь как заметку.",
+        sourceChannel: "telegram"
+      },
+      {
+        llmProvider: {
+          async callJson(input) {
+            calls.push(input.system);
+            if (input.system.includes("Classify")) {
+              return {
+                primaryIntent: "add_lead_note",
+                secondaryIntents: [],
+                confidence: 0.91,
+                reason: "The user explicitly negates new lead and asks to add a note.",
+                evidence: ["не новый лид", "добавь как заметку"]
+              };
+            }
+            if (input.system.includes("Resolve")) {
+              return {
+                targetType: "lead",
+                targetId: "lead-maxim",
+                confidence: 0.86,
+                candidates: [{ id: "lead-maxim", label: "Maxim current project", score: 0.86, reason: "Context mentions Maxim" }],
+                needsClarification: false,
+                clarificationQuestion: null
+              };
+            }
+            if (input.system.includes("Extract")) {
+              return {
+                fields: {
+                  notes: { value: "Information should be added as a note.", confidence: 0.9, evidence: "добавь как заметку", sourceMessageIds: ["m-2"] }
+                },
+                missingData: [],
+                notes: ["Negated create lead."]
+              };
+            }
+            return {
+              approved: true,
+              riskLevel: "low",
+              reason: "Resolved note update with explicit target.",
+              needsHumanConfirmation: false
+            };
+          }
+        }
+      }
+    );
+
+    expect(result.intent).toBe("add_lead_note");
+    expect(result.actions[0]).toMatchObject({ type: "update_lead", risk: "auto" });
+    expect(result.actions[0]?.payload).toMatchObject({ targetId: "lead-maxim" });
   });
 });
