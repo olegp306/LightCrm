@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createJsonLlmClient } from "./llm";
+import { createJsonLlmClient, createOpenAiJsonProvider } from "./llm";
 import {
   IntentClassificationSchema,
   EntityExtractionSchema,
@@ -173,5 +173,140 @@ describe("json llm client", () => {
     });
 
     expect(result.primaryIntent).toBe("add_lead_note");
+  });
+
+  it("does not pass the schema to the provider at runtime", async () => {
+    let providerInput: unknown;
+    const client = createJsonLlmClient({
+      callJson: async (input) => {
+        providerInput = input;
+        return {
+          primaryIntent: "add_lead_note",
+          secondaryIntents: [],
+          confidence: 0.77,
+          reason: "The message adds context but does not request a write to a specific field.",
+          evidence: ["general project context"]
+        };
+      }
+    });
+
+    await client.runJson({
+      schema: IntentClassificationSchema,
+      system: "system",
+      user: "user",
+      model: "fake",
+      temperature: 0
+    });
+
+    expect(providerInput).toEqual({
+      system: "system",
+      user: "user",
+      model: "fake",
+      temperature: 0
+    });
+  });
+
+  it("throws a missing key message before calling OpenAI", async () => {
+    const originalApiKey = process.env.OPENAI_API_KEY;
+    delete process.env.OPENAI_API_KEY;
+
+    const fetchImpl: typeof fetch = async () => {
+      throw new Error("fetch should not be called");
+    };
+
+    try {
+      const provider = createOpenAiJsonProvider(fetchImpl);
+
+      await expect(
+        provider.callJson({
+          system: "system",
+          user: "user",
+          model: "fake",
+          temperature: 0
+        })
+      ).rejects.toThrow("OPENAI_API_KEY is required for semantic LangGraph mode.");
+    } finally {
+      process.env.OPENAI_API_KEY = originalApiKey;
+    }
+  });
+
+  it("throws a clean OpenAI failure message for non-JSON failed responses", async () => {
+    const originalApiKey = process.env.OPENAI_API_KEY;
+    process.env.OPENAI_API_KEY = "test-key";
+
+    const fetchImpl: typeof fetch = async () =>
+      ({
+        ok: false,
+        json: async () => {
+          throw new SyntaxError("Unexpected end of JSON input");
+        }
+      }) as unknown as Response;
+
+    try {
+      const provider = createOpenAiJsonProvider(fetchImpl);
+
+      await expect(
+        provider.callJson({
+          system: "system",
+          user: "user",
+          model: "fake",
+          temperature: 0
+        })
+      ).rejects.toThrow("OpenAI JSON call failed.");
+    } finally {
+      process.env.OPENAI_API_KEY = originalApiKey;
+    }
+  });
+
+  it("throws when an ok OpenAI response has no content", async () => {
+    const originalApiKey = process.env.OPENAI_API_KEY;
+    process.env.OPENAI_API_KEY = "test-key";
+
+    const fetchImpl: typeof fetch = async () =>
+      ({
+        ok: true,
+        json: async () => ({ choices: [{ message: {} }] })
+      }) as unknown as Response;
+
+    try {
+      const provider = createOpenAiJsonProvider(fetchImpl);
+
+      await expect(
+        provider.callJson({
+          system: "system",
+          user: "user",
+          model: "fake",
+          temperature: 0
+        })
+      ).rejects.toThrow("OpenAI JSON call returned no content.");
+    } finally {
+      process.env.OPENAI_API_KEY = originalApiKey;
+    }
+  });
+
+  it("throws a clean message when OpenAI content is invalid JSON", async () => {
+    const originalApiKey = process.env.OPENAI_API_KEY;
+    process.env.OPENAI_API_KEY = "test-key";
+
+    const fetchImpl: typeof fetch = async () =>
+      ({
+        ok: true,
+        json: async () => ({ choices: [{ message: { content: "not json" } }] })
+      }) as unknown as Response;
+
+    try {
+      const provider = createOpenAiJsonProvider(fetchImpl);
+
+      await expect(
+        provider.callJson({
+          system: "system",
+          user: "user",
+          model: "fake",
+          temperature: 0
+        })
+      ).rejects.toThrow("OpenAI JSON call returned invalid JSON.");
+    } finally {
+      process.env.OPENAI_API_KEY = originalApiKey;
+    }
   });
 });

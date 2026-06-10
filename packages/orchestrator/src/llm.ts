@@ -18,10 +18,24 @@ export type RunJsonInput<T extends z.ZodTypeAny> = JsonLlmCallInput & {
 export function createJsonLlmClient(provider: JsonLlmProvider) {
   return {
     async runJson<T extends z.ZodTypeAny>(input: RunJsonInput<T>): Promise<z.infer<T>> {
-      const raw = await provider.callJson(input);
-      return input.schema.parse(raw);
+      const { schema, ...callInput } = input;
+      const raw = await provider.callJson(callInput);
+      return schema.parse(raw);
     }
   };
+}
+
+type OpenAiJsonPayload = {
+  error?: { message?: string };
+  choices?: Array<{ message?: { content?: string } }>;
+};
+
+async function readOpenAiPayload(response: Response): Promise<OpenAiJsonPayload | undefined> {
+  try {
+    return (await response.json()) as OpenAiJsonPayload;
+  } catch {
+    return undefined;
+  }
 }
 
 export function createOpenAiJsonProvider(fetchImpl: typeof fetch = fetch): JsonLlmProvider {
@@ -49,21 +63,22 @@ export function createOpenAiJsonProvider(fetchImpl: typeof fetch = fetch): JsonL
         })
       });
 
-      const payload = (await response.json()) as {
-        error?: { message?: string };
-        choices?: Array<{ message?: { content?: string } }>;
-      };
-
       if (!response.ok) {
-        throw new Error(payload.error?.message ?? "OpenAI JSON call failed.");
+        const payload = await readOpenAiPayload(response);
+        throw new Error(payload?.error?.message ?? "OpenAI JSON call failed.");
       }
 
-      const content = payload.choices?.[0]?.message?.content;
+      const payload = await readOpenAiPayload(response);
+      const content = payload?.choices?.[0]?.message?.content;
       if (!content) {
         throw new Error("OpenAI JSON call returned no content.");
       }
 
-      return JSON.parse(content) as unknown;
+      try {
+        return JSON.parse(content) as unknown;
+      } catch {
+        throw new Error("OpenAI JSON call returned invalid JSON.");
+      }
     }
   };
 }
