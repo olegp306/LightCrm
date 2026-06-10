@@ -24,7 +24,7 @@ describe("semantic orchestrator schemas", () => {
     expect(() =>
       EntityExtractionSchema.parse({
         fields: {
-          clientName: { value: "Maxim", confidence: 0.9, evidence: "" }
+          clientName: { value: "Maxim", confidence: 0.9, evidence: "", sourceMessageIds: ["msg-1"] }
         },
         missingData: []
       })
