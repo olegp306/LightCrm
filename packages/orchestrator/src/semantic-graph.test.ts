@@ -428,6 +428,48 @@ describe("json llm client", () => {
 });
 
 describe("semantic crm orchestration", () => {
+  function semanticProviderFor(options: {
+    intent: "create_lead" | "add_lead_note";
+    fields?: Record<string, { value: string | number | boolean | null; confidence: number; evidence: string; sourceMessageIds: string[] }>;
+  }) {
+    return {
+      async callJson(input: { system: string }) {
+        if (input.system.includes("Classify")) {
+          return {
+            primaryIntent: options.intent,
+            secondaryIntents: [],
+            confidence: 0.91,
+            reason: "The message describes a CRM write.",
+            evidence: ["explicit CRM write request"]
+          };
+        }
+        if (input.system.includes("Resolve")) {
+          return {
+            targetType: options.intent === "create_lead" ? "none" : "lead",
+            targetId: options.intent === "create_lead" ? null : "lead-maxim",
+            confidence: 0.86,
+            candidates: [],
+            needsClarification: false,
+            clarificationQuestion: null
+          };
+        }
+        if (input.system.includes("Extract")) {
+          return {
+            fields: options.fields ?? {},
+            missingData: [],
+            notes: []
+          };
+        }
+        return {
+          approved: true,
+          riskLevel: "low",
+          reason: "Validated explicit write.",
+          needsHumanConfirmation: false
+        };
+      }
+    };
+  }
+
   it("uses meaning-based intent, target resolution, extraction, and validation", async () => {
     const calls: string[] = [];
     const result = await runSemanticCrmOrchestration(
@@ -484,5 +526,60 @@ describe("semantic crm orchestration", () => {
     expect(result.intent).toBe("add_lead_note");
     expect(result.actions[0]).toMatchObject({ type: "update_lead", risk: "auto" });
     expect(result.actions[0]?.payload).toMatchObject({ targetId: "lead-maxim" });
+  });
+
+  it("routes create lead to review when auto-create lead policy is disabled", async () => {
+    const result = await runSemanticCrmOrchestration(
+      {
+        workspaceId: "default",
+        messageId: "m-3",
+        author: "architect",
+        text: "Create a lead for Maria for a 120 m2 house.",
+        sourceChannel: "telegram"
+      },
+      {
+        llmProvider: semanticProviderFor({
+          intent: "create_lead",
+          fields: {
+            clientName: { value: "Maria", confidence: 0.91, evidence: "lead for Maria", sourceMessageIds: ["m-3"] }
+          }
+        })
+      },
+      {
+        confirmationPolicy: {
+          allowAutoCreateLead: false
+        }
+      }
+    );
+
+    expect(result.actions[0]).toMatchObject({
+      type: "request_review",
+      risk: "review",
+      reason: "Runtime settings do not allow automatic lead creation."
+    });
+  });
+
+  it("maps semantic entity fields into compatibility facts", async () => {
+    const result = await runSemanticCrmOrchestration(
+      {
+        workspaceId: "default",
+        messageId: "m-4",
+        author: "architect",
+        text: "Create a lead for Maria for a 120 m2 house.",
+        sourceChannel: "telegram"
+      },
+      {
+        llmProvider: semanticProviderFor({
+          intent: "create_lead",
+          fields: {
+            clientName: { value: "Maria", confidence: 0.91, evidence: "lead for Maria", sourceMessageIds: ["m-4"] },
+            areaM2: { value: 120, confidence: 0.88, evidence: "120 m2", sourceMessageIds: ["m-4"] }
+          }
+        })
+      }
+    );
+
+    expect(result.facts.contactName).toBe("Maria");
+    expect(result.facts.areaM2).toBe(120);
   });
 });

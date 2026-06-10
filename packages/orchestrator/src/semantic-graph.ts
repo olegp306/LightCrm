@@ -184,15 +184,35 @@ async function validateAction(state: SemanticOrchestrationState): Promise<Partia
 }
 
 function compatibilityFacts(state: SemanticOrchestrationState): ExtractedFacts {
+  const fields = state.entities.fields;
+  const stringField = (...keys: string[]): string | null => {
+    for (const key of keys) {
+      const value = fields[key]?.value;
+      if (typeof value === "string") {
+        return value;
+      }
+    }
+    return null;
+  };
+  const numberField = (...keys: string[]): number | null => {
+    for (const key of keys) {
+      const value = fields[key]?.value;
+      if (typeof value === "number") {
+        return value;
+      }
+    }
+    return null;
+  };
+
   return {
-    contactName: null,
-    projectName: null,
-    projectType: null,
-    location: null,
-    areaM2: null,
-    phone: null,
-    budgetEur: null,
-    dueAt: null,
+    contactName: stringField("clientName"),
+    projectName: stringField("projectName"),
+    projectType: stringField("requestType", "projectType"),
+    location: stringField("projectAddress", "location"),
+    areaM2: numberField("areaM2"),
+    phone: stringField("phone"),
+    budgetEur: numberField("budgetEur"),
+    dueAt: stringField("reminderDateTime", "meetingDateTime", "dueAt"),
     sourceMessageId: state.input.messageId ?? null,
     evidence: {
       sourceMessageId: state.input.messageId ?? null,
@@ -247,6 +267,22 @@ function planAction(state: SemanticOrchestrationState): Partial<SemanticOrchestr
     return {
       facts: compatibilityFacts(state),
       actions: [createReviewAction(state, `No executable CRM action is mapped for semantic intent ${state.intent}.`)]
+    };
+  }
+
+  if (actionType === "create_lead" && !state.settings.confirmationPolicy.allowAutoCreateLead) {
+    return {
+      risk: "review",
+      facts: compatibilityFacts(state),
+      actions: [createReviewAction(state, "Runtime settings do not allow automatic lead creation.")]
+    };
+  }
+
+  if (actionType === "create_reminder" && !state.settings.confirmationPolicy.allowAutoCreateReminder) {
+    return {
+      risk: "review",
+      facts: compatibilityFacts(state),
+      actions: [createReviewAction(state, "Runtime settings do not allow automatic reminder creation.")]
     };
   }
 
