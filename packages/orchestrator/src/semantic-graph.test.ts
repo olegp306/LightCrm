@@ -557,6 +557,7 @@ describe("semantic crm orchestration", () => {
       risk: "review",
       reason: "Runtime settings do not allow automatic lead creation."
     });
+    expect(result.risk).toBe("review");
   });
 
   it("maps semantic entity fields into compatibility facts", async () => {

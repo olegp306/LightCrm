@@ -1,139 +1,53 @@
 import { describe, expect, it } from "vitest";
 import { runCrmOrchestration } from "./graph";
-import { LANGGRAPH_PRESETS } from "./settings";
+
+function restoreOpenAiApiKey(originalApiKey: string | undefined) {
+  if (originalApiKey === undefined) {
+    delete process.env.OPENAI_API_KEY;
+    return;
+  }
+
+  process.env.OPENAI_API_KEY = originalApiKey;
+}
 
 describe("runCrmOrchestration", () => {
-  it("prioritizes explicit new lead intent over name similarity", async () => {
-    const result = await runCrmOrchestration({
-      workspaceId: "workspace-1",
-      messageId: "1869",
-      author: "Катя",
-      text: "Ещё новый лид: снова Максим Тютюник, проект в Швейцарии, частный дом"
-    });
+  it("routes default runtime settings through semantic mode", async () => {
+    const originalApiKey = process.env.OPENAI_API_KEY;
+    delete process.env.OPENAI_API_KEY;
 
-    expect(result.intent).toBe("create_new_lead");
-    expect(result.actions[0]).toMatchObject({
-      type: "create_lead",
-      risk: "auto"
-    });
-    expect(result.facts.contactName).toBe("Максим Тютюник");
-    expect(result.facts.location).toBe("Швейцария");
-    expect(result.explanations).toContain("Explicit new-lead phrase wins over similar contact names.");
-    expect(result.actions[0]?.payload).toMatchObject({
-      externalMessageId: "1869",
-      sourceChannel: "telegram",
-      evidence: {
-        sourceMessageId: "1869",
-        author: "Катя"
+    try {
+      await expect(
+        runCrmOrchestration({
+          workspaceId: "workspace-1",
+          messageId: "semantic-default",
+          author: "operator",
+          text: "No, this is not a new lead. Add it as a note to the existing project."
+        })
+      ).rejects.toThrow("OPENAI_API_KEY is required for semantic LangGraph mode.");
+    } finally {
+      restoreOpenAiApiKey(originalApiKey);
+    }
+  });
+
+  it("keeps the legacy rule graph available only when semantic mode is disabled", async () => {
+    const result = await runCrmOrchestration(
+      {
+        workspaceId: "workspace-1",
+        messageId: "legacy-fallback",
+        author: "operator",
+        text: "Please handle this fresh opportunity."
+      },
+      {
+        semanticMode: false,
+        extraNewLeadPhrases: ["fresh opportunity"]
       }
-    });
-  });
+    );
 
-  it("routes suspicious name-only updates to human review", async () => {
-    const result = await runCrmOrchestration({
-      workspaceId: "workspace-1",
-      messageId: "1878",
-      author: "Катя",
-      text: "Имя клиента - Максим Тютюник"
-    });
-
-    expect(result.intent).toBe("update_contact");
-    expect(result.actions[0]).toMatchObject({
-      type: "request_review",
-      risk: "review"
-    });
-  });
-
-  it("does not create a lead when new-lead wording is negated", async () => {
-    const result = await runCrmOrchestration({
-      workspaceId: "workspace-1",
-      messageId: "negated-new-lead",
-      author: "Катя",
-      text: "Нет, это не новый лид"
-    });
-
-    expect(result.intent).toBe("clarification");
-    expect(result.actions[0]).toMatchObject({
-      type: "request_review",
-      risk: "review"
-    });
-    expect(result.actions[0]?.reason).toContain("negated");
-  });
-
-  it("keeps a potential developer without a concrete project as an opportunity", async () => {
-    const result = await runCrmOrchestration({
-      workspaceId: "workspace-1",
-      messageId: "arthur",
-      author: "Катя",
-      text: "Следующего потенциального клиента-застройщика зовут Артур Grauberger. У него пока нет никакого конкретного проекта, нужно периодически фоллоу пить."
-    });
-
+    expect(result.settings.semanticMode).toBe(false);
     expect(result.intent).toBe("create_new_lead");
     expect(result.actions[0]).toMatchObject({
       type: "create_lead",
       risk: "auto"
     });
-    expect(result.facts.contactName).toBe("Артур Grauberger");
-    expect(result.facts.projectType).toBe("potential_developer");
-  });
-
-  it("plans a reminder from follow-up date messages", async () => {
-    const result = await runCrmOrchestration({
-      workspaceId: "workspace-1",
-      messageId: "ufuk-follow-up",
-      author: "Катя",
-      text: "Это в понедельник в 10 утра, 8 июня"
-    });
-
-    expect(result.intent).toBe("create_reminder");
-    expect(result.actions[0]).toMatchObject({
-      type: "create_reminder",
-      risk: "auto"
-    });
-    expect(result.facts.dueAt).toBe("2026-06-08T10:00:00.000Z");
-  });
-
-  it("applies a cautious runtime setting without a code change", async () => {
-    const result = await runCrmOrchestration(
-      {
-        workspaceId: "workspace-1",
-        messageId: "cautious-lead",
-        author: "Катя",
-        text: "Ещё новый лид: клиент хочет дом"
-      },
-      LANGGRAPH_PRESETS.find((preset) => preset.id === "riskAuditor")
-    );
-
-    expect(result.settings.id).toBe("riskAuditor");
-    expect(result.intent).toBe("create_new_lead");
-    expect(result.actions[0]).toMatchObject({
-      type: "request_review",
-      risk: "review"
-    });
-    expect(result.actions[0]?.reason).toContain("settings");
-  });
-
-  it("uses mail analyst semantic runtime settings without legacy phrase behavior", async () => {
-    const result = await runCrmOrchestration(
-      {
-        workspaceId: "workspace-1",
-        messageId: "mail-thread",
-        author: "Катя",
-        text: "Разбор почты: клиент прислал ответ по проекту и вложил смету"
-      },
-      LANGGRAPH_PRESETS.find((preset) => preset.id === "mailAnalyst")
-    );
-
-    expect(result.settings.id).toBe("mailAnalyst");
-    expect(result.settings.semanticMode).toBe(true);
-    expect(result.settings.mailAnalysisPhrases).toEqual([]);
-    expect(result.settings.prompts.intentClassifier).toContain("business meaning");
-    expect(result.settings.thresholds.autoExecute).toBe(0.72);
-    expect(result.intent).toBe("unknown");
-    expect(result.actions[0]).toMatchObject({
-      type: "request_review",
-      risk: "review"
-    });
-    expect(result.explanations).not.toContain("Runtime settings matched mail-analysis wording.");
   });
 });

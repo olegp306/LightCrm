@@ -49,6 +49,40 @@ describe("telegram bot core", () => {
     expect(reply).toContain("Contact: Максим Тютюник");
   });
 
+  it("formats semantic note orchestration results", () => {
+    const reply = formatOrchestrationReply({
+      workspaceId: "default",
+      normalizedText: "No, this is not a new lead",
+      intent: "add_lead_note",
+      risk: "review",
+      actions: [{ type: "request_review", risk: "review", reason: "Need target confirmation.", payload: { targetId: "lead-1" } }],
+      explanations: ["The message negates lead creation."],
+      facts: {
+        contactName: null,
+        projectName: null,
+        projectType: null,
+        location: null,
+        areaM2: null,
+        phone: null,
+        budgetEur: null,
+        dueAt: null,
+        sourceMessageId: "m-1",
+        evidence: {
+          sourceMessageId: "m-1",
+          author: "architect",
+          sourceChannel: "telegram",
+          textSnippet: "No, this is not a new lead"
+        }
+      },
+      settings: DEFAULT_LANGGRAPH_SETTINGS
+    });
+
+    expect(reply).toContain("Intent: add_lead_note");
+    expect(reply).toContain("Action: request_review");
+    expect(reply).toContain("Target: lead-1");
+    expect(reply).not.toContain("Intent: create_new_lead");
+  });
+
   it("rejects messages from chats outside the allowlist", async () => {
     const sendMessage = vi.fn();
     await handleTelegramUpdate(

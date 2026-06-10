@@ -113,11 +113,14 @@ function shortValue(value: unknown): string {
 
 export function formatOrchestrationReply(result: CrmOrchestrationResult): string {
   const action = result.actions[0];
+  const payload = action?.payload && typeof action.payload === "object" ? action.payload : null;
+  const targetId = payload && "targetId" in payload ? payload.targetId : null;
   const lines = [
     "LightCrm dry-run",
     `Intent: ${result.intent}`,
     `Risk: ${result.risk}`,
     `Action: ${action?.type ?? "none"}`,
+    targetId ? `Target: ${String(targetId)}` : null,
     `Contact: ${shortValue(result.facts.contactName)}`,
     `Project type: ${shortValue(result.facts.projectType)}`,
     `Location: ${shortValue(result.facts.location)}`,

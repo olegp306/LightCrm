@@ -1,5 +1,6 @@
 import { Annotation, END, START, StateGraph } from "@langchain/langgraph";
 import { DEFAULT_LANGGRAPH_SETTINGS, mergeLangGraphSettings, type LangGraphRuntimeSettingsInput } from "./settings";
+import { runSemanticCrmOrchestration } from "./semantic-graph";
 import {
   classifyIntentByRules,
   extractFactsByRules,
@@ -146,6 +147,10 @@ export async function runCrmOrchestration(
   settingsInput?: LangGraphRuntimeSettingsInput | null
 ): Promise<CrmOrchestrationResult> {
   const settings = mergeLangGraphSettings(settingsInput ?? DEFAULT_LANGGRAPH_SETTINGS);
+  if (settings.semanticMode) {
+    return runSemanticCrmOrchestration(input, {}, settings);
+  }
+
   const result = await graph.invoke({
     input,
     settings,
