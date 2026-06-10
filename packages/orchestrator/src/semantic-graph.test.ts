@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { createJsonLlmClient } from "./llm";
 import {
   IntentClassificationSchema,
   EntityExtractionSchema,
@@ -148,5 +149,29 @@ describe("semantic runtime settings", () => {
     expect(LANGGRAPH_PRESETS.find((preset) => preset.id === "leadHunter")?.taxonomy.entityFields).not.toContain(
       "mutatedField"
     );
+  });
+});
+
+describe("json llm client", () => {
+  it("parses provider JSON through the supplied schema", async () => {
+    const client = createJsonLlmClient({
+      callJson: async () => ({
+        primaryIntent: "add_lead_note",
+        secondaryIntents: [],
+        confidence: 0.77,
+        reason: "The message adds context but does not request a write to a specific field.",
+        evidence: ["general project context"]
+      })
+    });
+
+    const result = await client.runJson({
+      schema: IntentClassificationSchema,
+      system: "system",
+      user: "user",
+      model: "fake",
+      temperature: 0
+    });
+
+    expect(result.primaryIntent).toBe("add_lead_note");
   });
 });
