@@ -11,6 +11,7 @@ export default function LeadsPage() {
       leadSummariesEndpoint="/api/crm/leads/summaries"
       updateRecordEndpoint="/api/crm/leads/update"
       offerGenerateEndpoint="/api/crm/leads/generate-offer"
+      clientOptionsEndpoint="/api/crm/clients"
     />
   );
 }

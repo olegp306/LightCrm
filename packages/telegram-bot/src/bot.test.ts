@@ -210,6 +210,41 @@ describe("telegram bot core", () => {
     expect(reply).toContain("Action: create_lead");
   });
 
+  it("formats multi-action orchestration replies as a chain", () => {
+    const reply = formatOrchestrationReply({
+      workspaceId: "default",
+      normalizedText: "New lead and remind me to email them in two weeks",
+      intent: "create_lead",
+      risk: "auto",
+      explanations: ["The message asks for a lead and a reminder."],
+      settings: DEFAULT_LANGGRAPH_SETTINGS,
+      facts: {
+        contactName: null,
+        projectName: null,
+        projectType: "country house",
+        location: null,
+        areaM2: null,
+        phone: null,
+        budgetEur: null,
+        dueAt: "2026-06-25T09:00:00.000Z",
+        sourceMessageId: "m-multi",
+        evidence: {
+          sourceMessageId: "m-multi",
+          author: "director",
+          sourceChannel: "telegram",
+          textSnippet: "New lead and remind me to email them in two weeks"
+        }
+      },
+      actions: [
+        { type: "create_lead", risk: "auto", reason: "Safe lead creation.", payload: {} },
+        { type: "create_reminder", risk: "auto", reason: "Secondary reminder action.", payload: {} }
+      ]
+    });
+
+    expect(reply).toContain("Action: create_lead + create_reminder");
+    expect(reply).toContain("Due: 2026-06-25T09:00:00.000Z");
+  });
+
   it("formats semantic note orchestration results", () => {
     const reply = formatOrchestrationReply({
       workspaceId: "default",

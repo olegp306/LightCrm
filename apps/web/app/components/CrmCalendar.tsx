@@ -1,5 +1,6 @@
 "use client";
 
+import type { FormEvent } from "react";
 import { useEffect, useMemo, useState } from "react";
 
 type CalendarViewMode = "month" | "week" | "day" | "agenda";
@@ -28,6 +29,14 @@ type CrmCalendarProps = {
   leadId?: string;
   clientId?: string;
   coldTargetId?: string;
+};
+
+type LeadOption = {
+  id: string;
+  code?: string | null;
+  name?: string | null;
+  projectName?: string | null;
+  client?: { name?: string | null } | null;
 };
 
 const dayFormatter = new Intl.DateTimeFormat("en", { weekday: "short" });
@@ -120,10 +129,40 @@ function addQuery(params: URLSearchParams, key: string, value: string | undefine
   }
 }
 
+function datetimeLocalValue(date = new Date()) {
+  const next = new Date(date);
+  next.setMinutes(next.getMinutes() - next.getTimezoneOffset());
+  return next.toISOString().slice(0, 16);
+}
+
+function datetimeLocalForDay(date: Date, currentValue: string) {
+  const next = startOfDay(date);
+  const current = currentValue ? new Date(currentValue) : null;
+  if (current && !Number.isNaN(current.getTime())) {
+    next.setHours(current.getHours(), current.getMinutes(), 0, 0);
+  } else {
+    next.setHours(9, 0, 0, 0);
+  }
+  return datetimeLocalValue(next);
+}
+
+function leadOptionLabel(lead: LeadOption): string {
+  return [lead.code ?? lead.id, lead.projectName ?? lead.name, lead.client?.name].filter(Boolean).join(" · ");
+}
+
+function leadOptionValue(lead: LeadOption): string {
+  return `${lead.id} | ${leadOptionLabel(lead)}`;
+}
+
+function leadIdFromInput(value: string): string {
+  return value.split("|")[0]?.trim() ?? value.trim();
+}
+
 function CalendarChip({ item, compact = false }: { item: CalendarFeedItem; compact?: boolean }) {
   const meta = itemMeta(item);
+  const tooltip = [item.title, item.description, itemTimeLabel(item), meta].filter(Boolean).join("\n");
   return (
-    <article className={`calendarChip ${item.kind === "reminder" ? "calendarChipReminder" : "calendarChipEvent"}`}>
+    <article className={`calendarChip ${item.kind === "reminder" ? "calendarChipReminder" : "calendarChipEvent"}`} title={tooltip}>
       <div>
         <span className="calendarChipTime">{itemTimeLabel(item)}</span>
         <strong>{item.title}</strong>
@@ -150,7 +189,7 @@ function CalendarInspector({ selectedDate, items }: { selectedDate: Date; items:
                 <div className="calendarTimelineRail">
                   <span />
                 </div>
-                <div className="calendarTimelineCard">
+                <div className="calendarTimelineCard" title={[item.title, item.description, itemTimeLabel(item), meta].filter(Boolean).join("\n")}>
                   <div className="calendarTimelineTopline">
                     <span>{itemTimeLabel(item)}</span>
                     <b>{item.kind}</b>
@@ -209,9 +248,16 @@ export function CrmCalendar({
   const [anchorDate, setAnchorDate] = useState(() => startOfDay(new Date()));
   const [selectedDate, setSelectedDate] = useState(() => startOfDay(new Date()));
   const [items, setItems] = useState<CalendarFeedItem[]>([]);
+  const [leadOptions, setLeadOptions] = useState<LeadOption[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [failed, setFailed] = useState(false);
-  const [isCompactCalendar, setIsCompactCalendar] = useState(false);
+  const [createDraft, setCreateDraft] = useState({
+    title: "",
+    startsAt: datetimeLocalValue(),
+    leadId: leadId ?? "",
+    description: ""
+  });
+  const [createStatus, setCreateStatus] = useState<"idle" | "saving" | "error">("idle");
   const range = useMemo(() => viewRange(mode, anchorDate), [anchorDate, mode]);
   const visibleDays = useMemo(() => {
     const totalDays = mode === "month" ? 42 : mode === "week" ? 7 : mode === "day" ? 1 : 31;
@@ -237,14 +283,15 @@ export function CrmCalendar({
     }
     return monthFormatter.format(anchorDate);
   }, [anchorDate, mode, range.from, range.to]);
-
-  useEffect(() => {
-    const query = window.matchMedia("(max-width: 860px)");
-    const syncCompactCalendar = () => setIsCompactCalendar(query.matches);
-    syncCompactCalendar();
-    query.addEventListener("change", syncCompactCalendar);
-    return () => query.removeEventListener("change", syncCompactCalendar);
-  }, []);
+  const selectedLeadLabel = useMemo(() => {
+    if (!leadId) {
+      return null;
+    }
+    const matchingLead = leadOptions.find((lead) => lead.id === leadId);
+    const matchingItem = items.find((item) => item.related.entity === "lead" && item.related.id === leadId && item.related.label);
+    return matchingLead ? leadOptionLabel(matchingLead) : matchingItem?.related.label ?? leadId;
+  }, [items, leadId, leadOptions]);
+  const contextDescription = selectedLeadLabel ? `${description} Lead: ${selectedLeadLabel}.` : description;
 
   useEffect(() => {
     const controller = new AbortController();
@@ -276,6 +323,31 @@ export function CrmCalendar({
     return () => controller.abort();
   }, [clientId, coldTargetId, endpoint, leadId, range.from, range.to]);
 
+  useEffect(() => {
+    const controller = new AbortController();
+    fetch("/api/crm/leads", { signal: controller.signal })
+      .then((response) => (response.ok ? (response.json() as Promise<LeadOption[]>) : []))
+      .then((payload) => setLeadOptions(Array.isArray(payload) ? payload : []))
+      .catch((error: unknown) => {
+        if (!(error instanceof DOMException && error.name === "AbortError")) {
+          setLeadOptions([]);
+        }
+      });
+    return () => controller.abort();
+  }, []);
+
+  useEffect(() => {
+    if (!leadId) {
+      return;
+    }
+    const matchingLead = leadOptions.find((lead) => lead.id === leadId);
+    setCreateDraft((current) => ({ ...current, leadId: matchingLead ? leadOptionValue(matchingLead) : leadId }));
+  }, [leadId, leadOptions]);
+
+  useEffect(() => {
+    setCreateDraft((current) => ({ ...current, startsAt: datetimeLocalForDay(selectedDate, current.startsAt) }));
+  }, [selectedDate]);
+
   const move = (direction: -1 | 1) => {
     if (mode === "month") {
       setAnchorDate((current) => {
@@ -294,12 +366,65 @@ export function CrmCalendar({
   const visibleItemCount = items.length;
   const selectedItems = itemsByDay.get(dateKey(selectedDate)) ?? [];
 
+  async function createCalendarEvent(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const titleValue = createDraft.title.trim();
+    if (!titleValue || !createDraft.startsAt) {
+      return;
+    }
+    setCreateStatus("saving");
+    try {
+      const startsAt = new Date(createDraft.startsAt);
+      const endsAt = new Date(startsAt.getTime() + 60 * 60 * 1000);
+      const targetLeadId = leadId ?? leadIdFromInput(createDraft.leadId);
+      const response = await fetch("/api/crm/calendar-events/upsert", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          workspaceId: "default",
+          leadId: targetLeadId || null,
+          title: titleValue,
+          description: createDraft.description.trim() || null,
+          startsAt: startsAt.toISOString(),
+          endsAt: endsAt.toISOString()
+        })
+      });
+      const payload = await response.json();
+      if (!response.ok) {
+        throw new Error(payload.error ?? "Calendar event save failed");
+      }
+      const createdItem: CalendarFeedItem = {
+        id: String(payload.id),
+        kind: "event",
+        title: String(payload.title ?? titleValue),
+        description: typeof payload.description === "string" ? payload.description : createDraft.description.trim() || null,
+        startsAt: String(payload.startsAt ?? startsAt.toISOString()),
+        endsAt: payload.endsAt ? String(payload.endsAt) : endsAt.toISOString(),
+        status: typeof payload.syncStatus === "string" ? payload.syncStatus : null,
+        sourceChannel: "manual",
+        location: typeof payload.location === "string" ? payload.location : null,
+        related: {
+          entity: targetLeadId ? "lead" : null,
+          id: targetLeadId || null,
+          label: targetLeadId || null,
+          href: targetLeadId ? `/leads?focus=${encodeURIComponent(targetLeadId)}` : null
+        }
+      };
+      setItems((current) => sortItemsByStart([...current, createdItem]));
+      setSelectedDate(startOfDay(new Date(createdItem.startsAt)));
+      setCreateDraft((current) => ({ ...current, title: "", description: "" }));
+      setCreateStatus("idle");
+    } catch {
+      setCreateStatus("error");
+    }
+  }
+
   return (
     <section className="calendarPage">
       <header className="calendarHeader">
         <div>
           <h1>{title}</h1>
-          <p>{failed ? `${description} Calendar API unavailable.` : description}</p>
+          <p>{failed ? `${contextDescription} Calendar API unavailable.` : contextDescription}</p>
         </div>
         <div className="calendarToolbar">
           <div className="calendarNav" aria-label="Calendar navigation">
@@ -333,6 +458,43 @@ export function CrmCalendar({
         <strong>{headerLabel}</strong>
         <span>{isLoading ? "Loading schedule" : `${visibleItemCount} scheduled item${visibleItemCount === 1 ? "" : "s"}`}</span>
       </div>
+      <form className="calendarCreateForm" onSubmit={createCalendarEvent}>
+        <input
+          aria-label="Event title"
+          placeholder="Event title"
+          value={createDraft.title}
+          onChange={(event) => setCreateDraft((current) => ({ ...current, title: event.target.value }))}
+        />
+        <input
+          aria-label="Event date and time"
+          type="datetime-local"
+          value={createDraft.startsAt}
+          onChange={(event) => setCreateDraft((current) => ({ ...current, startsAt: event.target.value }))}
+        />
+        <input
+          aria-label="Lead ID"
+          list="calendar-lead-options"
+          placeholder="Lead ID"
+          value={createDraft.leadId}
+          disabled={Boolean(leadId)}
+          onChange={(event) => setCreateDraft((current) => ({ ...current, leadId: event.target.value }))}
+        />
+        <datalist id="calendar-lead-options">
+          {leadOptions.map((lead) => (
+            <option key={lead.id} value={leadOptionValue(lead)} />
+          ))}
+        </datalist>
+        <input
+          aria-label="Event description"
+          placeholder="Description"
+          value={createDraft.description}
+          onChange={(event) => setCreateDraft((current) => ({ ...current, description: event.target.value }))}
+        />
+        <button type="submit" disabled={createStatus === "saving" || !createDraft.title.trim()}>
+          {createStatus === "saving" ? "Saving" : "Add event"}
+        </button>
+        {createStatus === "error" ? <span>Could not save event.</span> : null}
+      </form>
       {mode === "agenda" ? (
         <div className="calendarAgenda">
           {visibleDays.map((day) => {
@@ -357,23 +519,8 @@ export function CrmCalendar({
           {!isLoading && visibleItemCount === 0 ? <EmptyCalendarState /> : null}
         </div>
       ) : mode === "month" ? (
-        <div
-          className="calendarSplit"
-          style={isCompactCalendar ? { maxWidth: "min(360px, calc(100vw - 24px))", minWidth: 0, width: "100%" } : undefined}
-        >
-          <div
-            className="calendarGrid calendarGridMonth"
-            style={
-              isCompactCalendar
-                ? {
-                    gridTemplateColumns: "repeat(7, minmax(0, 1fr))",
-                    maxWidth: "min(360px, calc(100vw - 24px))",
-                    minWidth: 0,
-                    width: "min(360px, calc(100vw - 24px))"
-                  }
-                : { gridTemplateColumns: "repeat(7, minmax(0, 1fr))" }
-            }
-          >
+        <div className="calendarSplit">
+          <div className="calendarGrid calendarGridMonth">
             {visibleDays.map((day) => {
               const dayItems = sortItemsByStart(itemsByDay.get(dateKey(day)) ?? []);
               const outsideMonth = day.getMonth() !== anchorDate.getMonth();

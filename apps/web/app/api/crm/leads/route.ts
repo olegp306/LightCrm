@@ -2,28 +2,7 @@ import { NextResponse } from "next/server";
 import { evaluateCommercialOfferReadiness } from "@lightcrm/core";
 import { defaultWorkspaceId, getCrm, handleRouteError } from "../_shared";
 import { getCrmRuntimeSettings } from "../settings/crm-settings-store";
-
-const noteFields = {
-  project: "Project",
-  area: "Area",
-  description: "Description",
-  interest: "Interest",
-  urgency: "Urgency",
-  todo: "Todo",
-  address: "Address",
-  clientProjects: "Client projects",
-  budgetEur: "Budget EUR",
-  rawInput: "Raw input"
-} as const;
-
-function readNoteField(notes: string | null, label: string): string | null {
-  if (!notes) {
-    return null;
-  }
-  const escaped = label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const match = notes.match(new RegExp(`(?:^|\\n\\n)${escaped}: ([\\s\\S]*?)(?=\\n\\n[A-Z][A-Za-z ]+: |$)`));
-  return match?.[1]?.trim() || null;
-}
+import { leadNoteFields, readNoteField } from "./note-fields";
 
 function readNumber(value: string | null): number | null {
   if (!value) {
@@ -51,6 +30,31 @@ function compactSummary(value: string, maxLength: number): string {
     return compacted;
   }
   return `${compacted.slice(0, Math.max(0, maxLength - 1)).trimEnd()}...`;
+}
+
+function projectNameFrom(project: string | null, leadName: string): string {
+  const source = project || leadName;
+  return compactSummary(source, 54);
+}
+
+function nextActionFrom(input: {
+  todo: string | null;
+  offerStatus: string;
+  status: string;
+}): { nextAction: string; nextActionState: "crm" | "waiting" | "done" | "neutral" } {
+  if (input.todo) {
+    return { nextAction: compactSummary(input.todo, 26), nextActionState: "crm" };
+  }
+  if (["converted", "archived", "lost"].includes(input.status)) {
+    return { nextAction: "Done", nextActionState: "done" };
+  }
+  if (input.offerStatus === "ready") {
+    return { nextAction: "Create offer", nextActionState: "crm" };
+  }
+  if (input.offerStatus === "needs_data" || input.offerStatus === "not_ready") {
+    return { nextAction: "Needs data", nextActionState: "waiting" };
+  }
+  return { nextAction: "Monitor", nextActionState: "neutral" };
 }
 
 function readLatestLeadSummary(notes: string | null): { summaryShort: string | null; summaryLong: string | null } {
@@ -107,10 +111,11 @@ export async function GET(request: Request) {
     return NextResponse.json(
       leads.map((lead) => {
         const client = lead.clientId ? clientsById.get(lead.clientId) ?? null : null;
-        const project = readNoteField(lead.notes, noteFields.project) ?? lead.company;
-        const area = readNoteField(lead.notes, noteFields.area);
-        const description = readNoteField(lead.notes, noteFields.description) ?? lead.notes;
-        const address = readNoteField(lead.notes, noteFields.address);
+        const project = readNoteField(lead.notes, leadNoteFields.project) ?? lead.company;
+        const area = readNoteField(lead.notes, leadNoteFields.area);
+        const description = readNoteField(lead.notes, leadNoteFields.description) ?? lead.notes;
+        const address = readNoteField(lead.notes, leadNoteFields.address);
+        const todo = readNoteField(lead.notes, leadNoteFields.todo);
         const storedSummary = latestSummaryByLeadId.get(lead.id);
         const notesSummary = readLatestLeadSummary(lead.notes);
         const offerReadiness = evaluateCommercialOfferReadiness(
@@ -123,24 +128,28 @@ export async function GET(request: Request) {
           },
           feeRows
         );
+        const nextAction = nextActionFrom({ todo, offerStatus: offerReadiness.status, status: lead.status });
         return {
           ...lead,
           client,
           documents: documentsByLeadId.get(lead.id) ?? [],
+          projectName: projectNameFrom(project, lead.name),
           project,
           area,
           summaryShort: storedSummary?.shortSummary ?? notesSummary.summaryShort,
           summaryLong: storedSummary?.longSummary ?? notesSummary.summaryLong,
           summaryUpdatedAt: storedSummary?.createdAt ?? lead.updatedAt,
           description,
-          interest: readNoteField(lead.notes, noteFields.interest),
-          urgency: readNoteField(lead.notes, noteFields.urgency),
-          todo: readNoteField(lead.notes, noteFields.todo),
+          interest: readNoteField(lead.notes, leadNoteFields.interest),
+          urgency: readNoteField(lead.notes, leadNoteFields.urgency),
+          todo,
+          nextAction: nextAction.nextAction,
+          nextActionState: nextAction.nextActionState,
           address,
           messenger: lead.whatsapp ?? client?.whatsapp ?? null,
-          clientProjects: readNoteField(lead.notes, noteFields.clientProjects),
-          budgetEur: readNoteField(lead.notes, noteFields.budgetEur),
-          rawInput: readNoteField(lead.notes, noteFields.rawInput),
+          clientProjects: readNoteField(lead.notes, leadNoteFields.clientProjects),
+          budgetEur: readNoteField(lead.notes, leadNoteFields.budgetEur),
+          rawInput: readNoteField(lead.notes, leadNoteFields.rawInput),
           offerStatus: offerReadiness.status,
           offerMissingFields: offerReadiness.missingFields.join(", "),
           offerTotalGross: offerReadiness.values.totalGross,

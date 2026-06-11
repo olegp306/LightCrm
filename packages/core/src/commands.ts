@@ -32,7 +32,7 @@ type LinkLeadToClientInput = {
 
 type ArchiveRecordInput = {
   workspaceId: string;
-  entity: Exclude<CrmCollection, "outreachTouch" | "calendarEvent">;
+  entity: Exclude<CrmCollection, "outreachTouch">;
   id: string;
 };
 

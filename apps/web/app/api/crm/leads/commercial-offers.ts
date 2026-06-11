@@ -98,7 +98,18 @@ export async function generateCommercialOfferForLead(input: {
   );
 
   if (readiness.values.totalGross === null) {
-    const error = new Error("Commercial offer numbers are not ready");
+    const details = [
+      ...readiness.reasons,
+      readiness.missingFields.length > 0 ? `Missing fields: ${readiness.missingFields.join(", ")}.` : null,
+      settings.commercialOffers.activeFeeTable?.rows.length
+        ? null
+        : "Active fee table has no rows for automatic pricing."
+    ].filter(Boolean);
+    const error = new Error(
+      details.length > 0
+        ? `Commercial offer numbers are not ready. ${details.join(" ")}`
+        : "Commercial offer numbers are not ready. Check BGF, project type, client, address, and active fee table."
+    );
     (error as Error & { readiness?: typeof readiness }).readiness = readiness;
     throw error;
   }

@@ -3,7 +3,7 @@ import { defaultWorkspaceId, getCrm, handleRouteError, parseJson } from "../_sha
 
 const schema = z.object({
   workspaceId: z.string().min(1).optional(),
-  entity: z.enum(["client", "lead", "coldTarget", "reminder", "documentFile"]),
+  entity: z.enum(["client", "lead", "coldTarget", "reminder", "calendarEvent", "documentFile", "leadSummary"]),
   ids: z.array(z.string().min(1)).min(1)
 });
 

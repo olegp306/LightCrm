@@ -9,13 +9,20 @@ type TodayPageProps = {
 };
 
 export default function TodayPage({ searchParams }: TodayPageProps) {
-  const isFiltered = Boolean(searchParams?.leadId || searchParams?.clientId || searchParams?.coldTargetId);
+  const title = searchParams?.leadId
+    ? "Lead Calendar"
+    : searchParams?.clientId
+      ? "Client Calendar"
+      : searchParams?.coldTargetId
+        ? "Cold Target Calendar"
+        : "Today";
+  const isFiltered = title !== "Today";
   return (
     <CrmCalendar
-      title={isFiltered ? "Filtered Calendar" : "Today"}
+      title={title}
       description={
         isFiltered
-          ? "Calendar filtered to the selected CRM record."
+          ? "Schedule and manual events for the selected CRM record."
           : "Unified CRM calendar for reminders, scheduled events, Telegram intake, and LangGraph agent work."
       }
       leadId={searchParams?.leadId}

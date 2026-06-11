@@ -23,6 +23,8 @@ import {
   buildCreateRecordPayload,
   compactDocumentTitle,
   documentExtensionLabel,
+  formatAreaValue,
+  nextActionStateForTodo,
   recordToRow,
   sortRows,
   toCsv,
@@ -43,7 +45,7 @@ export type CrmTableColumn = {
   defaultVisible?: boolean;
   mobilePriority?: number;
   group?: string;
-  valueKind?: "text" | "link" | "documents" | "calendar";
+  valueKind?: "text" | "link" | "documents" | "calendar" | "area" | "longText" | "action";
 };
 
 export type DocumentCellItem = {
@@ -89,7 +91,17 @@ export type CreateRecordConfig = CreateRecordPayloadConfig & {
   fields: CreateRecordField[];
 };
 
-export type ArchiveRecordEntity = "client" | "lead" | "coldTarget" | "reminder" | "documentFile";
+export type ClientOption = {
+  id: string;
+  code?: string | null;
+  name?: string | null;
+  company?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  whatsapp?: string | null;
+};
+
+export type ArchiveRecordEntity = "client" | "lead" | "coldTarget" | "reminder" | "calendarEvent" | "documentFile" | "leadSummary";
 
 export type CrmTableProps = {
   title: string;
@@ -102,6 +114,7 @@ export type CrmTableProps = {
   leadSummariesEndpoint?: string;
   updateRecordEndpoint?: string;
   offerGenerateEndpoint?: string;
+  clientOptionsEndpoint?: string;
   archiveEntity?: ArchiveRecordEntity;
   createRecord?: CreateRecordConfig;
 };
@@ -119,6 +132,10 @@ type CalendarCustomCell = CustomCell<{
 }>;
 
 type DocumentCellAction = { type: "open"; index: number } | { type: "upload" } | null;
+type CalendarCellAction = { type: "delete"; index: number } | null;
+type CellDeleteTarget =
+  | { kind: "document"; rowId: string; item: DocumentCellItem }
+  | { kind: "calendar"; rowId: string; item: CalendarCellItem };
 type DocumentUploadTarget = {
   rowId: string;
   files: File[];
@@ -147,6 +164,11 @@ type LeadSummaryHistoryTarget = {
   summaries: LeadSummaryHistoryItem[];
 };
 
+type LongTextPreview = {
+  title: string;
+  text: string;
+};
+
 type BulkActionDialog = "delete" | "merge" | null;
 
 type MobileEditTarget = {
@@ -154,6 +176,28 @@ type MobileEditTarget = {
   columnId: string;
   value: string;
   saving: boolean;
+};
+
+type DetailsPanelState = {
+  rowId: string;
+  values: Record<string, string>;
+  saving: boolean;
+};
+
+type DetailsPanelTab = "details" | "documents";
+
+type DetailsButtonPosition = {
+  left: number;
+  top: number;
+};
+
+type ClientPickerState = {
+  rowId: string;
+  left: number;
+  top: number;
+  query: string;
+  saving: boolean;
+  error: string | null;
 };
 
 type LeadSummaryDraft = {
@@ -283,13 +327,21 @@ const documentIconHeight = 18;
 const documentUploadInset = 8;
 const documentUploadHitWidth = 40;
 const documentUploadPlusSize = 12;
+const cellDeleteHitSize = 14;
 const calendarChipWidth = 112;
-const calendarChipHeight = 24;
+const calendarChipHeight = 28;
 const calendarChipGap = 3;
+const calendarDateOnlyWidth = 46;
+const calendarTitleMaxLength = 12;
+const clientPickerHitSize = 24;
 const tableFontScales = [1, 1.2, 1.4] as const;
 
 function documentChipDisplayWidth(documents: DocumentCellValue): number {
   return documents.length > 3 ? documentIconChipWidth : documentChipWidth;
+}
+
+function isClientPickerHit(localX: number, localY: number, width: number, height: number): boolean {
+  return localX >= width - clientPickerHitSize - 14 && localX <= width - 2 && localY >= 2 && localY <= height - 2;
 }
 
 function normalizedFontScale(value: number | undefined): (typeof tableFontScales)[number] {
@@ -442,7 +494,11 @@ function cellSelection(cell: Item): GridSelection {
   };
 }
 
-function documentCellActionAt(x: number, documents: DocumentCellValue, uploadStart: number): DocumentCellAction {
+function pointInRect(x: number, y: number, rect: { left: number; top: number; width: number; height: number }): boolean {
+  return x >= rect.left && x <= rect.left + rect.width && y >= rect.top && y <= rect.top + rect.height;
+}
+
+function documentCellActionAt(x: number, y: number, documents: DocumentCellValue, uploadStart: number): DocumentCellAction {
   if (x >= uploadStart) {
     return { type: "upload" };
   }
@@ -455,8 +511,47 @@ function documentCellActionAt(x: number, documents: DocumentCellValue, uploadSta
   return null;
 }
 
+function calendarCellActionAt(x: number, y: number, items: CalendarCellValue, availableWidth: number): CalendarCellAction {
+  const firstItems = items.slice(0, 3);
+  const fullChipWidth = firstItems.length * calendarChipWidth + Math.max(0, firstItems.length - 1) * calendarChipGap;
+  const dateOnlyMode = items.length > 3 || fullChipWidth > availableWidth;
+  const chipWidth = dateOnlyMode ? calendarDateOnlyWidth : calendarChipWidth;
+  const visibleItemLimit = Math.max(1, Math.floor((availableWidth + calendarChipGap) / (chipWidth + calendarChipGap)));
+  const visibleItems = (dateOnlyMode ? items : firstItems).slice(0, visibleItemLimit);
+  for (let index = 0; index < visibleItems.length; index += 1) {
+    const chipStart = index * (chipWidth + calendarChipGap);
+    if (pointInRect(x, y, { left: chipStart + chipWidth - cellDeleteHitSize, top: 0, width: cellDeleteHitSize, height: cellDeleteHitSize })) {
+      const item = visibleItems[index];
+      const originalIndex = items.findIndex((candidate) => candidate.id === item?.id && candidate.kind === item?.kind);
+      return originalIndex >= 0 ? { type: "delete", index: originalIndex } : null;
+    }
+  }
+  return null;
+}
+
 function documentCellDisplayData(documents: DocumentCellValue): string {
   return documents.map((document) => document.fileName).join(", ");
+}
+
+function drawMiniDeleteIcon(ctx: CanvasRenderingContext2D, x: number, y: number, hovered: boolean, theme: Theme): void {
+  ctx.save();
+  ctx.beginPath();
+  ctx.roundRect(x, y, cellDeleteHitSize - 2, cellDeleteHitSize - 2, 4);
+  ctx.fillStyle = hovered ? "rgba(180, 35, 24, 0.16)" : "rgba(102, 112, 133, 0.1)";
+  ctx.fill();
+  ctx.strokeStyle = hovered ? "#b42318" : theme.borderColor;
+  ctx.lineWidth = 1;
+  ctx.stroke();
+  ctx.strokeStyle = hovered ? "#b42318" : theme.textMedium;
+  ctx.lineWidth = 1.4;
+  ctx.lineCap = "round";
+  ctx.beginPath();
+  ctx.moveTo(x + 4, y + 4);
+  ctx.lineTo(x + cellDeleteHitSize - 6, y + cellDeleteHitSize - 6);
+  ctx.moveTo(x + cellDeleteHitSize - 6, y + 4);
+  ctx.lineTo(x + 4, y + cellDeleteHitSize - 6);
+  ctx.stroke();
+  ctx.restore();
 }
 
 function isDocumentCellItem(value: unknown): value is DocumentCellItem {
@@ -483,8 +578,35 @@ function calendarDateLabel(value: string): string {
   return date.toLocaleDateString(undefined, { month: "short", day: "2-digit" });
 }
 
+function calendarDayMonthLabel(value: string): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+  return date.toLocaleDateString(undefined, { day: "2-digit", month: "short" });
+}
+
+function compactCalendarTitle(value: string): string {
+  const normalized = value.replace(/\s+/g, " ").trim();
+  return normalized.length <= calendarTitleMaxLength ? normalized : `${normalized.slice(0, calendarTitleMaxLength)}...`;
+}
+
 function calendarCellDisplayData(items: CalendarCellValue): string {
   return items.map((item) => `${calendarDateLabel(item.startsAt)} ${calendarTimeLabel(item.startsAt)} ${item.title}`).join(", ");
+}
+
+function actionTone(value: CrmTableCellValue | undefined): { fill: string; stroke: string; dot: string; text: string } {
+  const state = textCellValue(value)?.toLocaleLowerCase() ?? "";
+  if (state === "crm") {
+    return { fill: "rgba(65, 148, 111, 0.12)", stroke: "rgba(65, 148, 111, 0.34)", dot: "#2f9368", text: "#183d2e" };
+  }
+  if (state === "waiting") {
+    return { fill: "rgba(196, 141, 45, 0.14)", stroke: "rgba(196, 141, 45, 0.34)", dot: "#b7791f", text: "#4d3514" };
+  }
+  if (state === "done") {
+    return { fill: "rgba(118, 128, 144, 0.12)", stroke: "rgba(118, 128, 144, 0.28)", dot: "#788292", text: "#344054" };
+  }
+  return { fill: "rgba(96, 108, 128, 0.1)", stroke: "rgba(96, 108, 128, 0.24)", dot: "#667085", text: "#344054" };
 }
 
 function sortCalendarItemsByStart(items: CalendarCellValue): CalendarCellValue {
@@ -495,8 +617,78 @@ function mobileCalendarTitle(item: CalendarCellItem): string {
   return `${calendarDateLabel(item.startsAt)} ${calendarTimeLabel(item.startsAt)} ${item.title}`;
 }
 
+function calendarDate(value: string): Date | null {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function calendarDayKey(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function calendarMonthStart(date: Date): Date {
+  return new Date(date.getFullYear(), date.getMonth(), 1);
+}
+
+function calendarAddMonths(date: Date, delta: number): Date {
+  return new Date(date.getFullYear(), date.getMonth() + delta, 1);
+}
+
+function calendarAddDays(date: Date, delta: number): Date {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate() + delta);
+}
+
+function calendarMonthLabel(date: Date): string {
+  return date.toLocaleDateString(undefined, { month: "long", year: "numeric" });
+}
+
+function calendarMonthGrid(anchor: Date): Date[] {
+  const monthStart = calendarMonthStart(anchor);
+  const mondayOffset = (monthStart.getDay() + 6) % 7;
+  const gridStart = calendarAddDays(monthStart, -mondayOffset);
+  return Array.from({ length: 42 }, (_, index) => calendarAddDays(gridStart, index));
+}
+
+function nearestCalendarItem(items: CalendarCellValue): CalendarCellItem | null {
+  const sorted = sortCalendarItemsByStart(items);
+  const now = Date.now();
+  return sorted.find((item) => {
+    const date = calendarDate(item.startsAt);
+    return date ? date.getTime() >= now : false;
+  }) ?? sorted[0] ?? null;
+}
+
+function calendarItemsByDay(items: CalendarCellValue): Map<string, CalendarCellValue> {
+  const byDay = new Map<string, CalendarCellValue>();
+  items.forEach((item) => {
+    const date = calendarDate(item.startsAt);
+    if (!date) {
+      return;
+    }
+    const key = calendarDayKey(date);
+    byDay.set(key, [...(byDay.get(key) ?? []), item]);
+  });
+  return byDay;
+}
+
 function cellDocuments(value: CrmTableCellValue | undefined): DocumentCellValue {
   return Array.isArray(value) && value.every(isDocumentCellItem) ? value : [];
+}
+
+function sortDocumentsByAdded(documents: DocumentCellValue): DocumentCellValue {
+  return [...documents].sort((left, right) => {
+    const parsedLeftTime = left.createdAt ? new Date(left.createdAt).getTime() : Number.NaN;
+    const parsedRightTime = right.createdAt ? new Date(right.createdAt).getTime() : Number.NaN;
+    const leftTime = Number.isFinite(parsedLeftTime) ? parsedLeftTime : Number.POSITIVE_INFINITY;
+    const rightTime = Number.isFinite(parsedRightTime) ? parsedRightTime : Number.POSITIVE_INFINITY;
+    if (leftTime !== rightTime) {
+      return leftTime - rightTime;
+    }
+    return left.fileName.localeCompare(right.fileName);
+  });
 }
 
 function cellCalendarItems(value: CrmTableCellValue | undefined): CalendarCellValue {
@@ -566,6 +758,8 @@ function mobileLeadSummary(row: CrmTableRow): { short: string; long: string | nu
 
 const mobileReadonlyColumnIds = new Set([
   "code",
+  "nextAction",
+  "nextActionState",
   "client.name",
   "client.phone",
   "client.email",
@@ -611,21 +805,21 @@ function formatDocumentCreatedAt(value: string | null | undefined): string | nul
 
 function documentBadgeColor(extension: string): string {
   if (extension === "PDF") {
-    return "#b42318";
+    return "#8f4a45";
   }
   if (extension === "XLS") {
-    return "#15803d";
+    return "#4f7a5f";
   }
   if (extension === "IMG") {
-    return "#2563eb";
+    return "#566f9f";
   }
   if (extension === "AUD") {
-    return "#7c3aed";
+    return "#75649a";
   }
   if (extension === "DOC") {
-    return "#1d4ed8";
+    return "#4f6694";
   }
-  return "#475467";
+  return "#667085";
 }
 
 const documentCellRenderer: CustomRenderer<DocumentsCustomCell> = {
@@ -650,7 +844,10 @@ const documentCellRenderer: CustomRenderer<DocumentsCustomCell> = {
     ctx.rect(rect.x, rect.y, rect.width, rect.height);
     ctx.clip();
     const localX = hoverX === undefined ? -1 : hoverX <= rect.width ? hoverX - 8 : hoverX - rect.x - 8;
-    const uploadHovered = documentCellActionAt(localX, documents, uploadStart)?.type === "upload";
+    const localY =
+      args.hoverY === undefined ? -1 : args.hoverY <= rect.height ? args.hoverY - (top - rect.y) : args.hoverY - top;
+    const hoveredAction = documentCellActionAt(localX, localY, documents, uploadStart);
+    const uploadHovered = hoveredAction?.type === "upload";
     if (hoverAmount > 0) {
       ctx.globalAlpha = hoverAmount;
       ctx.beginPath();
@@ -660,8 +857,7 @@ const documentCellRenderer: CustomRenderer<DocumentsCustomCell> = {
       ctx.globalAlpha = 1;
     }
     for (const [index, document] of documents.entries()) {
-      const action = documentCellActionAt(localX, documents, uploadStart);
-      const hovered = action?.type === "open" && action.index === index;
+      const hovered = hoveredAction?.type === "open" && hoveredAction.index === index;
       const extension = documentExtensionLabel(document.fileName, document.mimeType);
       ctx.fillStyle = hovered ? theme.bgHeaderHovered : theme.bgBubble;
       ctx.strokeStyle = hovered ? theme.accentColor : theme.borderColor;
@@ -688,7 +884,7 @@ const documentCellRenderer: CustomRenderer<DocumentsCustomCell> = {
       ctx.textAlign = "left";
       if (!compactDocuments) {
         const titleLeft = iconLeft + documentIconWidth + 6;
-        ctx.fillText(documentChipTitle(document.fileName), titleLeft, top + documentChipHeight / 2, chipWidth - (titleLeft - left) - 7);
+        ctx.fillText(documentChipTitle(document.fileName), titleLeft, top + documentChipHeight / 2, chipWidth - (titleLeft - left) - 17);
       }
       left += chipWidth + documentChipGap;
     }
@@ -738,8 +934,9 @@ const calendarCellRenderer: CustomRenderer<CalendarCustomCell> = {
   isMatch: (cell): cell is CalendarCustomCell =>
     cell.data && typeof cell.data === "object" && "kind" in cell.data && cell.data.kind === "calendar-cell",
   needsHover: true,
+  needsHoverPosition: true,
   draw: (args, cell) => {
-    const { ctx, rect, theme, hoverAmount } = args;
+    const { ctx, rect, theme, hoverAmount, hoverX } = args;
     const items = cell.data.items.slice(0, 3);
     ctx.save();
     ctx.beginPath();
@@ -763,35 +960,62 @@ const calendarCellRenderer: CustomRenderer<CalendarCustomCell> = {
     let left = rect.x + 8;
     const top = rect.y + Math.floor((rect.height - calendarChipHeight) / 2);
     const visibleRight = Math.min(rect.x + rect.width - 8, ctx.canvas.getBoundingClientRect().width);
-    for (const item of items) {
-      if (left + calendarChipWidth > visibleRight) {
+    const availableWidth = Math.max(0, visibleRight - left);
+    const fullChipWidth = items.length * calendarChipWidth + Math.max(0, items.length - 1) * calendarChipGap;
+    const dateOnlyMode = cell.data.items.length > 3 || fullChipWidth > availableWidth;
+    const drawItems = dateOnlyMode ? cell.data.items : items;
+    const chipWidth = dateOnlyMode ? calendarDateOnlyWidth : calendarChipWidth;
+    const visibleItemLimit = Math.max(1, Math.floor((availableWidth + calendarChipGap) / (chipWidth + calendarChipGap)));
+    const localX = hoverX === undefined ? -1 : hoverX <= rect.width ? hoverX - 8 : hoverX - rect.x - 8;
+    const localY =
+      args.hoverY === undefined ? -1 : args.hoverY <= rect.height ? args.hoverY - (top - rect.y) : args.hoverY - top;
+    const hoveredAction = calendarCellActionAt(localX, localY, cell.data.items, availableWidth);
+    for (const item of drawItems.slice(0, visibleItemLimit)) {
+      if (left + chipWidth > visibleRight) {
         break;
       }
+      const originalIndex = cell.data.items.findIndex((candidate) => candidate.id === item.id && candidate.kind === item.kind);
+      const deleteHovered = hoveredAction?.type === "delete" && hoveredAction.index === originalIndex;
+      const itemBorderColor = item.kind === "reminder" ? "#b98a55" : "#8b8fc8";
       ctx.fillStyle = theme.bgBubble;
-      ctx.strokeStyle = item.kind === "reminder" ? "#b45309" : theme.accentColor;
-      ctx.lineWidth = 1;
+      ctx.strokeStyle = deleteHovered ? "#b42318" : itemBorderColor;
+      ctx.lineWidth = deleteHovered ? 0.9 : 0.6;
       ctx.beginPath();
-      ctx.roundRect(left, top, calendarChipWidth, calendarChipHeight, 7);
+      ctx.roundRect(left, top, chipWidth, calendarChipHeight, 7);
       ctx.fill();
       ctx.stroke();
 
-      ctx.fillStyle = item.kind === "reminder" ? "#b45309" : theme.accentColor;
-      ctx.font = "700 9px Inter, sans-serif";
+      ctx.fillStyle = theme.textDark;
+      ctx.font = "600 9px Inter, sans-serif";
       ctx.textAlign = "left";
       ctx.textBaseline = "middle";
-      ctx.fillText(calendarDateLabel(item.startsAt), left + 7, top + calendarChipHeight / 2, 34);
-
-      ctx.fillStyle = theme.textDark;
-      ctx.font = `500 ${Math.max(11, fontSizeFromTheme(theme, 13) - 2)}px Inter, sans-serif`;
-      ctx.fillText(item.title, left + 42, top + calendarChipHeight / 2, calendarChipWidth - 48);
-      left += calendarChipWidth + calendarChipGap;
+      if (dateOnlyMode) {
+        ctx.textAlign = "center";
+        ctx.fillText(calendarDayMonthLabel(item.startsAt), left + chipWidth / 2, top + 9, chipWidth - 6);
+        ctx.fillStyle = theme.textMedium;
+        ctx.font = "500 9px Inter, sans-serif";
+        ctx.fillText(calendarTimeLabel(item.startsAt), left + chipWidth / 2, top + 20, chipWidth - 6);
+      } else {
+        ctx.fillText(calendarDayMonthLabel(item.startsAt), left + 7, top + 9, 36);
+        ctx.fillStyle = theme.textMedium;
+        ctx.font = "500 9px Inter, sans-serif";
+        ctx.fillText(calendarTimeLabel(item.startsAt), left + 7, top + 20, 36);
+        ctx.fillStyle = theme.textDark;
+        ctx.font = `500 ${Math.max(11, fontSizeFromTheme(theme, 13) - 2)}px Inter, sans-serif`;
+        ctx.fillText(compactCalendarTitle(item.title), left + 47, top + calendarChipHeight / 2, chipWidth - 68);
+      }
+      if (deleteHovered || (localX >= left - rect.x - 8 && localX <= left - rect.x - 8 + chipWidth)) {
+        drawMiniDeleteIcon(ctx, left + chipWidth - cellDeleteHitSize, top + 2, deleteHovered, theme);
+      }
+      left += chipWidth + calendarChipGap;
     }
-    if (cell.data.items.length > items.length && left + 30 <= visibleRight) {
+    const hiddenCount = cell.data.items.length - Math.min(cell.data.items.length, visibleItemLimit);
+    if (hiddenCount > 0 && left + 30 <= visibleRight) {
       ctx.fillStyle = theme.textMedium;
       ctx.font = "700 11px Inter, sans-serif";
       ctx.textAlign = "left";
       ctx.textBaseline = "middle";
-      ctx.fillText(`+${cell.data.items.length - items.length}`, left + 2, rect.y + rect.height / 2);
+      ctx.fillText(`+${hiddenCount}`, left + 2, rect.y + rect.height / 2);
     }
     ctx.restore();
   },
@@ -809,6 +1033,7 @@ export function CrmTable({
   leadSummariesEndpoint,
   updateRecordEndpoint,
   offerGenerateEndpoint,
+  clientOptionsEndpoint,
   archiveEntity,
   createRecord
 }: CrmTableProps) {
@@ -827,8 +1052,21 @@ export function CrmTable({
   const [savingDraftIds, setSavingDraftIds] = useState<Set<string>>(() => new Set());
   const [flashRowId, setFlashRowId] = useState<string | null>(null);
   const [relatedTooltip, setRelatedTooltip] = useState<{ left: number; top: number; placement: "above" | "below" } | null>(null);
-  const [documentTooltip, setDocumentTooltip] = useState<{ left: number; top: number; document: DocumentCellItem } | null>(null);
+  const [documentTooltip, setDocumentTooltip] = useState<{
+    left: number;
+    top: number;
+    placement: "above" | "below";
+    document: DocumentCellItem;
+  } | null>(null);
+  const [calendarTooltip, setCalendarTooltip] = useState<{
+    left: number;
+    top: number;
+    placement: "above" | "below";
+    items: CalendarCellValue;
+  } | null>(null);
   const [previewDocument, setPreviewDocument] = useState<DocumentCellItem | null>(null);
+  const [cellDeleteTarget, setCellDeleteTarget] = useState<CellDeleteTarget | null>(null);
+  const [isDeletingCellItem, setIsDeletingCellItem] = useState(false);
   const uploadFileInputRef = useRef<HTMLInputElement | null>(null);
   const [uploadTarget, setUploadTarget] = useState<DocumentUploadTarget | null>(null);
   const [uploadSummaries, setUploadSummaries] = useState<string[]>([]);
@@ -845,8 +1083,19 @@ export function CrmTable({
   const [linkedTableColor, setLinkedTableColor] = useState(defaultTableColor);
   const [bulkActionDialog, setBulkActionDialog] = useState<BulkActionDialog>(null);
   const [mobileEditTarget, setMobileEditTarget] = useState<MobileEditTarget | null>(null);
+  const [detailAnchorRowId, setDetailAnchorRowId] = useState<string | null>(null);
+  const [detailsButtonPosition, setDetailsButtonPosition] = useState<DetailsButtonPosition | null>(null);
+  const [clientPicker, setClientPicker] = useState<ClientPickerState | null>(null);
+  const [hoveredClientPickerCell, setHoveredClientPickerCell] = useState<Item | null>(null);
+  const [clientOptions, setClientOptions] = useState<ClientOption[]>([]);
+  const [detailsPanel, setDetailsPanel] = useState<DetailsPanelState | null>(null);
+  const [detailsPanelTab, setDetailsPanelTab] = useState<DetailsPanelTab>("details");
   const [summaryHistoryTarget, setSummaryHistoryTarget] = useState<LeadSummaryHistoryTarget | null>(null);
   const [leadSummaryDraft, setLeadSummaryDraft] = useState<LeadSummaryDraft>({ shortSummary: "", longSummary: "", saving: false });
+  const [longTextPreview, setLongTextPreview] = useState<LongTextPreview | null>(null);
+  const [archivingSummaryIds, setArchivingSummaryIds] = useState<Set<string>>(() => new Set());
+  const [summaryArchiveConfirmId, setSummaryArchiveConfirmId] = useState<string | null>(null);
+  const [mobileCalendarMonths, setMobileCalendarMonths] = useState<Record<string, string>>({});
   const isDarkMode = useDarkModeEnabled();
   const tableFontScale = normalizedFontScale(preferences.fontScale);
   const tableColor = preferences.tableColor ?? defaultTableColor;
@@ -933,6 +1182,23 @@ export function CrmTable({
     setLinkedTableColor(readSavedTableColor("lightcrm.table.clients"));
   }, [tableColor, tableKey]);
 
+  useEffect(() => {
+    if (!clientOptionsEndpoint) {
+      setClientOptions([]);
+      return undefined;
+    }
+    const controller = new AbortController();
+    fetch(clientOptionsEndpoint, { signal: controller.signal })
+      .then((response) => (response.ok ? (response.json() as Promise<ClientOption[]>) : []))
+      .then((payload) => setClientOptions(Array.isArray(payload) ? payload : []))
+      .catch((error: unknown) => {
+        if (!(error instanceof DOMException && error.name === "AbortError")) {
+          setClientOptions([]);
+        }
+      });
+    return () => controller.abort();
+  }, [clientOptionsEndpoint]);
+
   const configuredColumns = useMemo(() => applyTablePreferences(columns, preferences), [columns, preferences]);
   const createTargetColumnIndex = useMemo(() => {
     if (!createRecord) {
@@ -992,10 +1258,31 @@ export function CrmTable({
     () => selectedIndexes.flatMap((index) => (filteredRows[index] ? [filteredRows[index]] : [])),
     [filteredRows, selectedIndexes]
   );
+  const currentCellRow = gridSelection.current?.cell[1] ?? null;
+  const anchoredDetailRow = detailAnchorRowId ? filteredRows.find((row) => row.id === detailAnchorRowId) ?? null : null;
+  const activeDetailRow = anchoredDetailRow
+    ? anchoredDetailRow
+    : currentCellRow !== null && filteredRows[currentCellRow]
+      ? filteredRows[currentCellRow]
+      : selectedRows.length === 1
+      ? selectedRows[0]
+      : null;
+  const detailsEditableColumns = useMemo(
+    () => configuredColumns.filter((column) => isMobileEditableColumn(column)),
+    [configuredColumns]
+  );
+  const detailsPanelRow = detailsPanel ? editableRows.find((row) => row.id === detailsPanel.rowId) ?? null : null;
+  const detailsPanelDocuments = detailsPanelRow ? sortDocumentsByAdded(cellDocuments(detailsPanelRow.values.documents)) : [];
   const handleGridSelectionChange = useCallback(
     (nextSelection: GridSelection) => {
       const nextIndexes = selectedRowIndexes(nextSelection, filteredRows.length);
       const currentIndexes = selectedRowIndexes(gridSelection, filteredRows.length);
+      const currentCellRowIndex = nextSelection.current?.cell[1];
+      if (currentCellRowIndex !== undefined && filteredRows[currentCellRowIndex]) {
+        setDetailAnchorRowId(filteredRows[currentCellRowIndex].id);
+      } else if (nextIndexes.length === 1 && filteredRows[nextIndexes[0]]) {
+        setDetailAnchorRowId(filteredRows[nextIndexes[0]].id);
+      }
 
       if (nextIndexes.length === 1 && nextSelection.columns.length === 0) {
         const nextIndex = nextIndexes[0];
@@ -1008,7 +1295,7 @@ export function CrmTable({
 
       setGridSelection(nextSelection);
     },
-    [filteredRows.length, gridSelection]
+    [filteredRows, gridSelection]
   );
 
   const getCellContent = useCallback(
@@ -1057,6 +1344,41 @@ export function CrmTable({
           }
         };
       }
+      if (column?.valueKind === "area") {
+        const displayData = formatAreaValue(value);
+        return {
+          kind: GridCellKind.Text,
+          data: String(value ?? ""),
+          displayData,
+          allowOverlay: true,
+          readonly: false,
+          themeOverride,
+          contentAlign: "center"
+        };
+      }
+      if (column?.valueKind === "longText") {
+        const displayData = String(value ?? "");
+        return {
+          kind: GridCellKind.Text,
+          data: displayData,
+          displayData,
+          allowOverlay: false,
+          readonly: true,
+          themeOverride
+        };
+      }
+      if (column?.valueKind === "action") {
+        const displayData = textCellValue(value) ?? "Monitor";
+        return {
+          kind: GridCellKind.Text,
+          data: displayData,
+          displayData,
+          allowOverlay: true,
+          readonly: false,
+          themeOverride,
+          contentAlign: "center"
+        };
+      }
       const displayValue = value;
       const displayData = Array.isArray(displayValue)
         ? displayValue.every(isCalendarCellItem)
@@ -1081,10 +1403,12 @@ export function CrmTable({
     if (!frameBounds) {
       setRelatedTooltip(null);
       setDocumentTooltip(null);
+      setCalendarTooltip(null);
       return;
     }
     if (args.kind === "group-header" && args.group === "Client") {
       setDocumentTooltip(null);
+      setCalendarTooltip(null);
       setRelatedTooltip({
         left: args.bounds.x - frameBounds.left + args.bounds.width / 2,
         top: args.bounds.y - frameBounds.top + args.bounds.height + 6,
@@ -1095,33 +1419,68 @@ export function CrmTable({
     if (args.kind === "cell") {
       const column = configuredColumns[args.location[0]];
       const row = filteredRows[args.location[1]];
+      const localX = args.localEventX <= args.bounds.width ? args.localEventX : args.localEventX - args.bounds.x;
+      const localY = args.localEventY <= args.bounds.height ? args.localEventY : args.localEventY - args.bounds.y;
+      setHoveredClientPickerCell(
+        column?.id === "client.name" &&
+          clientOptionsEndpoint &&
+          updateRecordEndpoint &&
+          isClientPickerHit(localX, localY, args.bounds.width, args.bounds.height)
+          ? args.location
+          : null
+      );
+      if (column?.valueKind === "calendar" && row) {
+        const items = cellCalendarItems(row.values[column.id]);
+        const relativeTop = args.bounds.y - frameBounds.top;
+        const showBelow = relativeTop < 76;
+        setRelatedTooltip(null);
+        setDocumentTooltip(null);
+        setCalendarTooltip(
+          items.length > 0
+            ? {
+                left: args.bounds.x - frameBounds.left + Math.min(Math.max(args.bounds.width / 2, 130), Math.max(130, args.bounds.width - 20)),
+                top: showBelow ? relativeTop + args.bounds.height + 8 : Math.max(8, relativeTop - 8),
+                placement: showBelow ? "below" : "above",
+                items
+              }
+            : null
+        );
+        return;
+      }
       if (column?.valueKind === "documents" && row) {
         const documents = cellDocuments(row.values[column.id]);
         const relativeX =
           args.localEventX <= args.bounds.width ? args.localEventX - 8 : args.localEventX - args.bounds.x - 8;
+        const relativeY = args.localEventY <= args.bounds.height ? args.localEventY - Math.floor((args.bounds.height - documentChipHeight) / 2) : -1;
         const visibleRight = Math.min(args.bounds.x + args.bounds.width, window.innerWidth);
         const uploadStart = Math.max(0, visibleRight - args.bounds.x - documentUploadHitWidth - documentUploadInset - 8);
-        const action = documentCellActionAt(relativeX, documents, uploadStart);
+        const action = documentCellActionAt(relativeX, relativeY, documents, uploadStart);
         if (action?.type === "open") {
           setRelatedTooltip(null);
+          setCalendarTooltip(null);
           const hoveredDocument = documents[action.index];
           if (!hoveredDocument) {
             setDocumentTooltip(null);
             return;
           }
           const tooltipLeft = args.bounds.x - frameBounds.left + Math.max(130, Math.min(relativeX + 20, args.bounds.width - 130));
+          const relativeTop = args.bounds.y - frameBounds.top;
+          const showBelow = relativeTop < 76;
           setDocumentTooltip({
             left: tooltipLeft,
-            top: Math.max(8, args.bounds.y - frameBounds.top - 8),
+            top: showBelow ? relativeTop + args.bounds.height + 8 : Math.max(8, relativeTop - 8),
+            placement: showBelow ? "below" : "above",
             document: hoveredDocument
           });
           return;
         }
       }
     }
+    setHoveredClientPickerCell(null);
     setRelatedTooltip(null);
     setDocumentTooltip(null);
-  }, [configuredColumns, filteredRows]);
+    setCalendarTooltip(null);
+  }, [clientOptionsEndpoint, configuredColumns, filteredRows, updateRecordEndpoint]);
 
   const toggleColumn = useCallback((columnId: string) => {
     setPreferences((current) => {
@@ -1277,11 +1636,70 @@ export function CrmTable({
     [createPayloadValues, createRecord]
   );
 
+  const persistInlinePatch = useCallback(
+    async (row: CrmTableRow, patch: Record<string, string | null>, label = "Update field") => {
+      if (!updateRecordEndpoint || row.id.startsWith("draft-")) {
+        return;
+      }
+      try {
+        const response = await fetch(updateRecordEndpoint, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            workspaceId: "default",
+            leadId: row.id,
+            patch,
+            source: { channel: "web-table" }
+          })
+        });
+        const payload = (await response.json()) as { error?: string };
+        if (!response.ok) {
+          throw new Error(payload.error ?? `${label} failed.`);
+        }
+        setCreateError(null);
+      } catch (error) {
+        setCreateError(error instanceof Error ? error.message : `${label} failed.`);
+      }
+    },
+    [updateRecordEndpoint]
+  );
+
+  const persistNextAction = useCallback(
+    async (row: CrmTableRow, value: string) => {
+      await persistInlinePatch(row, { todo: value.trim() ? value : null }, "Update next action");
+    },
+    [persistInlinePatch]
+  );
+
+  const persistInlineNoteField = useCallback(
+    (row: CrmTableRow, column: CrmTableColumn, value: string) => {
+      if (!updateRecordEndpoint || !createRecord?.noteFields?.[column.id]) {
+        return false;
+      }
+      void persistInlinePatch(row, { [column.id]: value.trim() ? value : null }, `Update ${column.title}`);
+      return true;
+    },
+    [createRecord, persistInlinePatch, updateRecordEndpoint]
+  );
+
   const editCell = useCallback(
     (columnIndex: number, rowIndex: number, value: GridCell) => {
       const column = configuredColumns[columnIndex];
       const row = filteredRows[rowIndex];
       if (!column || !row || (value.kind !== GridCellKind.Text && value.kind !== GridCellKind.Uri)) {
+        return;
+      }
+      if (column.valueKind === "action") {
+        const nextValue = String(value.data ?? "").trim();
+        setEditableRows((current) =>
+          updateRowCell(
+            updateRowCell(updateRowCell(current, row.id, column.id, nextValue), row.id, "todo", nextValue),
+            row.id,
+            "nextActionState",
+            nextActionStateForTodo(nextValue)
+          )
+        );
+        void persistNextAction(row, nextValue);
         return;
       }
       const nextRow = {
@@ -1291,11 +1709,13 @@ export function CrmTable({
       setEditableRows((current) => updateRowCell(current, row.id, column.id, value.data));
       if (draftRowIds.has(row.id)) {
         void saveDraftRow(nextRow);
+      } else if (persistInlineNoteField(row, column, String(value.data ?? ""))) {
+        return;
       } else if (createRecord?.fields.some((field) => field.id === column.id)) {
         void persistEditedRow(nextRow);
       }
     },
-    [configuredColumns, createRecord, draftRowIds, filteredRows, persistEditedRow, saveDraftRow]
+    [configuredColumns, createRecord, draftRowIds, filteredRows, persistEditedRow, persistInlineNoteField, persistNextAction, saveDraftRow]
   );
 
   const openCreateRecord = useCallback(() => {
@@ -1391,9 +1811,65 @@ export function CrmTable({
       if (!column || !row) {
         return;
       }
+      setDetailAnchorRowId(row.id);
+      if (column.group !== "Client" && column.id !== "client.name") {
+        setClientPicker(null);
+      }
+      const frameBounds = gridFrameRef.current?.getBoundingClientRect();
+      if (frameBounds) {
+        setDetailsButtonPosition({
+          left: Math.min(
+            Math.max(8, frameBounds.width - 104),
+            Math.max(8, event.bounds.x - frameBounds.left + event.bounds.width + 20)
+          ),
+          top: Math.min(
+            Math.max(8, frameBounds.height - 42),
+            Math.max(8, event.bounds.y - frameBounds.top + event.bounds.height + 24)
+          )
+        });
+      }
+      if ((column.group === "Client" || column.id === "client.name") && clientOptionsEndpoint && updateRecordEndpoint && frameBounds) {
+        const localX = event.localEventX <= event.bounds.width ? event.localEventX : event.localEventX - event.bounds.x;
+        const localY = event.localEventY <= event.bounds.height ? event.localEventY : event.localEventY - event.bounds.y;
+        if (isClientPickerHit(localX, localY, event.bounds.width, event.bounds.height)) {
+          event.preventDefault();
+          setClientPicker({
+            rowId: row.id,
+            left: Math.min(event.bounds.x - frameBounds.left + event.bounds.width - 22, Math.max(8, frameBounds.width - 340)),
+            top: Math.min(event.bounds.y - frameBounds.top + event.bounds.height + 4, Math.max(8, frameBounds.height - 300)),
+            query: "",
+            saving: false,
+            error: null
+          });
+          return;
+        }
+      }
       if (column.valueKind === "calendar") {
         event.preventDefault();
+        const items = cellCalendarItems(row.values[column.id]);
+        const relativeX =
+          event.localEventX <= event.bounds.width ? event.localEventX - 8 : event.localEventX - event.bounds.x - 8;
+        const top = Math.floor((event.bounds.height - calendarChipHeight) / 2);
+        const relativeY = event.localEventY <= event.bounds.height ? event.localEventY - top : -1;
+        const visibleRight = Math.min(event.bounds.x + event.bounds.width - 8, window.innerWidth);
+        const availableWidth = Math.max(0, visibleRight - event.bounds.x - 8);
+        const action = calendarCellActionAt(relativeX, relativeY, items, availableWidth);
+        if (action?.type === "delete") {
+          const item = items[action.index];
+          if (item) {
+            setCellDeleteTarget({ kind: "calendar", rowId: row.id, item });
+          }
+          return;
+        }
         window.location.assign(`/today?leadId=${encodeURIComponent(row.id)}`);
+        return;
+      }
+      if (column.valueKind === "longText") {
+        const text = textCellValue(row.values[column.id]);
+        if (text) {
+          event.preventDefault();
+          setLongTextPreview({ title: column.title, text });
+        }
         return;
       }
       if (column.valueKind !== "documents") {
@@ -1403,9 +1879,11 @@ export function CrmTable({
       const documents = cellDocuments(row.values[column.id]);
       const relativeX =
         event.localEventX <= event.bounds.width ? event.localEventX - 8 : event.localEventX - event.bounds.x - 8;
+      const top = Math.floor((event.bounds.height - documentChipHeight) / 2);
+      const relativeY = event.localEventY <= event.bounds.height ? event.localEventY - top : -1;
       const visibleRight = Math.min(event.bounds.x + event.bounds.width, window.innerWidth);
       const uploadStart = Math.max(0, visibleRight - event.bounds.x - documentUploadHitWidth - documentUploadInset - 8);
-      const action = documentCellActionAt(relativeX, documents, uploadStart);
+      const action = documentCellActionAt(relativeX, relativeY, documents, uploadStart);
       if (action?.type === "open") {
         setPreviewDocument(documents[action.index] ?? null);
       }
@@ -1570,6 +2048,121 @@ export function CrmTable({
     }
   }, [mobileEditTarget, updateRecordEndpoint]);
 
+  const openDetailsPanel = useCallback((row: CrmTableRow) => {
+    const values = Object.fromEntries(
+      detailsEditableColumns.map((column) => {
+        const value = mobileDisplayValue(row.values[column.id]);
+        return [column.id, value === "n/a" ? "" : String(value)];
+      })
+    );
+    setDetailsPanelTab("details");
+    setDetailsPanel({ rowId: row.id, values, saving: false });
+  }, [detailsEditableColumns]);
+
+  const saveDetailsPanel = useCallback(async () => {
+    if (!detailsPanel || !detailsPanelRow || !updateRecordEndpoint || detailsPanel.saving) {
+      return;
+    }
+    const patch = Object.fromEntries(
+      detailsEditableColumns
+        .map((column) => {
+          const currentValue = mobileDisplayValue(detailsPanelRow.values[column.id]);
+          const currentText = currentValue === "n/a" ? "" : String(currentValue);
+          const nextText = detailsPanel.values[column.id] ?? "";
+          return currentText === nextText ? null : [column.id, nextText.trim() ? nextText : null];
+        })
+        .filter((entry): entry is [string, string | null] => Boolean(entry))
+    );
+
+    if (Object.keys(patch).length === 0) {
+      setDetailsPanel(null);
+      return;
+    }
+
+    setDetailsPanel((current) => (current ? { ...current, saving: true } : current));
+    try {
+      const response = await fetch(updateRecordEndpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          workspaceId: "default",
+          leadId: detailsPanel.rowId,
+          patch,
+          source: { channel: "web-details" }
+        })
+      });
+      const payload = (await response.json()) as { error?: string };
+      if (!response.ok) {
+        throw new Error(payload.error ?? "Details update failed.");
+      }
+      setEditableRows((current) =>
+        Object.entries(patch).reduce(
+          (rows, [columnId, value]) => updateRowCell(rows, detailsPanel.rowId, columnId, value ?? ""),
+          current
+        )
+      );
+      setCreateError(null);
+      setDetailsPanel(null);
+    } catch (error) {
+      setCreateError(error instanceof Error ? error.message : "Details update failed.");
+      setDetailsPanel((current) => (current ? { ...current, saving: false } : current));
+    }
+  }, [detailsEditableColumns, detailsPanel, detailsPanelRow, updateRecordEndpoint]);
+
+  const selectClientForLead = useCallback(
+    async (client: ClientOption) => {
+      if (!clientPicker || !updateRecordEndpoint || clientPicker.saving) {
+        return;
+      }
+      setClientPicker((current) => (current ? { ...current, saving: true, error: null } : current));
+      try {
+        const response = await fetch(updateRecordEndpoint, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            workspaceId: "default",
+            leadId: clientPicker.rowId,
+            patch: { clientId: client.id },
+            source: { channel: "web-client-picker" }
+          })
+        });
+        const payload = (await response.json()) as { error?: string };
+        if (!response.ok) {
+          throw new Error(payload.error ?? "Client update failed.");
+        }
+        setEditableRows((current) =>
+          current.map((row) =>
+            row.id === clientPicker.rowId
+              ? {
+                  ...row,
+                  values: {
+                    ...row.values,
+                    "client.name": client.name ?? "n/a",
+                    "client.phone": client.phone ?? "n/a",
+                    "client.email": client.email ?? "n/a",
+                    messenger: client.whatsapp ?? row.values.messenger ?? "n/a"
+                  }
+                }
+              : row
+          )
+        );
+        setClientPicker(null);
+        setCreateError(null);
+      } catch (error) {
+        setClientPicker((current) =>
+          current
+            ? {
+                ...current,
+                saving: false,
+                error: error instanceof Error ? error.message : "Client update failed."
+              }
+            : current
+        );
+      }
+    },
+    [clientPicker, updateRecordEndpoint]
+  );
+
   const openLeadSummaryHistory = useCallback(async (row: CrmTableRow) => {
     if (!leadSummariesEndpoint) {
       return;
@@ -1675,14 +2268,122 @@ export function CrmTable({
     }
   }, [leadSummariesEndpoint, leadSummaryDraft, summaryHistoryTarget]);
 
+  const archiveLeadSummary = useCallback(async (summary: LeadSummaryHistoryItem) => {
+    if (archivingSummaryIds.has(summary.id)) {
+      return;
+    }
+    setArchivingSummaryIds((current) => new Set(current).add(summary.id));
+    try {
+      const response = await fetch("/api/crm/archive", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ workspaceId: "default", entity: "leadSummary", ids: [summary.id] })
+      });
+      const payload = (await response.json()) as { error?: string };
+      if (!response.ok) {
+        throw new Error(payload.error ?? "Summary archive failed.");
+      }
+      setSummaryHistoryTarget((current) => {
+        if (!current) {
+          return current;
+        }
+        const summaries = current.summaries.filter((item) => item.id !== summary.id);
+        const latest = summaries[0] ?? null;
+        return {
+          ...current,
+          error: null,
+          row: {
+            ...current.row,
+            values: {
+              ...current.row.values,
+              summaryShort: latest?.shortSummary ?? null,
+              summaryLong: latest?.longSummary ?? null,
+              summaryUpdatedAt: latest?.createdAt ?? null
+            }
+          },
+          summaries
+        };
+      });
+      setEditableRows((current) =>
+        current.map((row) => {
+          if (row.id !== summary.leadId) {
+            return row;
+          }
+          const target = summaryHistoryTarget?.summaries.filter((item) => item.id !== summary.id)[0] ?? null;
+          return {
+            ...row,
+            values: {
+              ...row.values,
+              summaryShort: target?.shortSummary ?? null,
+              summaryLong: target?.longSummary ?? null,
+              summaryUpdatedAt: target?.createdAt ?? null
+            }
+          };
+        })
+      );
+    } catch (error) {
+      setSummaryHistoryTarget((current) =>
+        current
+          ? { ...current, error: error instanceof Error ? error.message : "Summary archive failed." }
+          : current
+      );
+    } finally {
+      setSummaryArchiveConfirmId(null);
+      setArchivingSummaryIds((current) => {
+        const next = new Set(current);
+        next.delete(summary.id);
+        return next;
+      });
+    }
+  }, [archivingSummaryIds, summaryHistoryTarget]);
+
   const drawCell = useCallback<NonNullable<ComponentProps<typeof DataEditor>["drawCell"]>>(
     (args, drawContent) => {
-      drawContent();
-      drawSearchMatchHighlight(args, query, isDarkMode);
       if (args.row < 0) {
+        drawContent();
         return;
       }
       const column = configuredColumns[args.col];
+      if (column?.valueKind === "action" && args.cell.kind === GridCellKind.Text) {
+        const row = filteredRows[args.row];
+        const text = args.cell.displayData || args.cell.data || "Monitor";
+        const tone = actionTone(row?.values.nextActionState);
+        const { ctx, rect, theme } = args;
+        const fontSize = fontSizeFromTheme(theme, 13);
+        const fontFamily = theme.fontFamily ?? "Inter, sans-serif";
+        const chipHeight = Math.max(18, Math.min(rect.height - 8, fontSize + 8));
+        const dotSize = 6;
+
+        ctx.save();
+        ctx.font = `600 ${theme.baseFontStyle ?? `${fontSize}px`} ${fontFamily}`;
+        const maxChipWidth = rect.width - 12;
+        const textWidth = Math.min(ctx.measureText(text).width, Math.max(30, maxChipWidth - 28));
+        const chipWidth = Math.min(maxChipWidth, textWidth + 26);
+        const chipX = rect.x + Math.max(6, (rect.width - chipWidth) / 2);
+        const chipY = rect.y + (rect.height - chipHeight) / 2;
+        ctx.beginPath();
+        ctx.roundRect(chipX, chipY, chipWidth, chipHeight, chipHeight / 2);
+        ctx.fillStyle = tone.fill;
+        ctx.fill();
+        ctx.strokeStyle = tone.stroke;
+        ctx.lineWidth = 1;
+        ctx.stroke();
+
+        ctx.beginPath();
+        ctx.arc(chipX + 11, rect.y + rect.height / 2, dotSize / 2, 0, Math.PI * 2);
+        ctx.fillStyle = tone.dot;
+        ctx.fill();
+
+        ctx.fillStyle = isDarkMode ? theme.textDark : tone.text;
+        ctx.textBaseline = "middle";
+        ctx.fillText(text, chipX + 19, rect.y + rect.height / 2, chipWidth - 24);
+        ctx.restore();
+        drawSearchMatchHighlight(args, query, isDarkMode);
+        return;
+      }
+
+      drawContent();
+      drawSearchMatchHighlight(args, query, isDarkMode);
       if (column?.group !== "Client") {
         return;
       }
@@ -1716,9 +2417,41 @@ export function CrmTable({
       ctx.moveTo(rect.x + rect.width - 1.5, rect.y + 3);
       ctx.lineTo(rect.x + rect.width - 1.5, rect.y + rect.height - 3);
       ctx.stroke();
+
+      const isFocusedClientCell =
+        column.id === "client.name" &&
+        gridSelection.current?.cell[0] === args.col &&
+        gridSelection.current?.cell[1] === args.row;
+      if (isFocusedClientCell && clientOptionsEndpoint && updateRecordEndpoint) {
+        const isIconHovered = hoveredClientPickerCell?.[0] === args.col && hoveredClientPickerCell?.[1] === args.row;
+        const iconLeft = rect.x + rect.width - clientPickerHitSize - 4;
+        const iconTop = rect.y + Math.max(4, (rect.height - clientPickerHitSize) / 2);
+        ctx.fillStyle = isIconHovered ? colorWithAlpha(linkedTableColor, isDarkMode ? 0.36 : 0.24) : colorWithAlpha(linkedTableColor, isDarkMode ? 0.16 : 0.1);
+        ctx.strokeStyle = isIconHovered ? colorWithAlpha(linkedTableColor, isDarkMode ? 0.9 : 0.78) : colorWithAlpha(linkedTableColor, isDarkMode ? 0.52 : 0.44);
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.roundRect(iconLeft, iconTop, clientPickerHitSize, clientPickerHitSize, 6);
+        ctx.fill();
+        ctx.stroke();
+
+        const cx = iconLeft + 9;
+        const cy = iconTop + 9;
+        ctx.strokeStyle = isIconHovered ? contrastTextColor(linkedTableColor) : isDarkMode ? "#d9e7df" : "#486257";
+        ctx.lineWidth = 1.35;
+        ctx.beginPath();
+        ctx.arc(cx, cy - 2, 3, 0, Math.PI * 2);
+        ctx.moveTo(cx - 5, cy + 8);
+        ctx.quadraticCurveTo(cx, cy + 2, cx + 5, cy + 8);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(iconLeft + 16, iconTop + 10);
+        ctx.lineTo(iconLeft + 19, iconTop + 13);
+        ctx.lineTo(iconLeft + 22, iconTop + 10);
+        ctx.stroke();
+      }
       ctx.restore();
     },
-    [configuredColumns, isDarkMode, linkedTableColor, query]
+    [clientOptionsEndpoint, configuredColumns, filteredRows, gridSelection.current?.cell, hoveredClientPickerCell, isDarkMode, linkedTableColor, query, updateRecordEndpoint]
   );
 
   const confirmDeleteSelectedRows = useCallback(async () => {
@@ -1750,6 +2483,61 @@ export function CrmTable({
     setGridSelection(emptySelection());
     setBulkActionDialog(null);
   }, [archiveEntity, selectedRows]);
+
+  const confirmDeleteCellItem = useCallback(async () => {
+    if (!cellDeleteTarget || isDeletingCellItem) {
+      return;
+    }
+    const entity: ArchiveRecordEntity =
+      cellDeleteTarget.kind === "document"
+        ? "documentFile"
+        : cellDeleteTarget.item.kind === "reminder"
+          ? "reminder"
+          : "calendarEvent";
+    setIsDeletingCellItem(true);
+    try {
+      const response = await fetch("/api/crm/archive", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ workspaceId: "default", entity, ids: [cellDeleteTarget.item.id] })
+      });
+      const payload = (await response.json()) as { error?: string };
+      if (!response.ok) {
+        throw new Error(payload.error ?? "Delete failed.");
+      }
+      setEditableRows((current) =>
+        current.map((row) => {
+          if (row.id !== cellDeleteTarget.rowId) {
+            return row;
+          }
+          if (cellDeleteTarget.kind === "document") {
+            return {
+              ...row,
+              values: {
+                ...row.values,
+                documents: cellDocuments(row.values.documents).filter((document) => document.id !== cellDeleteTarget.item.id)
+              }
+            };
+          }
+          return {
+            ...row,
+            values: {
+              ...row.values,
+              calendar: cellCalendarItems(row.values.calendar).filter(
+                (item) => !(item.id === cellDeleteTarget.item.id && item.kind === cellDeleteTarget.item.kind)
+              )
+            }
+          };
+        })
+      );
+      setCreateError(null);
+      setCellDeleteTarget(null);
+    } catch (error) {
+      setCreateError(error instanceof Error ? error.message : "Delete failed.");
+    } finally {
+      setIsDeletingCellItem(false);
+    }
+  }, [cellDeleteTarget, isDeletingCellItem]);
 
   const generateOfferForSelectedRow = useCallback(async () => {
     const row = selectedRows[0];
@@ -1791,6 +2579,19 @@ export function CrmTable({
 
   const visibleColumnIds = new Set(configuredColumns.map((column) => column.id));
   const allColumnsByPreference = applyTablePreferences(columns, { ...preferences, hidden: [] });
+  const clientPickerOptions = clientPicker
+    ? clientOptions
+        .filter((client) => {
+          const queryText = clientPicker.query.trim().toLowerCase();
+          if (!queryText) {
+            return true;
+          }
+          return [client.code, client.name, client.company, client.email, client.phone, client.whatsapp]
+            .filter(Boolean)
+            .some((value) => String(value).toLowerCase().includes(queryText));
+        })
+        .slice(0, 8)
+    : [];
   const mobileColumns = configuredColumns
     .filter((column) => !["description", "summaryShort", "summaryLong", "summaryUpdatedAt"].includes(column.id))
     .slice()
@@ -1814,7 +2615,13 @@ export function CrmTable({
                 {selectedRows.length === 1 ? (
                   <>
                     {offerGenerateEndpoint ? (
-                      <button type="button" onClick={generateOfferForSelectedRow} disabled={isGeneratingOffer}>
+                      <button
+                        type="button"
+                        title="Generate offer"
+                        aria-label="Generate offer"
+                        onClick={generateOfferForSelectedRow}
+                        disabled={isGeneratingOffer}
+                      >
                         <FileText size={14} />
                         {isGeneratingOffer ? "Generating" : "Generate offer"}
                       </button>
@@ -1842,6 +2649,7 @@ export function CrmTable({
           </label>
           <button
             type="button"
+            className="toolbarIconButton toolbarCreateButton"
             title={createRecord ? "Create row" : "Create row unavailable"}
             aria-label="Create row"
             disabled={!createRecord}
@@ -1851,6 +2659,7 @@ export function CrmTable({
           </button>
           <button
             type="button"
+            className="toolbarIconButton toolbarColumnsButton"
             title="Columns"
             aria-label="Columns"
             onClick={() => setShowColumnMenu((value) => !value)}
@@ -1859,7 +2668,7 @@ export function CrmTable({
           </button>
           <button
             type="button"
-            className="fontScaleButton"
+            className="toolbarIconButton fontScaleButton"
             title={`Table font ${tableFontLabel(tableFontScale)}`}
             aria-label={`Table font ${tableFontLabel(tableFontScale)}`}
             onClick={cycleTableFontScale}
@@ -1868,6 +2677,7 @@ export function CrmTable({
           </button>
           <button
             type="button"
+            className="toolbarIconButton toolbarExportButton"
             title="Export CSV"
             aria-label="Export CSV"
             onClick={() => downloadCsv(`${tableKey}.csv`, toCsv(configuredColumns, filteredRows))}
@@ -1948,6 +2758,8 @@ export function CrmTable({
       <div className="gridFrame" ref={gridFrameRef} onMouseLeave={() => {
         setRelatedTooltip(null);
         setDocumentTooltip(null);
+        setCalendarTooltip(null);
+        setHoveredClientPickerCell(null);
       }}>
         {relatedTooltip ? (
           <div
@@ -1957,9 +2769,12 @@ export function CrmTable({
             <strong>Related table</strong>
             <span>These columns show fields from the linked client record.</span>
           </div>
-        ) : null}
+      ) : null}
       {documentTooltip ? (
-        <div className="relatedTableTooltip documentCellTooltip" style={{ left: documentTooltip.left, top: documentTooltip.top }}>
+        <div
+          className={`relatedTableTooltip documentCellTooltip ${documentTooltip.placement === "below" ? "relatedTableTooltipBelow" : ""}`}
+          style={{ left: documentTooltip.left, top: documentTooltip.top }}
+        >
           <strong>{documentTooltip.document.fileName}</strong>
           {formatDocumentCreatedAt(documentTooltip.document.createdAt) ? (
             <span>Added {formatDocumentCreatedAt(documentTooltip.document.createdAt)}</span>
@@ -1967,6 +2782,66 @@ export function CrmTable({
           <span>{documentTooltip.document.shortSummary}</span>
         </div>
       ) : null}
+        {calendarTooltip ? (
+        <div
+          className={`relatedTableTooltip calendarCellTooltip ${calendarTooltip.placement === "below" ? "relatedTableTooltipBelow" : ""}`}
+          style={{ left: calendarTooltip.left, top: calendarTooltip.top }}
+        >
+          <strong>Scheduled events</strong>
+          {sortCalendarItemsByStart(calendarTooltip.items).map((item) => (
+            <span key={`${item.kind}-${item.id}`}>
+              {calendarDayMonthLabel(item.startsAt)} {calendarTimeLabel(item.startsAt)} · {item.title}
+            </span>
+          ))}
+        </div>
+      ) : null}
+        {activeDetailRow && updateRecordEndpoint ? (
+          <button
+            className={`detailsFloatingButton${detailsButtonPosition ? " positioned" : ""}`}
+            type="button"
+            style={
+              detailsButtonPosition
+                ? ({
+                    "--details-button-left": `${detailsButtonPosition.left}px`,
+                    "--details-button-top": `${detailsButtonPosition.top}px`
+                  } as ComponentProps<"button">["style"])
+                : undefined
+            }
+            onClick={() => openDetailsPanel(activeDetailRow)}
+          >
+            Details
+          </button>
+        ) : null}
+        {clientPicker ? (
+          <div className="clientPickerPopover" style={{ left: clientPicker.left, top: clientPicker.top }}>
+            <header>
+              <strong>Change client</strong>
+              <button type="button" aria-label="Close client picker" onClick={() => setClientPicker(null)}>
+                <X size={13} />
+              </button>
+            </header>
+            <input
+              autoFocus
+              placeholder="Search clients"
+              value={clientPicker.query}
+              onChange={(event) => setClientPicker((current) => (current ? { ...current, query: event.target.value } : current))}
+            />
+            {clientPicker.error ? <p className="clientPickerError">{clientPicker.error}</p> : null}
+            <div className="clientPickerList">
+              {clientPickerOptions.length > 0 ? (
+                clientPickerOptions.map((client) => (
+                  <button type="button" key={client.id} onClick={() => void selectClientForLead(client)} disabled={clientPicker.saving}>
+                    <span>{client.code ?? client.id}</span>
+                    <strong>{client.name ?? "Unnamed client"}</strong>
+                    <small>{[client.phone, client.email].filter(Boolean).join(" · ") || client.company || "No contact details"}</small>
+                  </button>
+                ))
+              ) : (
+                <p>No clients found.</p>
+              )}
+            </div>
+          </div>
+        ) : null}
         <DataEditor
           ref={gridRef}
           columns={visibleColumns}
@@ -2017,22 +2892,126 @@ export function CrmTable({
           const description = textCellValue(row.values.description);
           return (
             <article className="mobileTableRow" key={row.id}>
-              {mobileColumns.map((column) => {
+              {mobileColumns.filter((column) => column.valueKind !== "longText").map((column) => {
                 const isEditing = mobileEditTarget?.rowId === row.id && mobileEditTarget.columnId === column.id;
                 const canEdit = isMobileEditableColumn(column) && Boolean(updateRecordEndpoint);
+                if (column.valueKind === "documents") {
+                  const documents = sortDocumentsByAdded(cellDocuments(row.values[column.id]));
+                  return (
+                    <div className="mobileField mobileDocumentsField" key={column.id}>
+                      <span>{column.title}</span>
+                      {documents.length > 0 ? (
+                        <div className="leadDocumentCardList">
+                          {documents.map((document) => {
+                            const extension = documentExtensionLabel(document.fileName, document.mimeType);
+                            const createdAt = formatDocumentCreatedAt(document.createdAt);
+                            return (
+                              <button
+                                type="button"
+                                className="leadDocumentCard"
+                                key={document.id}
+                                title={`${document.fileName}${document.shortSummary ? `\n${document.shortSummary}` : ""}`}
+                                onClick={() => setPreviewDocument(document)}
+                              >
+                                <span
+                                  className="leadDocumentCardBadge"
+                                  style={{ "--document-color": documentBadgeColor(extension) } as ComponentProps<"span">["style"]}
+                                >
+                                  {extension.slice(0, 3)}
+                                </span>
+                                <span className="leadDocumentCardMain">
+                                  <strong>{documentChipTitle(document.fileName)}</strong>
+                                  <span>{createdAt ? `Added ${createdAt}` : "Added date unknown"}</span>
+                                </span>
+                                <span className="leadDocumentCardSummary">{document.shortSummary || "No summary yet"}</span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      ) : (
+                        <strong>No documents</strong>
+                      )}
+                    </div>
+                  );
+                }
                 if (column.valueKind === "calendar") {
                   const calendarItems = sortCalendarItemsByStart(cellCalendarItems(row.values[column.id]));
-                  const firstCalendarItem = calendarItems[0] ?? null;
+                  const firstCalendarItem = nearestCalendarItem(calendarItems);
+                  const monthAnchor = (() => {
+                    const storedMonth = mobileCalendarMonths[row.id];
+                    if (storedMonth) {
+                      const storedDate = calendarDate(storedMonth);
+                      if (storedDate) {
+                        return calendarMonthStart(storedDate);
+                      }
+                    }
+                    const firstDate = firstCalendarItem ? calendarDate(firstCalendarItem.startsAt) : null;
+                    return calendarMonthStart(firstDate ?? new Date());
+                  })();
+                  const monthDays = calendarMonthGrid(monthAnchor);
+                  const monthDayItems = calendarItemsByDay(calendarItems);
                   return (
                     <div className="mobileField mobileCalendarField" key={column.id}>
                       {firstCalendarItem ? (
-                        <details>
-                          <summary>
+                        <details className="mobileCalendarDetails">
+                          <summary title={calendarCellDisplayData(calendarItems)}>
                             <span>{column.title}</span>
                             <strong>{mobileCalendarTitle(firstCalendarItem)}</strong>
-                            {calendarItems.length > 1 ? <em aria-label={`${calendarItems.length - 1} more events`}>...</em> : null}
                           </summary>
-                          {calendarItems.length > 1 ? (
+                          <div className="mobileMiniCalendar" aria-label={`${column.title} month view`}>
+                            <div className="mobileMiniCalendarHeader">
+                              <button
+                                aria-label="Previous calendar month"
+                                type="button"
+                                onClick={() =>
+                                  setMobileCalendarMonths((current) => ({
+                                    ...current,
+                                    [row.id]: calendarDayKey(calendarAddMonths(monthAnchor, -1))
+                                  }))
+                                }
+                              >
+                                &lt;
+                              </button>
+                              <strong>{calendarMonthLabel(monthAnchor)}</strong>
+                              <button
+                                aria-label="Next calendar month"
+                                type="button"
+                                onClick={() =>
+                                  setMobileCalendarMonths((current) => ({
+                                    ...current,
+                                    [row.id]: calendarDayKey(calendarAddMonths(monthAnchor, 1))
+                                  }))
+                                }
+                              >
+                                &gt;
+                              </button>
+                            </div>
+                            <div className="mobileMiniCalendarWeekdays" aria-hidden="true">
+                              {["M", "T", "W", "T", "F", "S", "S"].map((day, index) => (
+                                <span key={`${day}-${index}`}>{day}</span>
+                              ))}
+                            </div>
+                            <div className="mobileMiniCalendarGrid">
+                              {monthDays.map((day) => {
+                                const key = calendarDayKey(day);
+                                const dayItems = monthDayItems.get(key) ?? [];
+                                const isOutsideMonth = day.getMonth() !== monthAnchor.getMonth();
+                                const isToday = key === calendarDayKey(new Date());
+                                return (
+                                  <div
+                                    className={`mobileMiniCalendarDay${isOutsideMonth ? " outside" : ""}${dayItems.length > 0 ? " hasEvents" : ""}${isToday ? " today" : ""}`}
+                                    key={key}
+                                    title={dayItems.length > 0 ? calendarCellDisplayData(dayItems) : undefined}
+                                  >
+                                    <span>{day.getDate()}</span>
+                                    {dayItems.length > 0 ? <i>{dayItems.length}</i> : null}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                          <div className="mobileCalendarInlineList">
+                            <span>Next events</span>
                             <ul>
                               {calendarItems.map((item) => (
                                 <li key={`${item.kind}-${item.id}`}>
@@ -2041,14 +3020,26 @@ export function CrmTable({
                                 </li>
                               ))}
                             </ul>
-                          ) : (
-                            <p>No more events.</p>
-                          )}
+                          </div>
+                          <button
+                            className="mobileCalendarCreateButton"
+                            type="button"
+                            onClick={() => window.location.assign(`/today?leadId=${encodeURIComponent(row.id)}`)}
+                          >
+                            Add event
+                          </button>
                         </details>
                       ) : (
                         <>
                           <span>{column.title}</span>
                           <strong>No events</strong>
+                          <button
+                            className="mobileCalendarCreateButton"
+                            type="button"
+                            onClick={() => window.location.assign(`/today?leadId=${encodeURIComponent(row.id)}`)}
+                          >
+                            Add event
+                          </button>
                         </>
                       )}
                     </div>
@@ -2090,7 +3081,7 @@ export function CrmTable({
                         </button>
                       </div>
                     ) : (
-                      <strong>{mobileDisplayValue(row.values[column.id])}</strong>
+                      <strong>{column.valueKind === "area" ? formatAreaValue(row.values[column.id]) : mobileDisplayValue(row.values[column.id])}</strong>
                     )}
                   </div>
                 );
@@ -2122,6 +3113,121 @@ export function CrmTable({
           );
         })}
       </div>
+      {detailsPanel && detailsPanelRow ? (
+        <div className="detailsDrawerBackdrop" role="presentation" onMouseDown={() => setDetailsPanel(null)}>
+          <aside className="detailsDrawer" role="dialog" aria-modal="true" onMouseDown={(event) => event.stopPropagation()}>
+            <header>
+              <div>
+                <span>Lead details</span>
+                <h2>{String(mobileDisplayValue(detailsPanelRow.values.code) || detailsPanelRow.id)}</h2>
+                <p>{String(mobileDisplayValue(detailsPanelRow.values.name) || detailsPanelRow.id)}</p>
+              </div>
+              <button type="button" onClick={() => setDetailsPanel(null)} aria-label="Close lead details">
+                <X size={18} />
+              </button>
+            </header>
+            <div className="detailsDrawerTabs" role="tablist" aria-label="Lead detail sections">
+              <button
+                type="button"
+                className={detailsPanelTab === "details" ? "active" : ""}
+                role="tab"
+                aria-selected={detailsPanelTab === "details"}
+                onClick={() => setDetailsPanelTab("details")}
+              >
+                Details
+              </button>
+              <button
+                type="button"
+                className={detailsPanelTab === "documents" ? "active" : ""}
+                role="tab"
+                aria-selected={detailsPanelTab === "documents"}
+                onClick={() => setDetailsPanelTab("documents")}
+              >
+                Documents <span>{detailsPanelDocuments.length}</span>
+              </button>
+            </div>
+            {detailsPanelTab === "details" ? (
+              <div className="detailsDrawerFields">
+                {detailsEditableColumns.map((column) => (
+                  <label className={isMobileMultilineColumn(column.id) ? "wide" : ""} key={column.id}>
+                    <span>{column.title}</span>
+                    {isMobileMultilineColumn(column.id) ? (
+                      <textarea
+                        rows={3}
+                        value={detailsPanel.values[column.id] ?? ""}
+                        onChange={(event) =>
+                          setDetailsPanel((current) =>
+                            current ? { ...current, values: { ...current.values, [column.id]: event.target.value } } : current
+                          )
+                        }
+                      />
+                    ) : (
+                      <input
+                        value={detailsPanel.values[column.id] ?? ""}
+                        onChange={(event) =>
+                          setDetailsPanel((current) =>
+                            current ? { ...current, values: { ...current.values, [column.id]: event.target.value } } : current
+                          )
+                        }
+                      />
+                    )}
+                  </label>
+                ))}
+              </div>
+            ) : (
+              <div className="detailsDrawerDocuments">
+                {detailsPanelDocuments.length > 0 ? (
+                  <div className="leadDocumentCardList">
+                    {detailsPanelDocuments.map((document) => {
+                      const extension = documentExtensionLabel(document.fileName, document.mimeType);
+                      const createdAt = formatDocumentCreatedAt(document.createdAt);
+                      return (
+                        <button
+                          type="button"
+                          className="leadDocumentCard"
+                          key={document.id}
+                          title={`${document.fileName}${document.shortSummary ? `\n${document.shortSummary}` : ""}`}
+                          onClick={() => setPreviewDocument(document)}
+                        >
+                          <span
+                            className="leadDocumentCardBadge"
+                            style={{ "--document-color": documentBadgeColor(extension) } as ComponentProps<"span">["style"]}
+                          >
+                            {extension.slice(0, 3)}
+                          </span>
+                          <span className="leadDocumentCardMain">
+                            <strong>{documentChipTitle(document.fileName)}</strong>
+                            <span>{createdAt ? `Added ${createdAt}` : "Added date unknown"}</span>
+                          </span>
+                          <span className="leadDocumentCardSummary">{document.shortSummary || "No summary yet"}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <p className="detailsDrawerEmpty">No documents linked to this lead yet.</p>
+                )}
+              </div>
+            )}
+            <footer>
+              {detailsPanelTab === "details" ? (
+                <>
+                  <button type="button" onClick={() => setDetailsPanel(null)}>
+                    Cancel
+                  </button>
+                  <button type="button" className="primary" onClick={saveDetailsPanel} disabled={detailsPanel.saving}>
+                    {detailsPanel.saving ? "Saving" : "Save details"}
+                  </button>
+                </>
+              ) : (
+                <button type="button" onClick={() => setDetailsPanel(null)}>
+                  Close
+                </button>
+              )}
+            </footer>
+          </aside>
+        </div>
+      ) : null}
       {bulkActionDialog === "merge" ? (
         <div className="documentModalBackdrop" role="presentation" onMouseDown={() => setBulkActionDialog(null)}>
           <section className="bulkActionDialog" role="dialog" aria-modal="true" onMouseDown={(event) => event.stopPropagation()}>
@@ -2140,6 +3246,34 @@ export function CrmTable({
             <footer>
               <button type="button" onClick={() => setBulkActionDialog(null)}>
                 OK
+              </button>
+            </footer>
+          </section>
+        </div>
+      ) : null}
+      {cellDeleteTarget ? (
+        <div className="documentModalBackdrop" role="presentation" onMouseDown={() => setCellDeleteTarget(null)}>
+          <section className="bulkActionDialog" role="dialog" aria-modal="true" onMouseDown={(event) => event.stopPropagation()}>
+            <header>
+              <div>
+                <span>{cellDeleteTarget.kind === "document" ? "Delete document" : "Delete calendar item"}</span>
+                <h2>Confirm deletion</h2>
+              </div>
+              <button type="button" onClick={() => setCellDeleteTarget(null)} aria-label="Close delete confirmation">
+                <X size={18} />
+              </button>
+            </header>
+            <p>
+              {cellDeleteTarget.kind === "document"
+                ? cellDeleteTarget.item.fileName
+                : `${cellDeleteTarget.item.title} · ${calendarDayMonthLabel(cellDeleteTarget.item.startsAt)} ${calendarTimeLabel(cellDeleteTarget.item.startsAt)}`}
+            </p>
+            <footer>
+              <button type="button" onClick={() => setCellDeleteTarget(null)}>
+                Cancel
+              </button>
+              <button type="button" className="danger" onClick={confirmDeleteCellItem} disabled={isDeletingCellItem}>
+                {isDeletingCellItem ? "Deleting" : "Yes, delete"}
               </button>
             </footer>
           </section>
@@ -2174,7 +3308,14 @@ export function CrmTable({
         </div>
       ) : null}
       {summaryHistoryTarget ? (
-        <div className="documentModalBackdrop" role="presentation" onMouseDown={() => setSummaryHistoryTarget(null)}>
+        <div
+          className="documentModalBackdrop"
+          role="presentation"
+          onMouseDown={() => {
+            setSummaryHistoryTarget(null);
+            setSummaryArchiveConfirmId(null);
+          }}
+        >
           <section className="documentModal leadSummaryHistoryModal" role="dialog" aria-modal="true" onMouseDown={(event) => event.stopPropagation()}>
             <header>
               <div>
@@ -2228,9 +3369,43 @@ export function CrmTable({
                   </span>
                   <strong>{summaryItem.shortSummary}</strong>
                   {summaryItem.longSummary ? <p>{summaryItem.longSummary}</p> : null}
+                  <button
+                    type="button"
+                    className={`summaryArchiveButton${summaryArchiveConfirmId === summaryItem.id ? " confirm" : ""}`}
+                    onClick={() => {
+                      if (summaryArchiveConfirmId === summaryItem.id) {
+                        void archiveLeadSummary(summaryItem);
+                        return;
+                      }
+                      setSummaryArchiveConfirmId(summaryItem.id);
+                    }}
+                    disabled={archivingSummaryIds.has(summaryItem.id)}
+                  >
+                    {archivingSummaryIds.has(summaryItem.id)
+                      ? "Archiving"
+                      : summaryArchiveConfirmId === summaryItem.id
+                        ? "Confirm archive"
+                        : "Archive"}
+                  </button>
                 </article>
               ))}
             </div>
+          </section>
+        </div>
+      ) : null}
+      {longTextPreview ? (
+        <div className="documentModalBackdrop" role="presentation" onMouseDown={() => setLongTextPreview(null)}>
+          <section className="documentModal longTextModal" role="dialog" aria-modal="true" onMouseDown={(event) => event.stopPropagation()}>
+            <header>
+              <div>
+                <span>Lead field</span>
+                <h2>{longTextPreview.title}</h2>
+              </div>
+              <button type="button" onClick={() => setLongTextPreview(null)} aria-label="Close text preview">
+                <X size={18} />
+              </button>
+            </header>
+            <p>{longTextPreview.text}</p>
           </section>
         </div>
       ) : null}
@@ -2259,6 +3434,21 @@ export function CrmTable({
               <div className="documentPreviewEmpty">Preview is unavailable for this file.</div>
             )}
             <footer>
+              <button
+                type="button"
+                className="danger"
+                onClick={() => {
+                  const ownerRow = editableRows.find((row) =>
+                    cellDocuments(row.values.documents).some((document) => document.id === previewDocument.id)
+                  );
+                  if (ownerRow) {
+                    setPreviewDocument(null);
+                    setCellDeleteTarget({ kind: "document", rowId: ownerRow.id, item: previewDocument });
+                  }
+                }}
+              >
+                Delete
+              </button>
               {previewDocument.downloadUrl ? (
                 <a href={previewDocument.downloadUrl} download={previewDocument.fileName}>
                   Download

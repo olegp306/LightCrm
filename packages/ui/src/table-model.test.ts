@@ -4,6 +4,8 @@ import {
   buildCreateRecordPayload,
   compactDocumentTitle,
   documentExtensionLabel,
+  formatAreaValue,
+  nextActionStateForTodo,
   recordToRow,
   recordsToRows,
   sortRows,
@@ -151,6 +153,18 @@ describe("table-model", () => {
     expect(documentExtensionLabel("budget.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")).toBe("XLS");
     expect(compactDocumentTitle("architectural-layout-final-version.pdf")).toBe("architectu…l-version");
     expect(compactDocumentTitle("brief.pdf")).toBe("brief");
+  });
+
+  it("formats lead area values with readable units", () => {
+    expect(formatAreaValue("3609.000000000000000000000000000000")).toBe("3.609 m²");
+    expect(formatAreaValue("100,5")).toBe("100,5 m²");
+    expect(formatAreaValue("about 120")).toBe("about 120 m²");
+    expect(formatAreaValue(null)).toBe("—");
+  });
+
+  it("derives next action state from editable Todo text", () => {
+    expect(nextActionStateForTodo("manual review")).toBe("crm");
+    expect(nextActionStateForTodo("   ")).toBe("neutral");
   });
 
   it("exports visible columns and sorted rows to CSV", () => {

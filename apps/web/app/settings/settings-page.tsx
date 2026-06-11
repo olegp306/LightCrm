@@ -80,6 +80,38 @@ function stableSettingsJson(value: LangGraphRuntimeSettings) {
   return JSON.stringify(value);
 }
 
+function traceRouteLabel(result: CrmOrchestrationResult | null): string {
+  const route = result?.trace?.map((event) => event.node).filter(Boolean) ?? [];
+  return route.length > 0 ? route.join(" -> ") : "trace route is empty";
+}
+
+function traceDecisionLabel(result: CrmOrchestrationResult | null): string {
+  if (!result) {
+    return "No decision yet";
+  }
+  return `${result.intent} / ${result.risk} / ${traceActionLabel(result)}`;
+}
+
+function traceActionLabel(result: CrmOrchestrationResult | null): string {
+  if (!result || result.actions.length === 0) {
+    return "no action";
+  }
+  return result.actions.map((action) => action.type).join(" + ");
+}
+
+function traceDetailsText(details: Record<string, string | number | boolean | null> | undefined): string | null {
+  if (!details) {
+    return null;
+  }
+  const values = Object.entries(details).flatMap(([key, value]) => {
+    if (value === null || value === "") {
+      return [];
+    }
+    return `${key}: ${String(value)}`;
+  });
+  return values.length > 0 ? values.join(" · ") : null;
+}
+
 export function LangGraphSettingsPage() {
   const [activeTab, setActiveTab] = useState<"crm" | "langgraph">("crm");
   const [settings, setSettings] = useState<LangGraphRuntimeSettings | null>(null);
@@ -344,7 +376,8 @@ export function LangGraphSettingsPage() {
         body: JSON.stringify({
           text: traceText,
           sourceChannel: "telegram",
-          author: "operator"
+          author: "operator",
+          settings
         })
       });
       const payload = (await response.json()) as CrmOrchestrationResult & { error?: string };
@@ -530,21 +563,40 @@ export function LangGraphSettingsPage() {
             </button>
             <span>
               {traceResult
-                ? `${traceResult.intent} В· ${traceResult.risk} В· ${traceResult.actions[0]?.type ?? "none"}`
+                ? `${traceResult.intent} · ${traceResult.risk} · ${traceActionLabel(traceResult)}`
                 : "No trace yet"}
             </span>
           </div>
           {traceError ? <div className="settingsError">{traceError}</div> : null}
+          <div className="traceDecisionCard">
+            <div>
+              <span>Decision</span>
+              <strong>{traceDecisionLabel(traceResult)}</strong>
+            </div>
+            <div>
+              <span>Actions</span>
+              <strong>{traceActionLabel(traceResult)}</strong>
+            </div>
+            <div>
+              <span>Graph route</span>
+              <strong>{traceRouteLabel(traceResult)}</strong>
+            </div>
+            {traceResult?.actions[0]?.reason ? <p>{traceResult.actions[0].reason}</p> : null}
+          </div>
           <div className="traceChat" aria-label="LangGraph readable trace">
-            {(traceResult?.trace ?? []).map((event) => (
-              <article className={`traceBubble ${event.status}`} key={event.id}>
-                <div>
-                  <strong>{event.titleRu}</strong>
-                  <span>{event.node}</span>
-                </div>
-                <p>{event.messageRu}</p>
-              </article>
-            ))}
+            {(traceResult?.trace ?? []).map((event) => {
+              const detailsText = traceDetailsText(event.details);
+              return (
+                <article className={`traceBubble ${event.status}`} key={event.id}>
+                  <div>
+                    <strong>{event.titleRu}</strong>
+                    <span>{event.node}</span>
+                  </div>
+                  <p>{event.messageRu}</p>
+                  {detailsText ? <small>{detailsText}</small> : null}
+                </article>
+              );
+            })}
             {traceResult && (traceResult.trace?.length ?? 0) === 0 ? (
               <article className="traceBubble review">
                 <div>

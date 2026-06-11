@@ -132,6 +132,25 @@ export function formatTableValue(value: unknown): CrmTableCellValue {
   return String(value);
 }
 
+export function formatAreaValue(value: CrmTableCellValue | undefined): string {
+  const raw = typeof value === "number" ? String(value) : typeof value === "string" ? value.trim() : "";
+  if (!raw || raw === "—" || raw === "-") {
+    return "—";
+  }
+  const numeric = Number(raw.replace(/\s+/g, "").replace(",", "."));
+  if (!Number.isFinite(numeric)) {
+    return raw.includes("m²") || raw.includes("м²") ? raw : `${raw} m²`;
+  }
+  const formatted = new Intl.NumberFormat("de-DE", {
+    maximumFractionDigits: Number.isInteger(numeric) ? 0 : 1
+  }).format(numeric);
+  return `${formatted} m²`;
+}
+
+export function nextActionStateForTodo(value: string): string {
+  return value.trim() ? "crm" : "neutral";
+}
+
 export function recordToRow(record: ApiRecord, columns: CrmTableColumn[]): CrmTableRow {
   return {
     id: record.id,

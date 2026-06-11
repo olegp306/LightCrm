@@ -326,13 +326,66 @@ input {
   font-size: 13px;
 }
 
-.calendarGrid {
+.calendarCreateForm {
+  align-items: center;
   background: var(--panel);
   border: 1px solid var(--line);
   border-radius: 8px;
   display: grid;
+  gap: 7px;
+  grid-template-columns: minmax(150px, 1.2fr) 170px minmax(120px, 0.7fr) minmax(170px, 1fr) auto;
+  padding: 8px;
+}
+
+.calendarCreateForm input {
+  background: var(--control);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--ink);
+  font: inherit;
+  font-size: 12px;
+  min-height: 32px;
+  min-width: 0;
+  padding: 6px 8px;
+}
+
+.calendarCreateForm input:disabled {
+  color: var(--muted);
+  cursor: default;
+}
+
+.calendarCreateForm button {
+  background: var(--accent);
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  color: white;
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  min-height: 32px;
+  padding: 6px 10px;
+}
+
+.calendarCreateForm button:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+.calendarCreateForm span {
+  color: var(--danger);
+  font-size: 12px;
+}
+
+.calendarGrid {
+  background: var(--panel);
+  border: 1px solid color-mix(in srgb, var(--line) 46%, transparent);
+  border-radius: 8px;
+  display: grid;
+  gap: 4px;
   min-height: 620px;
   overflow: hidden;
+  padding: 4px;
 }
 
 .calendarGridMonth {
@@ -343,7 +396,7 @@ input {
   align-items: stretch;
   display: grid;
   gap: 14px;
-  grid-template-columns: minmax(0, 1.35fr) minmax(320px, 0.9fr);
+  grid-template-columns: minmax(340px, 1fr) minmax(0, 2fr);
   min-height: 620px;
 }
 
@@ -361,13 +414,13 @@ input {
 }
 
 .calendarDay {
-  border-bottom: 1px solid var(--line);
-  border-right: 1px solid var(--line);
+  border: 1px solid color-mix(in srgb, var(--line) 42%, transparent);
+  border-radius: 7px;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
   min-height: 112px;
   min-width: 0;
-  padding: 9px;
+  padding: 8px;
 }
 
 .calendarDayButton {
@@ -384,19 +437,18 @@ input {
 
 .calendarDayButton:hover {
   background: var(--control);
+  border-color: color-mix(in srgb, var(--accent) 28%, var(--line));
 }
 
 .calendarDay.selected {
-  box-shadow: inset 0 0 0 2px var(--accent);
+  background: color-mix(in srgb, #8b5cf6 10%, var(--panel));
+  border-color: color-mix(in srgb, #8b5cf6 48%, var(--line));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, #8b5cf6 58%, transparent);
 }
 
 .calendarGridWeek .calendarDay,
 .calendarGridDay .calendarDay {
   min-height: 560px;
-}
-
-.calendarDay:nth-child(7n) {
-  border-right: 0;
 }
 
 .calendarDay.muted {
@@ -405,7 +457,13 @@ input {
 }
 
 .calendarDay.today {
-  box-shadow: inset 0 0 0 2px var(--accent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 60%, transparent);
+}
+
+.calendarDay.today.selected {
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, #8b5cf6 62%, transparent),
+    inset 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent);
 }
 
 .calendarDay header {
@@ -867,15 +925,18 @@ input {
   border-radius: 6px;
   color: var(--ink);
   display: flex;
-  gap: 8px;
+  flex: 0 1 auto;
+  gap: 7px;
   height: 36px;
   justify-content: space-between;
+  max-width: min(100%, 460px);
   min-width: 0;
-  padding: 0 5px 0 10px;
+  padding: 0 6px 0 10px;
 }
 
 .bulkActionBar > span {
   color: var(--muted);
+  flex: 0 0 auto;
   font-size: 12px;
   white-space: nowrap;
 }
@@ -883,7 +944,10 @@ input {
 .bulkActionBar > div {
   align-items: center;
   display: flex;
-  gap: 5px;
+  flex: 1 1 auto;
+  gap: 4px;
+  justify-content: flex-end;
+  min-width: 0;
 }
 
 .bulkActionBar button,
@@ -900,7 +964,14 @@ input {
   gap: 4px;
   height: 24px;
   line-height: 1;
-  padding: 0 8px;
+  min-width: 0;
+  padding: 0 7px;
+  white-space: nowrap;
+  width: auto;
+}
+
+.bulkActionBar button svg {
+  flex: 0 0 auto;
 }
 
 .bulkActionBar button:hover,
@@ -918,11 +989,12 @@ input {
 }
 
 .bulkActionBar button.danger {
-  min-width: 48px;
-  padding: 0 8px;
+  min-width: 42px;
+  padding: 0 7px;
 }
 
 .bulkActionBar .clearSelectionButton {
+  flex: 0 0 24px;
   justify-content: center;
   min-width: 24px;
   padding: 0;
@@ -1067,6 +1139,7 @@ input {
 
 .relatedTableTooltipBelow {
   transform: translateX(-50%);
+  margin-top: 0;
 }
 
 .relatedTableTooltip strong {
@@ -1084,8 +1157,13 @@ input {
   max-width: 300px;
 }
 
+.calendarCellTooltip {
+  max-width: 320px;
+}
+
 .documentCellTooltip strong,
-.documentCellTooltip span {
+.documentCellTooltip span,
+.calendarCellTooltip span {
   overflow-wrap: anywhere;
 }
 
@@ -1272,6 +1350,440 @@ input {
   margin: 0;
 }
 
+.detailsFloatingButton {
+  animation: detailsButtonIn 160ms ease-out;
+  background: color-mix(in srgb, var(--panel-raised) 82%, #98a2b3 18%);
+  border: 1px solid color-mix(in srgb, var(--line) 78%, #98a2b3 22%);
+  border-radius: 999px;
+  box-shadow: 0 8px 18px color-mix(in srgb, var(--shadow) 55%, transparent);
+  color: color-mix(in srgb, var(--ink-soft) 78%, var(--muted) 22%);
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 800;
+  min-height: 30px;
+  opacity: 0.68;
+  padding: 6px 12px;
+  position: absolute;
+  right: 12px;
+  top: 12px;
+  transform: translateY(0) scale(0.98);
+  transition:
+    background 150ms ease,
+    border-color 150ms ease,
+    box-shadow 150ms ease,
+    color 150ms ease,
+    opacity 150ms ease,
+    transform 150ms ease;
+  z-index: 6;
+}
+
+.detailsFloatingButton.positioned {
+  left: var(--details-button-left);
+  right: auto;
+  top: var(--details-button-top);
+}
+
+.detailsFloatingButton:hover {
+  background: var(--panel-raised);
+  border-color: color-mix(in srgb, var(--accent) 52%, var(--line));
+  box-shadow: 0 12px 26px var(--shadow);
+  color: var(--accent);
+  opacity: 1;
+  transform: translateY(-1px) scale(1);
+}
+
+.clientPickerPopover {
+  background: var(--panel-raised);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: 0 18px 42px var(--shadow-strong);
+  color: var(--ink);
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+  position: absolute;
+  width: min(330px, calc(100% - 16px));
+  z-index: 8;
+}
+
+.clientPickerPopover header {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+}
+
+.clientPickerPopover header strong {
+  font-size: 13px;
+}
+
+.clientPickerPopover header button {
+  align-items: center;
+  background: var(--control);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--muted);
+  cursor: pointer;
+  display: inline-flex;
+  height: 24px;
+  justify-content: center;
+  width: 24px;
+}
+
+.clientPickerPopover input {
+  background: var(--control);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--ink);
+  font: inherit;
+  font-size: 12px;
+  min-height: 30px;
+  min-width: 0;
+  padding: 6px 8px;
+}
+
+.clientPickerList {
+  display: grid;
+  gap: 5px;
+  max-height: 230px;
+  overflow: auto;
+}
+
+.clientPickerList button {
+  background: var(--control);
+  border: 1px solid color-mix(in srgb, var(--line) 82%, transparent);
+  border-radius: 7px;
+  color: var(--ink);
+  cursor: pointer;
+  display: grid;
+  gap: 2px;
+  padding: 7px 8px;
+  text-align: left;
+}
+
+.clientPickerList button:hover {
+  background: var(--panel);
+  border-color: color-mix(in srgb, var(--accent) 42%, var(--line));
+}
+
+.clientPickerList button:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+.clientPickerList span,
+.clientPickerList small,
+.clientPickerError {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.clientPickerList strong {
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.clientPickerError {
+  color: var(--danger);
+  margin: 0;
+}
+
+@keyframes detailsButtonIn {
+  from {
+    opacity: 0;
+    transform: translateY(4px) scale(0.94);
+  }
+  to {
+    opacity: 0.68;
+    transform: translateY(0) scale(0.98);
+  }
+}
+
+.detailsDrawerBackdrop {
+  align-items: stretch;
+  background: color-mix(in srgb, var(--backdrop) 58%, transparent);
+  display: flex;
+  inset: 0;
+  justify-content: flex-end;
+  padding: 18px;
+  position: fixed;
+  z-index: 22;
+}
+
+.detailsDrawer {
+  background: var(--panel-raised);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: 0 22px 54px var(--shadow-strong);
+  color: var(--ink);
+  display: grid;
+  gap: 14px;
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  max-width: min(440px, calc(100vw - 36px));
+  padding: 16px;
+  width: 420px;
+}
+
+.detailsDrawer header {
+  align-items: flex-start;
+  display: flex;
+  gap: 14px;
+  justify-content: space-between;
+}
+
+.detailsDrawer header span {
+  background: var(--tag-bg);
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  color: var(--muted);
+  display: inline-flex;
+  font-size: 10px;
+  font-weight: 700;
+  margin-bottom: 7px;
+  padding: 3px 6px;
+}
+
+.detailsDrawer h2,
+.detailsDrawer p {
+  margin: 0;
+}
+
+.detailsDrawer h2 {
+  font-size: 17px;
+  line-height: 1.2;
+}
+
+.detailsDrawer p {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.detailsDrawer header button {
+  align-items: center;
+  background: var(--control);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--ink);
+  cursor: pointer;
+  display: inline-flex;
+  height: 32px;
+  justify-content: center;
+  width: 32px;
+}
+
+.detailsDrawerTabs {
+  align-items: center;
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  gap: 6px;
+  padding-bottom: 8px;
+}
+
+.detailsDrawerTabs button {
+  align-items: center;
+  background: var(--control);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--ink-soft);
+  cursor: pointer;
+  display: inline-flex;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 800;
+  gap: 6px;
+  min-height: 30px;
+  padding: 5px 10px;
+}
+
+.detailsDrawerTabs button.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+}
+
+.detailsDrawerTabs button span {
+  align-items: center;
+  background: color-mix(in srgb, currentColor 14%, transparent);
+  border-radius: 999px;
+  display: inline-flex;
+  font-size: 10px;
+  justify-content: center;
+  min-width: 18px;
+  padding: 1px 5px;
+}
+
+.detailsDrawerFields {
+  align-content: start;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  overflow: auto;
+  padding-right: 2px;
+}
+
+.detailsDrawerFields label {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+
+.detailsDrawerFields label.wide {
+  grid-column: 1 / -1;
+}
+
+.detailsDrawerFields span {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.detailsDrawerFields input,
+.detailsDrawerFields textarea {
+  background: var(--control);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+  min-width: 0;
+  padding: 8px 9px;
+}
+
+.detailsDrawerFields textarea {
+  line-height: 1.35;
+  resize: vertical;
+}
+
+.detailsDrawerDocuments {
+  align-content: start;
+  display: grid;
+  gap: 8px;
+  min-height: 0;
+  overflow: auto;
+  padding-right: 2px;
+}
+
+.detailsDrawerEmpty {
+  background: var(--control);
+  border: 1px dashed var(--line);
+  border-radius: 8px;
+  color: var(--muted);
+  font-size: 13px;
+  margin: 0;
+  padding: 12px;
+}
+
+.leadDocumentCardList {
+  display: grid;
+  gap: 6px;
+}
+
+.leadDocumentCard {
+  align-items: center;
+  background: var(--control);
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  color: var(--ink);
+  cursor: pointer;
+  display: grid;
+  gap: 7px;
+  grid-template-columns: 24px minmax(82px, 0.75fr) minmax(0, 1fr);
+  min-height: 36px;
+  min-width: 0;
+  padding: 5px 7px;
+  text-align: left;
+}
+
+.leadDocumentCard:hover {
+  background: var(--panel);
+  border-color: color-mix(in srgb, var(--accent) 44%, var(--line));
+}
+
+.leadDocumentCardBadge {
+  align-items: center;
+  background: var(--document-color, #475467);
+  border-radius: 5px;
+  color: #fff;
+  display: inline-flex;
+  font-size: 8px;
+  font-weight: 800;
+  height: 20px;
+  justify-content: center;
+  text-transform: uppercase;
+  width: 20px;
+}
+
+.leadDocumentCardMain {
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+}
+
+.leadDocumentCardMain strong {
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 700;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.leadDocumentCardMain span,
+.leadDocumentCardSummary {
+  color: var(--muted);
+  font-size: 10px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.leadDocumentCardSummary {
+  font-size: 11px;
+}
+
+.detailsDrawer footer {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.detailsDrawer footer button {
+  background: var(--control);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--ink);
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  min-height: 34px;
+  padding: 7px 11px;
+}
+
+.detailsDrawer footer button.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: white;
+}
+
+.detailsDrawer footer button:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+.longTextModal {
+  width: min(780px, 100%);
+}
+
+.longTextModal p {
+  color: var(--ink-soft);
+  white-space: pre-wrap;
+}
+
 .documentPreviewFrame {
   background: var(--file-surface);
   border: 1px solid var(--line);
@@ -1324,6 +1836,13 @@ input {
   background: var(--control);
   color: var(--ink-soft);
   border-color: var(--line);
+}
+
+.documentModal footer button.danger {
+  background: var(--danger-soft);
+  border-color: var(--danger-line);
+  color: var(--danger);
+  font-weight: 700;
 }
 
 .documentUploadForm label,
@@ -1405,8 +1924,8 @@ input {
   border: 1px solid var(--line);
   border-radius: 8px;
   display: grid;
-  gap: 3px;
-  padding: 3px 12px;
+  gap: 2px;
+  padding: 2px 12px;
 }
 
 .mobileTableRow .mobileField {
@@ -1421,12 +1940,16 @@ input {
 }
 
 .mobileCalendarField summary {
-  align-items: baseline;
   cursor: pointer;
   display: grid;
-  gap: 6px;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 1px;
   list-style: none;
+}
+
+.mobileCalendarField summary strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .mobileCalendarField summary::-webkit-details-marker,
@@ -1434,30 +1957,154 @@ input {
   display: none;
 }
 
-.mobileCalendarField summary em {
-  color: var(--accent);
-  font-style: normal;
-  font-weight: 800;
-  letter-spacing: 1px;
-}
-
-.mobileCalendarField ul {
+.mobileMiniCalendar {
+  border: 1px solid color-mix(in srgb, var(--line) 74%, transparent);
+  border-radius: 8px;
   display: grid;
   gap: 4px;
-  list-style: none;
-  margin: 5px 0 0;
+  margin-top: 5px;
+  padding: 6px;
+}
+
+.mobileMiniCalendarHeader {
+  align-items: center;
+  display: grid;
+  grid-template-columns: 28px 1fr 28px;
+  gap: 6px;
+}
+
+.mobileMiniCalendarHeader button {
+  align-items: center;
+  background: var(--panel);
+  border: 1px solid color-mix(in srgb, var(--line) 80%, transparent);
+  border-radius: 6px;
+  color: var(--ink);
+  cursor: pointer;
+  display: inline-flex;
+  height: 26px;
+  justify-content: center;
   padding: 0;
 }
 
-.mobileCalendarField li {
+.mobileMiniCalendarHeader strong {
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 700;
+  text-align: center;
+}
+
+.mobileMiniCalendarWeekdays,
+.mobileMiniCalendarGrid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+}
+
+.mobileMiniCalendarWeekdays span {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 700;
+  text-align: center;
+}
+
+.mobileMiniCalendarGrid {
+  border-left: 1px solid color-mix(in srgb, var(--line) 64%, transparent);
+  border-top: 1px solid color-mix(in srgb, var(--line) 64%, transparent);
+}
+
+.mobileMiniCalendarDay {
+  align-items: center;
+  aspect-ratio: 1;
+  border-bottom: 1px solid color-mix(in srgb, var(--line) 64%, transparent);
+  border-right: 1px solid color-mix(in srgb, var(--line) 64%, transparent);
+  display: grid;
+  justify-items: center;
+  min-width: 0;
+  position: relative;
+}
+
+.mobileMiniCalendarDay span {
+  color: var(--ink);
+  font-size: 10px;
+}
+
+.mobileMiniCalendarDay.outside span {
+  color: color-mix(in srgb, var(--muted) 58%, transparent);
+}
+
+.mobileMiniCalendarDay.hasEvents {
+  background: color-mix(in srgb, var(--accent) 7%, transparent);
+}
+
+.mobileMiniCalendarDay.today {
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 42%, transparent);
+}
+
+.mobileMiniCalendarDay i {
+  align-items: center;
+  background: var(--accent);
+  border-radius: 999px;
+  color: var(--accent-ink);
+  display: inline-flex;
+  font-size: 8px;
+  font-style: normal;
+  height: 12px;
+  justify-content: center;
+  min-width: 12px;
+  padding: 0 3px;
+  position: absolute;
+  right: 2px;
+  top: 2px;
+}
+
+.mobileCalendarInlineList {
+  display: grid;
+  gap: 2px;
+  margin-top: 5px;
+}
+
+.mobileCalendarInlineList > span {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.mobileCalendarInlineList ul {
+  display: grid;
+  gap: 2px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.mobileCalendarInlineList li {
   display: grid;
   gap: 1px;
-  padding-left: 56px;
+  padding-left: 0;
+}
+
+.mobileCalendarCreateButton {
+  background: var(--control);
+  border: 1px solid color-mix(in srgb, var(--line) 82%, transparent);
+  border-radius: 6px;
+  color: var(--ink);
+  cursor: pointer;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  justify-self: start;
+  margin-top: 5px;
+  min-height: 26px;
+  padding: 4px 8px;
+}
+
+.mobileCalendarCreateButton:hover {
+  border-color: color-mix(in srgb, var(--accent) 42%, var(--line));
+  color: var(--accent);
 }
 
 .mobileDescriptionDetails {
   border-bottom: 1px solid var(--line);
-  padding: 2px 0 4px;
+  padding: 1px 0 3px;
 }
 
 .mobileDescriptionDetails summary {
@@ -1470,8 +2117,8 @@ input {
 .mobileDescriptionDetails p {
   color: var(--ink);
   font-size: 13px;
-  line-height: 1.35;
-  margin: 3px 0 0;
+  line-height: 1.28;
+  margin: 2px 0 0;
   overflow-wrap: anywhere;
 }
 
@@ -1527,10 +2174,10 @@ input {
 
 .mobileLeadSummary {
   display: grid;
-  gap: 2px;
+  gap: 1px;
   border-bottom: 1px solid var(--line);
-  margin-top: 3px;
-  padding: 3px 0 5px;
+  margin-top: 1px;
+  padding: 2px 0 3px;
 }
 
 .mobileLeadSummary strong {
@@ -1544,7 +2191,7 @@ input {
 .mobileLeadSummary details {
   color: var(--ink-soft);
   font-size: 12px;
-  margin-top: 1px;
+  margin-top: 0;
 }
 
 .mobileLeadSummary summary {
@@ -1554,14 +2201,16 @@ input {
 }
 
 .mobileLeadSummary p {
-  line-height: 1.35;
+  line-height: 1.3;
+  max-height: 6.5em;
   margin: 2px 0 0;
+  overflow: auto;
 }
 
 .mobileLeadSummary button {
   justify-self: start;
-  margin-top: 2px;
-  padding: 3px 7px;
+  margin-top: 1px;
+  padding: 2px 7px;
 }
 
 .leadSummaryHistoryModal {
@@ -1645,6 +2294,37 @@ input {
   font-size: 12px;
   line-height: 1.35;
   margin: 0;
+}
+
+.summaryArchiveButton {
+  align-self: start;
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--muted);
+  cursor: pointer;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  justify-self: start;
+  margin-top: 2px;
+  min-height: 24px;
+  padding: 3px 8px;
+}
+
+.summaryArchiveButton:hover:not(:disabled) {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+.summaryArchiveButton.confirm {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+.summaryArchiveButton:disabled {
+  cursor: default;
+  opacity: 0.55;
 }
 
 .status {
@@ -2010,6 +2690,46 @@ input {
   font-size: 12px;
 }
 
+.traceDecisionCard {
+  background: var(--control);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: grid;
+  gap: 7px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  padding: 9px 10px;
+}
+
+.traceDecisionCard div {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.traceDecisionCard span {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.traceDecisionCard strong {
+  color: var(--ink);
+  font-size: 13px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.traceDecisionCard p {
+  color: var(--ink-soft);
+  font-size: 12px;
+  grid-column: 1 / -1;
+  line-height: 1.35;
+  margin: 0;
+}
+
 .traceChat {
   align-content: start;
   background: var(--control);
@@ -2066,6 +2786,12 @@ input {
   font-size: 12px;
   line-height: 1.4;
   margin: 0;
+}
+
+.traceBubble small {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.35;
 }
 
 @media (max-width: 860px) {
@@ -2147,6 +2873,55 @@ input {
   .tableHeader {
     align-items: stretch;
     flex-direction: column;
+    gap: 6px;
+  }
+
+  .tableHeader > div:first-child {
+    align-items: end;
+    display: grid;
+    gap: 7px;
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .tableHeader h1 {
+    font-size: 15px;
+    line-height: 1.1;
+    margin: 0;
+  }
+
+  .tableHeader p {
+    font-size: 11px;
+    line-height: 1.15;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .toolbar {
+    display: grid;
+    gap: 5px;
+    grid-template-columns: minmax(108px, 1fr) repeat(4, 30px);
+    width: 100%;
+  }
+
+  .toolbar .searchBox {
+    min-width: 0;
+    width: 100%;
+  }
+
+  .toolbar button {
+    height: 30px;
+    width: 30px;
+  }
+
+  .tableColorControl {
+    display: none;
+  }
+
+  .detailsFloatingButton,
+  .detailsDrawerBackdrop {
+    display: none;
   }
 
   .content {
@@ -2184,15 +2959,17 @@ input {
   .calendarSplit {
     gap: 10px;
     grid-template-columns: 1fr;
-    inline-size: calc(100vw - 24px);
-    max-inline-size: calc(100vw - 24px);
+    inline-size: 100%;
+    max-inline-size: 100%;
     min-height: 0;
+    width: 100%;
   }
 
   .calendarSplit .calendarGridMonth {
-    inline-size: calc(100vw - 24px);
-    max-inline-size: calc(100vw - 24px);
+    inline-size: 100%;
+    max-inline-size: 100%;
     min-height: 0;
+    width: 100%;
   }
 
   .calendarGridMonth,
@@ -2248,6 +3025,10 @@ input {
     padding: 7px 10px;
   }
 
+  .calendarCreateForm {
+    grid-template-columns: 1fr;
+  }
+
   .calendarSummary strong {
     font-size: 14px;
   }
@@ -2257,11 +3038,12 @@ input {
   }
 
   .calendarDay {
+    aspect-ratio: 1 / 1;
     border: 0;
     box-sizing: border-box;
-    min-height: 46px;
+    min-height: 0;
     min-width: 0;
-    padding: 5px 3px;
+    padding: 4px 2px;
   }
 
   .calendarDayButton {
@@ -2273,16 +3055,15 @@ input {
     display: grid;
     gap: 1px;
     justify-items: center;
-    margin-bottom: 2px;
+    margin-bottom: 1px;
   }
 
   .calendarDay header span {
-    font-size: 8px;
-    line-height: 1;
+    display: none;
   }
 
   .calendarDay header strong {
-    font-size: 13px;
+    font-size: 14px;
     line-height: 1.1;
     min-width: 0;
     text-align: center;
@@ -2396,22 +3177,17 @@ input {
     .calendarSplit,
     .calendarSplit .calendarGridMonth,
     .calendarInspector {
-      inline-size: min(100%, 360px);
-      max-inline-size: calc(100vw - 24px);
+      inline-size: 100%;
+      max-inline-size: 100%;
     }
   }
 
-  .toolbar {
-    flex-wrap: wrap;
-  }
-
   .bulkActionBar {
-    flex: 1 1 100%;
+    grid-column: 1 / -1;
   }
 
   .searchBox {
-    flex: 1 1 220px;
-    width: auto;
+    width: 100%;
   }
 
   .metricGrid {
@@ -2434,6 +3210,10 @@ input {
 
   .traceChat {
     max-height: 420px;
+  }
+
+  .traceDecisionCard {
+    grid-template-columns: 1fr;
   }
 
   .settingsFieldGrid,

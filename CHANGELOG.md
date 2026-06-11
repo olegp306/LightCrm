@@ -2,6 +2,55 @@
 
 All notable LightCrm releases are documented here. Starting with `0.2.0`, every version bump must include a changelog entry.
 
+## 0.3.3 - 2026-06-11
+
+### Project Snapshot
+
+LightCrm is now closer to a showable operator CRM build: production-export data can be reviewed in the current table model, Telegram/LangGraph intake can create draft leads from incomplete multi-file context, lead cards expose documents and schedules more compactly, and calendar work is visible both in Today and inside lead/table views.
+
+### Added
+
+- Added draft-first Telegram intake behavior so incomplete incoming messages and attachments can still be saved as leads for later enrichment.
+- Added multi-attachment Telegram intake feedback, including the short `reviewing the files, back shortly` acknowledgement for larger batches.
+- Added Telegram CRM buttons for newly created or opened leads so users can jump directly into the web lead view.
+- Added reply-to-lead-card handling groundwork so Telegram replies to a lead card can be interpreted as updates, notes, schedules, or follow-up actions for that lead.
+- Added lead and client public identifiers such as `L-2026-001` and `C-2026-001`, generated from year-based incremental counters.
+- Added compact lead-card summary support with short summary, expandable full summary, and summary history plumbing.
+- Added a Documents section to the lead details card, reusing the table document-chip visual language for preview, download, summary inspection, and commercial offer review.
+- Added CRM settings groundwork for commercial offer templates, honorarium tables, and generated-offer readiness.
+- Added manual calendar-event creation from the Today calendar with selected-date prefill and optional lead linking.
+- Added table/client-cell client reassignment affordance for leads with an in-cell focused picker.
+
+### Changed
+
+- Improved the semantic LangGraph settings layer so more orchestration behavior is driven from Settings UI instead of code-level phrase or regex rules.
+- Improved Telegram attachment handling so files, captions, forwarded context, and operator instructions can be treated as one intake context rather than isolated leads.
+- Improved lead table defaults by returning to the compact intended default column set and hiding imported/internal fields from default views.
+- Improved the Details entry point in desktop tables so it appears near the selected cell with a softer, less intrusive hover treatment.
+- Improved the Today month view: lighter borders, selected-day styling, selected-date-aware event creation, and a wider timeline/inspector panel.
+- Improved mobile Today calendar layout for iPhone-sized screens with a compact month grid and event list.
+- Improved table calendar chips so they align visually with Today calendar events, use lighter borders, show date/time consistently, and collapse when there are too many events.
+- Improved document chips and badges with muted file-type colors, tighter spacing, stable tooltips, and preview-based delete confirmation.
+- Improved selected-record actions by removing `Regenerate`, renaming `Generate` to `Generate offer`, and making commercial-offer readiness errors more specific.
+- Improved desktop and mobile shell polish, including version display in place of the old workspace label and mobile navigation/header density.
+
+### Fixed
+
+- Fixed Telegram intake cases where one text message plus several files created several draft leads instead of preserving the intended shared intake context.
+- Fixed server-side Telegram processing so failures can be surfaced back to Telegram with a short developer-notification message.
+- Fixed tooltip placement around document/calendar chips so popups do not get clipped by the top table toolbar.
+- Fixed calendar border weight in Today so the month grid uses lighter, semi-transparent borders.
+- Fixed lead table action buttons so `Generate offer`, `Refresh`, `Delete`, and close controls fit on one toolbar row.
+- Fixed document deletion UX by removing table-cell delete crosses and keeping delete inside the preview confirmation flow.
+
+### Verification
+
+- `pnpm --filter @lightcrm/web typecheck`
+- `pnpm --filter @lightcrm/ui typecheck`
+- `pnpm --filter @lightcrm/ui test`
+- `pnpm --filter @lightcrm/core test`
+- `pnpm --filter @lightcrm/telegram-bot test`
+
 ## 0.3.2 - 2026-06-10
 
 ### Project Snapshot

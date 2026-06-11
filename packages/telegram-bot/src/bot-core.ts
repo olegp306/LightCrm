@@ -235,6 +235,7 @@ export function formatOrchestrationReply(
   options: { status?: "preview" | "executed" } = {}
 ): string {
   const action = result.actions[0];
+  const actionLabel = result.actions.length > 0 ? result.actions.map((item) => item.type).join(" + ") : "none";
   const payload = action?.payload && typeof action.payload === "object" ? action.payload : null;
   const targetId = payload && "targetId" in payload ? payload.targetId : null;
   const status = options.status ?? "preview";
@@ -243,7 +244,7 @@ export function formatOrchestrationReply(
     `Status: ${status}`,
     `Intent: ${result.intent}`,
     `Risk: ${result.risk}`,
-    `Action: ${action?.type ?? "none"}`,
+    `Action: ${actionLabel}`,
     targetId ? `Target: ${String(targetId)}` : null,
     `Contact: ${shortValue(result.facts.contactName)}`,
     `Project type: ${shortValue(result.facts.projectType)}`,
@@ -763,20 +764,18 @@ function telegramLeadCardText(lead: TelegramLeadCard): string {
     cardField("Client", lead.clientName, 90),
     cardField("Project", lead.project, 120),
     cardField("Area", lead.area, 60),
-    cardField("Description", lead.description, 180),
+    cardField("Description", lead.description, 120),
     cardField("Interest", lead.interest, 60),
     cardField("Urgency", lead.urgency, 60),
-    cardField("Todo", lead.todo, 120),
-    cardField("Address", lead.address, 120),
+    cardField("Todo", lead.todo, 90),
+    cardField("Address", lead.address, 90),
     cardField("Messenger", lead.messenger, 80),
     lead.status ? `Status: ${lead.status}` : null,
-    lead.summaryShort ? `Summary: ${compactLine(lead.summaryShort, 180)}` : null,
-    lead.summaryUpdatedAt ? `Summary date: ${lead.summaryUpdatedAt}` : null,
-    typeof lead.score === "number" ? `Score: ${Math.round(lead.score * 100)}%` : null
+    lead.summaryShort ? `Summary: ${compactLine(lead.summaryShort, 140)}` : null
   ]
     .filter((line): line is string => Boolean(line))
     .join("\n")
-    .slice(0, 1600);
+    .slice(0, 1200);
 }
 
 function telegramLeadFullSummaryText(lead: TelegramLeadCard): string {
@@ -785,7 +784,7 @@ function telegramLeadFullSummaryText(lead: TelegramLeadCard): string {
     "Full summary",
     lead.code ? `${lead.code} · ${lead.name}` : lead.name,
     `Lead ID: ${lead.id}`,
-    summary ? compactLine(summary, 2400) : "No full summary is available yet.",
+    summary ? compactLine(summary, 1200) : "No full summary is available yet.",
     lead.summaryUpdatedAt ? `Summary date: ${lead.summaryUpdatedAt}` : null
   ]
     .filter((line): line is string => Boolean(line))
