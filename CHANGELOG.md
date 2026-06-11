@@ -2,6 +2,29 @@
 
 All notable LightCrm releases are documented here. Starting with `0.2.0`, every version bump must include a changelog entry.
 
+## 0.3.6 - 2026-06-11
+
+### Project Snapshot
+
+LightCrm Today calendar navigation is cleaner and safer to use. Month navigation now uses stable icon buttons instead of glyphs that could render as broken symbols, and the month view has direct month/year controls next to the visible calendar range.
+
+### Added
+
+- Added month-level previous/next controls next to the Today calendar month heading.
+- Added direct month and year selectors for the Today month calendar.
+- Added Telegram bot coverage for public HTTP CRM URLs so non-local HTTP deployments still send an inline CRM URL button instead of a localhost callback.
+
+### Changed
+
+- Replaced fragile calendar navigation glyphs with lucide chevron icons.
+- Kept Today calendar month controls compact on mobile by letting month/year selectors fill the available width.
+
+### Verification
+
+- `pnpm --filter @lightcrm/web typecheck`
+- `pnpm --filter @lightcrm/telegram-bot test`
+- `pnpm --filter @lightcrm/telegram-bot typecheck`
+
 ## 0.3.5 - 2026-06-11
 
 ### Project Snapshot

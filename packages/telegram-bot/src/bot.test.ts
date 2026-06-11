@@ -733,6 +733,72 @@ describe("telegram bot core", () => {
     );
   });
 
+  it("uses a URL CRM button for public HTTP CRM URLs", async () => {
+    const sendMessage = vi.fn();
+    const orchestrate = vi.fn().mockResolvedValue({
+      workspaceId: "default",
+      normalizedText: "New lead: Maria, private house",
+      intent: "create_lead",
+      risk: "auto",
+      explanations: [],
+      settings: DEFAULT_LANGGRAPH_SETTINGS,
+      facts: {
+        contactName: "Maria",
+        projectName: null,
+        projectType: "private_house",
+        location: null,
+        areaM2: null,
+        phone: null,
+        budgetEur: null,
+        dueAt: null,
+        sourceMessageId: "304",
+        evidence: { sourceMessageId: "304", author: "Katya", sourceChannel: "telegram", textSnippet: "New lead: Maria" }
+      },
+      actions: [{ type: "create_lead", risk: "auto", reason: "Low-risk CRM action.", payload: {} }]
+    });
+    const createLead = vi.fn().mockResolvedValue({ id: "lead-304", name: "Maria" });
+
+    await handleTelegramUpdate(
+      {
+        update_id: 10,
+        message: {
+          message_id: 304,
+          text: "New lead: Maria, private house",
+          chat: { id: 111111 },
+          from: { first_name: "Katya" }
+        }
+      },
+      {
+        allowedChatIds: new Set([111111]),
+        workspaceId: "default",
+        crmAppBaseUrl: "http://204.168.163.99:3004",
+        sendMessage,
+        orchestrate,
+        createLead
+      }
+    );
+
+    expect(sendMessage).toHaveBeenCalledWith(
+      111111,
+      expect.stringContaining("Intake: saved 0 attachment"),
+      {
+        replyMarkup: {
+          inline_keyboard: [
+            [
+              { text: "CRM", url: "http://204.168.163.99:3004/leads?leadId=lead-304" },
+              { text: "offer", callback_data: "offer_lead:lead-304" }
+            ],
+            [{ text: "undo", callback_data: "undo_lead:lead-304" }]
+          ]
+        }
+      }
+    );
+    expect(sendMessage).not.toHaveBeenCalledWith(
+      111111,
+      "http://204.168.163.99:3004/leads?leadId=lead-304"
+    );
+  });
+
   it("answers localhost CRM callback buttons with a local lead URL", async () => {
     const sendMessage = vi.fn();
 
@@ -918,7 +984,7 @@ describe("telegram bot core", () => {
             message_id: 903,
             text: "LightCrm dry-run\nLead ID: lead-303\nIntake: saved 0 attachment(s) to Maria.",
             reply_markup: {
-              inline_keyboard: [[{ text: "CRM", callback_data: "crm_lead:lead-303" }]]
+              inline_keyboard: [[{ text: "CRM", url: "http://204.168.163.99:3004/leads?leadId=lead-303" }]]
             }
           }
         }

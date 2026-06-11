@@ -1,6 +1,7 @@
 ﻿"use client";
 
 import type { FormEvent } from "react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
 type CalendarViewMode = "month" | "week" | "day" | "agenda";
@@ -44,6 +45,10 @@ const monthFormatter = new Intl.DateTimeFormat("en", { month: "long", year: "num
 const dateFormatter = new Intl.DateTimeFormat("en", { month: "short", day: "numeric" });
 const fullDateFormatter = new Intl.DateTimeFormat("en", { weekday: "long", month: "long", day: "numeric", year: "numeric" });
 const timeFormatter = new Intl.DateTimeFormat("en", { hour: "2-digit", minute: "2-digit" });
+const monthOptions = Array.from({ length: 12 }, (_, month) => ({
+  value: month,
+  label: new Intl.DateTimeFormat("en", { month: "long" }).format(new Date(2026, month, 1))
+}));
 
 function startOfDay(date: Date) {
   const next = new Date(date);
@@ -292,6 +297,10 @@ export function CrmCalendar({
     return matchingLead ? leadOptionLabel(matchingLead) : matchingItem?.related.label ?? leadId;
   }, [items, leadId, leadOptions]);
   const contextDescription = selectedLeadLabel ? `${description} Lead: ${selectedLeadLabel}.` : description;
+  const yearOptions = useMemo(() => {
+    const anchorYear = anchorDate.getFullYear();
+    return Array.from({ length: 11 }, (_, index) => anchorYear - 5 + index);
+  }, [anchorDate]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -362,6 +371,11 @@ export function CrmCalendar({
       return;
     }
     setAnchorDate((current) => addDays(current, direction));
+  };
+  const setVisibleMonth = (month: number, year = anchorDate.getFullYear()) => {
+    const next = startOfDay(new Date(year, month, 1));
+    setAnchorDate(next);
+    setSelectedDate(next);
   };
   const visibleItemCount = items.length;
   const selectedItems = itemsByDay.get(dateKey(selectedDate)) ?? [];
@@ -470,7 +484,7 @@ export function CrmCalendar({
         <div className="calendarToolbar">
           <div className="calendarNav" aria-label="Calendar navigation">
             <button type="button" onClick={() => move(-1)} aria-label="Previous calendar range">
-              вЂ№
+              <ChevronLeft aria-hidden="true" size={16} strokeWidth={2} />
             </button>
             <button
               type="button"
@@ -483,7 +497,7 @@ export function CrmCalendar({
               Today
             </button>
             <button type="button" onClick={() => move(1)} aria-label="Next calendar range">
-              вЂє
+              <ChevronRight aria-hidden="true" size={16} strokeWidth={2} />
             </button>
           </div>
           <div className="calendarViewSwitch" aria-label="Calendar view">
@@ -496,7 +510,41 @@ export function CrmCalendar({
         </div>
       </header>
       <div className="calendarSummary">
-        <strong>{headerLabel}</strong>
+        <div className="calendarSummaryTitle">
+          <strong>{headerLabel}</strong>
+          {mode === "month" ? (
+            <div className="calendarMonthControls" aria-label="Month navigation">
+              <button type="button" onClick={() => move(-1)} aria-label="Previous month">
+                <ChevronLeft aria-hidden="true" size={14} strokeWidth={2} />
+              </button>
+              <select
+                aria-label="Month"
+                value={anchorDate.getMonth()}
+                onChange={(event) => setVisibleMonth(Number(event.target.value))}
+              >
+                {monthOptions.map((month) => (
+                  <option key={month.value} value={month.value}>
+                    {month.label}
+                  </option>
+                ))}
+              </select>
+              <select
+                aria-label="Year"
+                value={anchorDate.getFullYear()}
+                onChange={(event) => setVisibleMonth(anchorDate.getMonth(), Number(event.target.value))}
+              >
+                {yearOptions.map((year) => (
+                  <option key={year} value={year}>
+                    {year}
+                  </option>
+                ))}
+              </select>
+              <button type="button" onClick={() => move(1)} aria-label="Next month">
+                <ChevronRight aria-hidden="true" size={14} strokeWidth={2} />
+              </button>
+            </div>
+          ) : null}
+        </div>
         <span>{isLoading ? "Loading schedule" : `${visibleItemCount} scheduled item${visibleItemCount === 1 ? "" : "s"}`}</span>
       </div>
       {mode === "agenda" ? (

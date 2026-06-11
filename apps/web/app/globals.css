@@ -363,13 +363,16 @@ input {
 
 .calendarNav button,
 .calendarViewSwitch button {
+  align-items: center;
   background: transparent;
   border: 0;
   border-right: 1px solid var(--line);
   color: var(--ink-soft);
   cursor: pointer;
+  display: inline-flex;
   font-size: 13px;
   height: 34px;
+  justify-content: center;
   min-width: 36px;
   padding: 0 11px;
   text-transform: capitalize;
@@ -400,6 +403,59 @@ input {
 
 .calendarSummary strong {
   font-size: 15px;
+}
+
+.calendarSummaryTitle {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  min-width: 0;
+}
+
+.calendarMonthControls {
+  align-items: center;
+  background: color-mix(in srgb, var(--control) 78%, var(--panel));
+  border: 1px solid color-mix(in srgb, var(--line) 70%, transparent);
+  border-radius: 7px;
+  display: inline-flex;
+  overflow: hidden;
+}
+
+.calendarMonthControls button,
+.calendarMonthControls select {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-right: 1px solid color-mix(in srgb, var(--line) 70%, transparent);
+  color: var(--ink-soft);
+  display: inline-flex;
+  font: inherit;
+  font-size: 12px;
+  height: 30px;
+  justify-content: center;
+}
+
+.calendarMonthControls button {
+  cursor: pointer;
+  min-width: 30px;
+  padding: 0 8px;
+}
+
+.calendarMonthControls select {
+  cursor: pointer;
+  max-width: 130px;
+  padding: 0 24px 0 8px;
+}
+
+.calendarMonthControls > :last-child {
+  border-right: 0;
+}
+
+.calendarMonthControls button:hover,
+.calendarMonthControls select:hover {
+  background: var(--accent-soft);
+  color: var(--accent);
 }
 
 .calendarSummary span {
@@ -3295,6 +3351,23 @@ input {
   .calendarSummary {
     min-height: 36px;
     padding: 7px 10px;
+  }
+
+  .calendarSummaryTitle {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 6px;
+    width: 100%;
+  }
+
+  .calendarMonthControls {
+    width: 100%;
+  }
+
+  .calendarMonthControls select {
+    flex: 1;
+    max-width: none;
+    min-width: 0;
   }
 
   .calendarCreateForm {

@@ -651,7 +651,7 @@ function crmLeadUrl(deps: TelegramBotDeps, lead: Pick<Lead, "id" | "name">): str
   return `${baseUrl}/leads?leadId=${encodeURIComponent(lead.id)}`;
 }
 
-function isTelegramLocalUrl(value: string): boolean {
+function isLocalCrmUrl(value: string): boolean {
   try {
     const url = new URL(value);
     return ["localhost", "127.0.0.1", "0.0.0.0"].includes(url.hostname);
@@ -688,7 +688,7 @@ function crmLeadReplyMarkup(
       }
     };
   }
-  if (isTelegramLocalUrl(url)) {
+  if (isLocalCrmUrl(url)) {
     return {
       replyMarkup: {
         inline_keyboard: [
