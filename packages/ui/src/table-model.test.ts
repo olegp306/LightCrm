@@ -152,16 +152,20 @@ describe("table-model", () => {
       buildCreateRecordPayload(
         {
           "client.name": "Katya Client",
+          "client.phone": "+49 123",
+          "client.email": "katya@example.com",
           project: "House brief"
         },
         {
-          payloadMap: { "client.name": "name", project: "company" },
+          payloadMap: { "client.name": "name", "client.phone": "phone", "client.email": "email", project: "company" },
           noteFields: { project: "Project" }
         }
       )
     ).toEqual({
       workspaceId: "default",
       name: "Katya Client",
+      phone: "+49 123",
+      email: "katya@example.com",
       company: "House brief",
       notes: "Project: House brief"
     });

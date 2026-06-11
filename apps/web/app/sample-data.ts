@@ -83,7 +83,13 @@ export const tables: Record<string, TableDefinition> = {
     createRecord: {
       endpoint: "/api/crm/leads/upsert",
       workspaceId: "default",
-      payloadMap: { "client.name": "name", projectName: "company", project: "company" },
+      payloadMap: {
+        "client.name": "name",
+        "client.phone": "phone",
+        "client.email": "email",
+        projectName: "company",
+        project: "company"
+      },
       noteFields: {
         projectName: "Project",
         project: "Project",
@@ -99,8 +105,8 @@ export const tables: Record<string, TableDefinition> = {
         { id: "projectName", label: "Name" },
         { id: "area", label: "Area" },
         { id: "description", label: "Description", multiline: true },
-        { id: "phone", label: "Phone" },
-        { id: "email", label: "Email" },
+        { id: "client.phone", label: "Phone" },
+        { id: "client.email", label: "Email" },
         { id: "address", label: "Address" },
         { id: "todo", label: "Todo" }
       ]

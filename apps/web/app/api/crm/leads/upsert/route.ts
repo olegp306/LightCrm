@@ -23,7 +23,7 @@ export async function POST(request: Request) {
   try {
     const input = await parseJson(request, schema);
     const crm = getCrm();
-    const lead = await crm.upsertLead(input);
+    const lead = await crm.upsertLeadWithClientResolution(input);
     const autoOffer = await maybeAutoGenerateCommercialOfferForLead({
       crm,
       workspaceId: lead.workspaceId,

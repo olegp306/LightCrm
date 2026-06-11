@@ -80,6 +80,118 @@ describe("createCrmService", () => {
     expect(updated.status).toBe("qualified");
   });
 
+  it("creates and links a client when saving a lead with unique contact details", async () => {
+    const repository = new MemoryCrmRepository();
+    const crm = createCrmService(repository);
+
+    const lead = await crm.upsertLeadWithClientResolution({
+      workspaceId: "workspace-1",
+      name: "Maria House",
+      email: "Maria@Example.COM ",
+      phone: "+49 123 456",
+      company: "Private house"
+    });
+
+    expect(lead.clientId).toBeTruthy();
+    const clients = await crm.listRecords({ workspaceId: "workspace-1", entity: "client" });
+    expect(clients).toHaveLength(1);
+    expect(clients[0]).toMatchObject({
+      id: lead.clientId,
+      name: "Maria House",
+      email: "Maria@Example.COM ",
+      phone: "+49 123 456",
+      company: "Private house"
+    });
+  });
+
+  it("links a lead to an existing client by normalized email without overwriting filled client fields", async () => {
+    const repository = new MemoryCrmRepository();
+    const crm = createCrmService(repository);
+    const client = await crm.upsertClient({
+      workspaceId: "workspace-1",
+      name: "Existing Maria",
+      email: "maria@example.com",
+      phone: "+49 111",
+      company: "Existing company"
+    });
+
+    const lead = await crm.upsertLeadWithClientResolution({
+      workspaceId: "workspace-1",
+      name: "New Maria Request",
+      email: " MARIA@example.com ",
+      phone: "+49 222",
+      company: "New project"
+    });
+
+    expect(lead.clientId).toBe(client.id);
+    const storedClient = await repository.get("client", client.id);
+    expect(storedClient).toMatchObject({
+      name: "Existing Maria",
+      email: "maria@example.com",
+      phone: "+49 111",
+      company: "Existing company"
+    });
+  });
+
+  it("fills empty fields on a matched client without replacing existing values", async () => {
+    const repository = new MemoryCrmRepository();
+    const crm = createCrmService(repository);
+    const client = await crm.upsertClient({
+      workspaceId: "workspace-1",
+      name: "Phone Client",
+      phone: "+49 123456"
+    });
+
+    const lead = await crm.upsertLeadWithClientResolution({
+      workspaceId: "workspace-1",
+      name: "Phone request",
+      email: "phone@example.com",
+      phone: "+49 (123) 456",
+      company: "Phone company"
+    });
+
+    expect(lead.clientId).toBe(client.id);
+    const storedClient = await repository.get("client", client.id);
+    expect(storedClient).toMatchObject({
+      email: "phone@example.com",
+      phone: "+49 123456",
+      company: "Phone company"
+    });
+  });
+
+  it("does not auto-link a lead when email and phone match different clients", async () => {
+    const repository = new MemoryCrmRepository();
+    const crm = createCrmService(repository);
+    const emailClient = await crm.upsertClient({
+      workspaceId: "workspace-1",
+      name: "Email Client",
+      email: "shared@example.com"
+    });
+    const phoneClient = await crm.upsertClient({
+      workspaceId: "workspace-1",
+      name: "Phone Client",
+      phone: "+49 777"
+    });
+
+    const lead = await crm.upsertLeadWithClientResolution({
+      workspaceId: "workspace-1",
+      name: "Conflicting lead",
+      email: "shared@example.com",
+      phone: "+49 777"
+    });
+
+    expect(lead.clientId).toBeNull();
+    expect(await repository.get("client", emailClient.id)).toMatchObject({ name: "Email Client" });
+    expect(await repository.get("client", phoneClient.id)).toMatchObject({ name: "Phone Client" });
+    const auditLogs = await repository.listAuditLogs("workspace-1");
+    expect(auditLogs.find((log) => log.action === "lead.clientResolutionConflict")).toMatchObject({
+      entity: "lead",
+      metadata: expect.objectContaining({
+        clientIds: expect.arrayContaining([emailClient.id, phoneClient.id])
+      })
+    });
+  });
+
   it("links a lead to a client through the service layer", async () => {
     const repository = new MemoryCrmRepository();
     const crm = createCrmService(repository);

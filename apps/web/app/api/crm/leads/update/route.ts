@@ -81,7 +81,7 @@ export async function POST(request: Request) {
     if (input.patch.company !== undefined) leadPatch.company = input.patch.company;
     if (input.patch.status !== undefined) leadPatch.status = input.patch.status;
     const nextNotes = notesWithTabularPatch(existing.notes, input.patch);
-    const lead = await crm.upsertLead({
+    const lead = await crm.upsertLeadWithClientResolution({
       ...existing,
       ...leadPatch,
       workspaceId,

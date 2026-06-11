@@ -97,6 +97,27 @@ function trimText(value: string | null | undefined): string | null {
   return trimmed ? trimmed : null;
 }
 
+function normalizeEmail(value: string | null | undefined): string | null {
+  return trimText(value)?.toLocaleLowerCase() ?? null;
+}
+
+function normalizePhone(value: string | null | undefined): string | null {
+  const trimmed = trimText(value);
+  if (!trimmed) {
+    return null;
+  }
+  const hasInternationalPrefix = trimmed.startsWith("+");
+  const digits = trimmed.replace(/\D/g, "");
+  if (!digits) {
+    return null;
+  }
+  return hasInternationalPrefix ? `+${digits}` : digits;
+}
+
+function leadContactClientName(input: UpsertLeadInput): string {
+  return trimText(input.name) ?? trimText(input.company) ?? "Client from lead";
+}
+
 function compactText(value: string, maxLength = 240): string {
   const compacted = value.replace(/\s+/g, " ").trim();
   if (compacted.length <= maxLength) {
@@ -408,6 +429,115 @@ export function createCrmService(repository: CrmRepository) {
     return record;
   }
 
+  async function resolveClientForLead(input: UpsertLeadInput): Promise<string | null> {
+    if (input.clientId) {
+      return input.clientId;
+    }
+    const email = normalizeEmail(input.email);
+    const phone = normalizePhone(input.phone);
+    if (!email && !phone) {
+      return null;
+    }
+
+    const clients = await repository.list("client", input.workspaceId);
+    const matches = clients.filter((client) => {
+      if (client.archivedAt) {
+        return false;
+      }
+      const clientEmail = normalizeEmail(client.email);
+      const clientPhone = normalizePhone(client.phone);
+      return Boolean((email && clientEmail === email) || (phone && clientPhone === phone));
+    });
+    const uniqueMatches = [...new Map(matches.map((client) => [client.id, client])).values()];
+
+    if (uniqueMatches.length === 1) {
+      const client = uniqueMatches[0]!;
+      const nextEmail = client.email ?? input.email ?? null;
+      const nextPhone = client.phone ?? input.phone ?? null;
+      const nextWhatsapp = client.whatsapp ?? input.whatsapp ?? null;
+      const nextCompany = client.company ?? input.company ?? null;
+      if (
+        nextEmail !== client.email ||
+        nextPhone !== client.phone ||
+        nextWhatsapp !== client.whatsapp ||
+        nextCompany !== client.company
+      ) {
+        await upsertClient({
+          id: client.id,
+          workspaceId: input.workspaceId,
+          code: client.code,
+          name: client.name,
+          email: nextEmail,
+          phone: nextPhone,
+          whatsapp: nextWhatsapp,
+          company: nextCompany,
+          status: client.status,
+          notes: client.notes,
+          sourceChannel: client.sourceChannel ?? input.sourceChannel ?? null,
+          externalThreadId: client.externalThreadId ?? input.externalThreadId ?? null,
+          externalMessageId: client.externalMessageId ?? input.externalMessageId ?? null
+        });
+      }
+      await audit({
+        workspaceId: input.workspaceId,
+        actorId: null,
+        action: "lead.clientResolutionLink",
+        entity: "client",
+        entityId: client.id,
+        metadata: { email, phone }
+      });
+      return client.id;
+    }
+
+    if (uniqueMatches.length > 1) {
+      await audit({
+        workspaceId: input.workspaceId,
+        actorId: null,
+        action: "lead.clientResolutionConflict",
+        entity: "lead",
+        entityId: input.id ?? "pending",
+        metadata: {
+          email,
+          phone,
+          clientIds: uniqueMatches.map((client) => client.id)
+        }
+      });
+      return null;
+    }
+
+    const client = await upsertClient({
+      workspaceId: input.workspaceId,
+      name: leadContactClientName(input),
+      email: input.email ?? null,
+      phone: input.phone ?? null,
+      whatsapp: input.whatsapp ?? null,
+      company: input.company ?? null,
+      status: "active",
+      notes: "Created automatically from lead contact details.",
+      sourceChannel: input.sourceChannel ?? null,
+      externalThreadId: input.externalThreadId ?? null,
+      externalMessageId: input.externalMessageId ?? null
+    });
+    await audit({
+      workspaceId: input.workspaceId,
+      actorId: null,
+      action: "lead.clientResolutionCreate",
+      entity: "client",
+      entityId: client.id,
+      metadata: { email, phone }
+    });
+    return client.id;
+  }
+
+  async function upsertLeadWithClientResolution(input: UpsertLeadInput): Promise<Lead> {
+    const existing = input.id ? await repository.get("lead", input.id) : null;
+    const resolvedClientId = input.clientId ?? existing?.clientId ?? (await resolveClientForLead(input));
+    return upsertLead({
+      ...input,
+      clientId: resolvedClientId
+    });
+  }
+
   async function createLeadSummary(input: CreateLeadSummaryInput): Promise<LeadSummary> {
     const lead = await repository.get("lead", input.leadId);
     if (!lead || lead.workspaceId !== input.workspaceId) {
@@ -560,6 +690,7 @@ export function createCrmService(repository: CrmRepository) {
     listRecords,
     upsertClient,
     upsertLead,
+    upsertLeadWithClientResolution,
     upsertColdTarget,
     createOutreachTouch,
     upsertReminder,

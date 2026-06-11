@@ -2,6 +2,33 @@
 
 All notable LightCrm releases are documented here. Starting with `0.2.0`, every version bump must include a changelog entry.
 
+## 0.3.7 - 2026-06-11
+
+### Project Snapshot
+
+LightCrm can now resolve clients automatically while saving leads from the web table or Telegram/API flows. When a lead has a phone number or email, the backend can create a new client, link an existing unique client, or leave the lead unlinked when contact details point to conflicting clients.
+
+### Added
+
+- Added backend client resolution for lead saves based on normalized email and phone values.
+- Added automatic client creation when a saved lead has unique contact details and no matching client.
+- Added automatic lead-to-client linking when exactly one active client matches the lead email or phone.
+- Added conflict audit logging when email and phone match multiple clients, avoiding unsafe overwrites.
+- Added table payload mapping so `client.phone` and `client.email` lead-table columns save as native lead contact fields.
+
+### Changed
+
+- Switched lead create/update API routes to use client-aware lead saving.
+- Matched clients may be enriched only in empty fields; existing client contact/company fields are not overwritten.
+
+### Verification
+
+- `pnpm --filter @lightcrm/core test`
+- `pnpm --filter @lightcrm/core typecheck`
+- `pnpm --filter @lightcrm/ui test`
+- `pnpm --filter @lightcrm/ui typecheck`
+- `pnpm --filter @lightcrm/web typecheck`
+
 ## 0.3.6 - 2026-06-11
 
 ### Project Snapshot
