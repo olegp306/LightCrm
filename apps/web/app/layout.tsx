@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { CalendarDays, FileText, Folders, Megaphone, MoreHorizontal, Send, Settings, UsersRound, type LucideIcon } from "lucide-react";
 import appPackage from "../package.json";
 import { ThemeToggle } from "./components/ThemeToggle";
 import "./globals.css";
@@ -9,16 +10,33 @@ export const metadata: Metadata = {
   description: "Table-first lightweight CRM MVP"
 };
 
-const navItems = [
-  ["Today", "/today"],
-  ["Clients", "/clients"],
-  ["Leads", "/leads"],
-  ["Storage", "/storage"],
-  ["Settings", "/settings"],
-  ["Cold Targets", "/cold-targets"],
-  ["Outreach", "/outreach"],
-  ["Calendar", "/calendar"]
-] as const;
+type NavItem = {
+  label: string;
+  href: string;
+  Icon: LucideIcon;
+};
+
+const primaryNavItems: NavItem[] = [
+  { label: "Today", href: "/today", Icon: CalendarDays },
+  { label: "Clients", href: "/clients", Icon: UsersRound },
+  { label: "Leads", href: "/leads", Icon: Folders }
+];
+
+const tableNavItems: NavItem[] = [
+  { label: "StorageTable", href: "/storage", Icon: FileText },
+  { label: "Settings", href: "/settings", Icon: Settings },
+  { label: "CallTargetTable", href: "/cold-targets", Icon: Megaphone },
+  { label: "Outreach", href: "/outreach", Icon: Send },
+  { label: "CalendarTable", href: "/calendar", Icon: CalendarDays }
+];
+
+function NavIcon({ icon: Icon }: { icon: LucideIcon }) {
+  return (
+    <span className="navIcon" aria-hidden="true">
+      <Icon size={16} strokeWidth={1.8} />
+    </span>
+  );
+}
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -41,11 +59,30 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               </Link>
             </div>
             <nav className="nav" aria-label="CRM navigation">
-              {navItems.map(([label, href]) => (
-                <Link key={href} href={href}>
-                  {label}
-                </Link>
-              ))}
+              <div className="navPrimary" aria-label="Operator workspace">
+                {primaryNavItems.map((item) => (
+                  <Link key={item.href} href={item.href}>
+                    <NavIcon icon={item.Icon} />
+                    <span>{item.label}</span>
+                  </Link>
+                ))}
+              </div>
+              <details className="navSecondary">
+                <summary>
+                  <span className="navSummaryIcon" aria-hidden="true">
+                    <MoreHorizontal size={16} strokeWidth={1.8} />
+                  </span>
+                  <span>More tables</span>
+                </summary>
+                <div>
+                  {tableNavItems.map((item) => (
+                    <Link key={item.href} href={item.href}>
+                      <NavIcon icon={item.Icon} />
+                      <span>{item.label}</span>
+                    </Link>
+                  ))}
+                </div>
+              </details>
             </nav>
             <div className="sidebarBottom">
               <ThemeToggle />

@@ -2,6 +2,41 @@
 
 All notable LightCrm releases are documented here. Starting with `0.2.0`, every version bump must include a changelog entry.
 
+## 0.3.4 - 2026-06-11
+
+### Project Snapshot
+
+LightCrm now has a cleaner operator workspace shell and more polished table/calendar controls. The release focuses on making the day-to-day CRM surface calmer: primary navigation highlights Today, Clients, and Leads; advanced tables move behind a secondary drawer; the Today calendar uses a stable split layout; and table columns can persist typographic emphasis.
+
+### Added
+
+- Added persisted per-column typography preferences for CRM tables.
+- Added selected-column controls for medium weight, super-bold weight, and italic text styling.
+- Added direct `lucide-react` navigation icons in the web shell so sidebar icons match the cleaner reference style.
+- Added a focused sidebar navigation grouping: primary operator tabs remain visible, while secondary tables live under `More tables`.
+
+### Changed
+
+- Changed column bold behavior from a binary toggle to a three-state cycle: normal, medium, and super.
+- Changed Today month view into a stable split layout with the month calendar on the left and the selected-day event inspector on the right.
+- Moved the month-view event creation form under the calendar so long event lists no longer stretch the calendar grid.
+- Updated calendar lead selection labels to show public lead number, client/name, and project without exposing internal ids first.
+- Renamed secondary navigation labels to `StorageTable`, `CallTargetTable`, and `CalendarTable`.
+- Replaced CSS-drawn sidebar icons with lucide icons for Today, Clients, Leads, StorageTable, Settings, CallTargetTable, Outreach, and CalendarTable.
+
+### Fixed
+
+- Fixed Today calendar month grid stretching when the selected day contains many events.
+- Fixed sidebar visual focus so operators see Today, Clients, and Leads first instead of a long flat navigation list.
+- Kept compatibility with previously saved `bold: true` column preferences by treating them as super-bold.
+
+### Verification
+
+- `pnpm --filter @lightcrm/web typecheck`
+- `pnpm --filter @lightcrm/ui typecheck`
+- `pnpm --filter @lightcrm/ui test`
+- Browser smoke checks for `/leads` and `/today`
+
 ## 0.3.3 - 2026-06-11
 
 ### Project Snapshot

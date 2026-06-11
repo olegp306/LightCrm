@@ -15,7 +15,7 @@ import {
   type Item,
   type Theme
 } from "@glideapps/glide-data-grid";
-import { Check, Columns3, Download, FileText, Merge, Palette, Plus, Search, Trash2, X } from "lucide-react";
+import { Check, Columns3, Download, FileText, Italic, Merge, Palette, Plus, Search, Trash2, X } from "lucide-react";
 import type { ChangeEvent, ComponentProps, FormEvent } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -30,6 +30,7 @@ import {
   toCsv,
   updateRowCell,
   type ApiRecord,
+  type ColumnTextStyle,
   type CreateRecordFieldValue,
   type CreateRecordPayloadConfig,
   type TablePreferences,
@@ -46,6 +47,7 @@ export type CrmTableColumn = {
   mobilePriority?: number;
   group?: string;
   valueKind?: "text" | "link" | "documents" | "calendar" | "area" | "longText" | "action";
+  textStyle?: ColumnTextStyle;
 };
 
 export type DocumentCellItem = {
@@ -372,11 +374,22 @@ function selectedRowIndexes(selection: GridSelection, rowCount: number): number[
   return selection.rows.toArray().filter((index) => index >= 0 && index < rowCount);
 }
 
+function selectedColumnIndexes(selection: GridSelection, columnCount: number): number[] {
+  return selection.columns.toArray().filter((index) => index >= 0 && index < columnCount);
+}
+
 function rowSelection(indexes: number[]): GridSelection {
   const uniqueIndexes = Array.from(new Set(indexes)).sort((left, right) => left - right);
   return {
     columns: CompactSelection.empty(),
     rows: uniqueIndexes.reduce((selection, index) => selection.add(index), CompactSelection.empty())
+  };
+}
+
+function columnSelection(index: number): GridSelection {
+  return {
+    columns: CompactSelection.empty().add(index),
+    rows: CompactSelection.empty()
   };
 }
 
@@ -402,6 +415,44 @@ function scaledTableTheme(theme: Partial<Theme>, scale: number): Partial<Theme> 
     editorFontSize: `${cellFontSize}px`,
     headerFontStyle: `600 ${headerFontSize}px`
   };
+}
+
+function columnFontStyle(baseTheme: Partial<Theme>, textStyle?: ColumnTextStyle): string | undefined {
+  const weight = textStyle?.weight ?? (textStyle?.bold ? "super" : undefined);
+  if (!weight && !textStyle?.italic) {
+    return undefined;
+  }
+  const fontSize = fontSizeFromTheme(baseTheme, 13);
+  const fontWeight = weight === "super" ? "700 " : weight === "medium" ? "600 " : "";
+  return `${textStyle?.italic ? "italic " : ""}${fontWeight}${fontSize}px`.trim();
+}
+
+function nextColumnWeight(weight: ColumnTextStyle["weight"] | undefined): ColumnTextStyle["weight"] | undefined {
+  if (!weight) {
+    return "medium";
+  }
+  if (weight === "medium") {
+    return "super";
+  }
+  return undefined;
+}
+
+function columnWeightLabel(weight: ColumnTextStyle["weight"] | undefined): string {
+  if (weight === "super") {
+    return "super";
+  }
+  if (weight === "medium") {
+    return "medium";
+  }
+  return "normal";
+}
+
+function textThemeOverride(baseTheme: Partial<Theme>, rowTheme: Partial<Theme> | undefined, textStyle?: ColumnTextStyle): Partial<Theme> | undefined {
+  const baseFontStyle = columnFontStyle(baseTheme, textStyle);
+  if (!baseFontStyle) {
+    return rowTheme;
+  }
+  return { ...(rowTheme ?? {}), baseFontStyle };
 }
 
 function fontSizeFromTheme(theme: { baseFontStyle?: string }, fallback: number): number {
@@ -1273,6 +1324,27 @@ export function CrmTable({
   );
   const detailsPanelRow = detailsPanel ? editableRows.find((row) => row.id === detailsPanel.rowId) ?? null : null;
   const detailsPanelDocuments = detailsPanelRow ? sortDocumentsByAdded(cellDocuments(detailsPanelRow.values.documents)) : [];
+  const selectedColumnIndex = useMemo(() => {
+    const indexes = selectedColumnIndexes(gridSelection, configuredColumns.length);
+    return indexes.length === 1 ? indexes[0] : null;
+  }, [configuredColumns.length, gridSelection]);
+  const selectedColumn = selectedColumnIndex !== null ? configuredColumns[selectedColumnIndex] ?? null : null;
+  const selectedColumnStyle = selectedColumn?.textStyle ?? {};
+  const selectedColumnStylePosition = useMemo(() => {
+    if (selectedColumnIndex === null || !selectedColumn) {
+      return null;
+    }
+    const columnLeft =
+      rowMarkerWidth +
+      configuredColumns
+        .slice(0, selectedColumnIndex)
+        .reduce((total, column) => total + (column.width ?? 160), 0);
+    const columnWidth = selectedColumn.width ?? 160;
+    return {
+      left: Math.max(rowMarkerWidth + 6, columnLeft + columnWidth - 88),
+      top: groupHeaderHeight + 5
+    };
+  }, [configuredColumns, selectedColumn, selectedColumnIndex]);
   const handleGridSelectionChange = useCallback(
     (nextSelection: GridSelection) => {
       const nextIndexes = selectedRowIndexes(nextSelection, filteredRows.length);
@@ -1337,7 +1409,7 @@ export function CrmTable({
           allowOverlay: true,
           hoverEffect: true,
           readonly: false,
-          themeOverride,
+          themeOverride: textThemeOverride(activeTableTheme, themeOverride, column.textStyle),
           onClickUri: (args) => {
             args.preventDefault();
             openTableLink(href);
@@ -1352,7 +1424,7 @@ export function CrmTable({
           displayData,
           allowOverlay: true,
           readonly: false,
-          themeOverride,
+          themeOverride: textThemeOverride(activeTableTheme, themeOverride, column.textStyle),
           contentAlign: "center"
         };
       }
@@ -1364,7 +1436,7 @@ export function CrmTable({
           displayData,
           allowOverlay: false,
           readonly: true,
-          themeOverride
+          themeOverride: textThemeOverride(activeTableTheme, themeOverride, column.textStyle)
         };
       }
       if (column?.valueKind === "action") {
@@ -1375,7 +1447,7 @@ export function CrmTable({
           displayData,
           allowOverlay: true,
           readonly: false,
-          themeOverride,
+          themeOverride: textThemeOverride(activeTableTheme, themeOverride, column.textStyle),
           contentAlign: "center"
         };
       }
@@ -1391,11 +1463,11 @@ export function CrmTable({
         displayData,
         allowOverlay: true,
         readonly: false,
-        themeOverride,
+        themeOverride: textThemeOverride(activeTableTheme, themeOverride, column?.textStyle),
         contentAlign: column?.id === "interest" ? "center" : undefined
       };
     },
-    [activeDraftRowTheme, configuredColumns, draftRowIds, filteredRows, pendingDocumentUploads, uploadPulse]
+    [activeDraftRowTheme, activeTableTheme, configuredColumns, draftRowIds, filteredRows, pendingDocumentUploads, uploadPulse]
   );
 
   const handleItemHovered = useCallback((args: GridMouseEventArgs) => {
@@ -1497,6 +1569,55 @@ export function CrmTable({
   const cycleTableFontScale = useCallback(() => {
     setPreferences((current) => ({ ...current, fontScale: nextFontScale(current.fontScale) }));
   }, []);
+
+  const cycleSelectedColumnWeight = useCallback(() => {
+    if (!selectedColumn) {
+      return;
+    }
+    setPreferences((current) => {
+      const currentStyle = current.columnTextStyles?.[selectedColumn.id] ?? {};
+      const currentWeight = currentStyle.weight ?? (currentStyle.bold ? "super" : undefined);
+      const nextWeight = nextColumnWeight(currentWeight);
+      const nextStyle: ColumnTextStyle = {
+        ...(nextWeight ? { weight: nextWeight } : {}),
+        ...(currentStyle.italic ? { italic: true } : {})
+      };
+      const nextStyles = { ...(current.columnTextStyles ?? {}) };
+      if (nextStyle.weight || nextStyle.italic) {
+        nextStyles[selectedColumn.id] = nextStyle;
+      } else {
+        delete nextStyles[selectedColumn.id];
+      }
+      return {
+        ...current,
+        columnTextStyles: Object.keys(nextStyles).length > 0 ? nextStyles : undefined
+      };
+    });
+  }, [selectedColumn]);
+
+  const toggleSelectedColumnItalic = useCallback(() => {
+    if (!selectedColumn) {
+      return;
+    }
+    setPreferences((current) => {
+      const currentStyle = current.columnTextStyles?.[selectedColumn.id] ?? {};
+      const currentWeight = currentStyle.weight ?? (currentStyle.bold ? "super" : undefined);
+      const nextStyle: ColumnTextStyle = {
+        ...(currentWeight ? { weight: currentWeight } : {}),
+        ...(!currentStyle.italic ? { italic: true } : {})
+      };
+      const nextStyles = { ...(current.columnTextStyles ?? {}) };
+      if (nextStyle.weight || nextStyle.italic) {
+        nextStyles[selectedColumn.id] = nextStyle;
+      } else {
+        delete nextStyles[selectedColumn.id];
+      }
+      return {
+        ...current,
+        columnTextStyles: Object.keys(nextStyles).length > 0 ? nextStyles : undefined
+      };
+    });
+  }, [selectedColumn]);
 
   const moveColumn = useCallback((sourceIndex: number, targetIndex: number) => {
     setPreferences((current) => {
@@ -2842,6 +2963,33 @@ export function CrmTable({
             </div>
           </div>
         ) : null}
+        {selectedColumn && selectedColumnStylePosition ? (
+          <div
+            className="columnStyleToggles"
+            style={{ left: selectedColumnStylePosition.left, top: selectedColumnStylePosition.top }}
+            aria-label={`${selectedColumn.title} column text style`}
+          >
+            <button
+              type="button"
+              className={`columnWeightButton ${selectedColumnStyle.weight ? `active ${selectedColumnStyle.weight}` : ""}`}
+              title={`Column weight: ${columnWeightLabel(selectedColumnStyle.weight)}`}
+              aria-label={`Column weight: ${columnWeightLabel(selectedColumnStyle.weight)}`}
+              onClick={cycleSelectedColumnWeight}
+            >
+              <span aria-hidden="true">B</span>
+            </button>
+            <button
+              type="button"
+              className={selectedColumnStyle.italic ? "active" : ""}
+              title="Italic column"
+              aria-label="Italic column"
+              aria-pressed={Boolean(selectedColumnStyle.italic)}
+              onClick={toggleSelectedColumnItalic}
+            >
+              <Italic size={12} />
+            </button>
+          </div>
+        ) : null}
         <DataEditor
           ref={gridRef}
           columns={visibleColumns}
@@ -2852,6 +3000,7 @@ export function CrmTable({
           onHeaderClicked={(columnIndex) => {
             const column = configuredColumns[columnIndex];
             if (column) {
+              setGridSelection(columnSelection(columnIndex));
               setSort((current) => nextSort(current, column.id));
             }
           }}

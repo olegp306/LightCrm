@@ -55,6 +55,25 @@ describe("table-model", () => {
     ]);
   });
 
+  it("applies saved column text styles with other preferences", () => {
+    expect(
+      applyTablePreferences(columns, {
+        widths: { name: 240 },
+        columnTextStyles: {
+          name: { weight: "medium" },
+          "client.name": { bold: true },
+          status: { weight: "super", italic: true },
+          documents: { bold: false, italic: false }
+        }
+      }).map((column) => [column.id, column.width, column.textStyle])
+    ).toEqual([
+      ["name", 240, { weight: "medium" }],
+      ["client.name", 180, { weight: "super" }],
+      ["status", 120, { weight: "super", italic: true }],
+      ["documents", 260, undefined]
+    ]);
+  });
+
   it("sorts rows by a selected column in both directions", () => {
     expect(sortRows(rows, { columnId: "name", direction: "asc" }).map((row) => row.id)).toEqual(["1", "2"]);
     expect(sortRows(rows, { columnId: "client.name", direction: "desc" }).map((row) => row.id)).toEqual(["2", "1"]);

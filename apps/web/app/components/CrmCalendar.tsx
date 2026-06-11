@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import type { FormEvent } from "react";
 import { useEffect, useMemo, useState } from "react";
@@ -116,7 +116,7 @@ function itemTimeLabel(item: CalendarFeedItem) {
 }
 
 function itemMeta(item: CalendarFeedItem) {
-  return [item.related.label, item.location, item.sourceChannel].filter(Boolean).join(" · ");
+  return [item.related.label, item.location, item.sourceChannel].filter(Boolean).join(" В· ");
 }
 
 function sortItemsByStart(items: CalendarFeedItem[]) {
@@ -147,11 +147,11 @@ function datetimeLocalForDay(date: Date, currentValue: string) {
 }
 
 function leadOptionLabel(lead: LeadOption): string {
-  return [lead.code ?? lead.id, lead.projectName ?? lead.name, lead.client?.name].filter(Boolean).join(" · ");
+  return [lead.code ?? lead.id, lead.client?.name ?? lead.name, lead.projectName ?? lead.name].filter(Boolean).join(" · ");
 }
 
 function leadOptionValue(lead: LeadOption): string {
-  return `${lead.id} | ${leadOptionLabel(lead)}`;
+  return leadOptionLabel(lead);
 }
 
 function leadIdFromInput(value: string): string {
@@ -376,7 +376,8 @@ export function CrmCalendar({
     try {
       const startsAt = new Date(createDraft.startsAt);
       const endsAt = new Date(startsAt.getTime() + 60 * 60 * 1000);
-      const targetLeadId = leadId ?? leadIdFromInput(createDraft.leadId);
+      const matchingLead = leadOptions.find((lead) => leadOptionValue(lead) === createDraft.leadId.trim());
+      const targetLeadId = leadId ?? matchingLead?.id ?? leadIdFromInput(createDraft.leadId);
       const response = await fetch("/api/crm/calendar-events/upsert", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -419,6 +420,46 @@ export function CrmCalendar({
     }
   }
 
+  const createEventForm = (
+    <form className="calendarCreateForm" onSubmit={createCalendarEvent}>
+      <input
+        aria-label="Event title"
+        placeholder="Event title"
+        value={createDraft.title}
+        onChange={(event) => setCreateDraft((current) => ({ ...current, title: event.target.value }))}
+      />
+      <input
+        aria-label="Event date and time"
+        type="datetime-local"
+        value={createDraft.startsAt}
+        onChange={(event) => setCreateDraft((current) => ({ ...current, startsAt: event.target.value }))}
+      />
+      <input
+        aria-label="Lead"
+        list="calendar-lead-options"
+        placeholder="Lead"
+        value={createDraft.leadId}
+        disabled={Boolean(leadId)}
+        onChange={(event) => setCreateDraft((current) => ({ ...current, leadId: event.target.value }))}
+      />
+      <datalist id="calendar-lead-options">
+        {leadOptions.map((lead) => (
+          <option key={lead.id} value={leadOptionValue(lead)} />
+        ))}
+      </datalist>
+      <input
+        aria-label="Event description"
+        placeholder="Description"
+        value={createDraft.description}
+        onChange={(event) => setCreateDraft((current) => ({ ...current, description: event.target.value }))}
+      />
+      <button type="submit" disabled={createStatus === "saving" || !createDraft.title.trim()}>
+        {createStatus === "saving" ? "Saving" : "Add event"}
+      </button>
+      {createStatus === "error" ? <span>Could not save event.</span> : null}
+    </form>
+  );
+
   return (
     <section className="calendarPage">
       <header className="calendarHeader">
@@ -429,7 +470,7 @@ export function CrmCalendar({
         <div className="calendarToolbar">
           <div className="calendarNav" aria-label="Calendar navigation">
             <button type="button" onClick={() => move(-1)} aria-label="Previous calendar range">
-              ‹
+              вЂ№
             </button>
             <button
               type="button"
@@ -442,7 +483,7 @@ export function CrmCalendar({
               Today
             </button>
             <button type="button" onClick={() => move(1)} aria-label="Next calendar range">
-              ›
+              вЂє
             </button>
           </div>
           <div className="calendarViewSwitch" aria-label="Calendar view">
@@ -458,43 +499,6 @@ export function CrmCalendar({
         <strong>{headerLabel}</strong>
         <span>{isLoading ? "Loading schedule" : `${visibleItemCount} scheduled item${visibleItemCount === 1 ? "" : "s"}`}</span>
       </div>
-      <form className="calendarCreateForm" onSubmit={createCalendarEvent}>
-        <input
-          aria-label="Event title"
-          placeholder="Event title"
-          value={createDraft.title}
-          onChange={(event) => setCreateDraft((current) => ({ ...current, title: event.target.value }))}
-        />
-        <input
-          aria-label="Event date and time"
-          type="datetime-local"
-          value={createDraft.startsAt}
-          onChange={(event) => setCreateDraft((current) => ({ ...current, startsAt: event.target.value }))}
-        />
-        <input
-          aria-label="Lead ID"
-          list="calendar-lead-options"
-          placeholder="Lead ID"
-          value={createDraft.leadId}
-          disabled={Boolean(leadId)}
-          onChange={(event) => setCreateDraft((current) => ({ ...current, leadId: event.target.value }))}
-        />
-        <datalist id="calendar-lead-options">
-          {leadOptions.map((lead) => (
-            <option key={lead.id} value={leadOptionValue(lead)} />
-          ))}
-        </datalist>
-        <input
-          aria-label="Event description"
-          placeholder="Description"
-          value={createDraft.description}
-          onChange={(event) => setCreateDraft((current) => ({ ...current, description: event.target.value }))}
-        />
-        <button type="submit" disabled={createStatus === "saving" || !createDraft.title.trim()}>
-          {createStatus === "saving" ? "Saving" : "Add event"}
-        </button>
-        {createStatus === "error" ? <span>Could not save event.</span> : null}
-      </form>
       {mode === "agenda" ? (
         <div className="calendarAgenda">
           {visibleDays.map((day) => {
@@ -520,33 +524,36 @@ export function CrmCalendar({
         </div>
       ) : mode === "month" ? (
         <div className="calendarSplit">
-          <div className="calendarGrid calendarGridMonth">
-            {visibleDays.map((day) => {
-              const dayItems = sortItemsByStart(itemsByDay.get(dateKey(day)) ?? []);
-              const outsideMonth = day.getMonth() !== anchorDate.getMonth();
-              const isSelected = sameDay(day, selectedDate);
-              return (
-                <button
-                  type="button"
-                  className={`calendarDay calendarDayButton ${outsideMonth ? "muted" : ""} ${
-                    sameDay(day, new Date()) ? "today" : ""
-                  } ${isSelected ? "selected" : ""}`}
-                  key={dateKey(day)}
-                  onClick={() => setSelectedDate(startOfDay(day))}
-                >
-                  <header>
-                    <span>{dayFormatter.format(day)}</span>
-                    <strong>{day.getDate()}</strong>
-                  </header>
-                  <div className="calendarDayItems">
-                    {dayItems.slice(0, 3).map((item) => (
-                      <CalendarChip item={item} key={`${item.kind}-${item.id}`} compact />
-                    ))}
-                    {dayItems.length > 3 ? <span className="calendarMore">+{dayItems.length - 3} more</span> : null}
-                  </div>
-                </button>
-              );
-            })}
+          <div className="calendarMonthPanel">
+            <div className="calendarGrid calendarGridMonth">
+              {visibleDays.map((day) => {
+                const dayItems = sortItemsByStart(itemsByDay.get(dateKey(day)) ?? []);
+                const outsideMonth = day.getMonth() !== anchorDate.getMonth();
+                const isSelected = sameDay(day, selectedDate);
+                return (
+                  <button
+                    type="button"
+                    className={`calendarDay calendarDayButton ${outsideMonth ? "muted" : ""} ${
+                      sameDay(day, new Date()) ? "today" : ""
+                    } ${isSelected ? "selected" : ""}`}
+                    key={dateKey(day)}
+                    onClick={() => setSelectedDate(startOfDay(day))}
+                  >
+                    <header>
+                      <span>{dayFormatter.format(day)}</span>
+                      <strong>{day.getDate()}</strong>
+                    </header>
+                    <div className="calendarDayItems">
+                      {dayItems.slice(0, 3).map((item) => (
+                        <CalendarChip item={item} key={`${item.kind}-${item.id}`} compact />
+                      ))}
+                      {dayItems.length > 3 ? <span className="calendarMore">+{dayItems.length - 3} more</span> : null}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+            {createEventForm}
           </div>
           <CalendarInspector selectedDate={selectedDate} items={selectedItems} />
         </div>
@@ -573,6 +580,7 @@ export function CrmCalendar({
           })}
         </div>
       )}
+      {mode === "month" ? null : createEventForm}
     </section>
   );
 }

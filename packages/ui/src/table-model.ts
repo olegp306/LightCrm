@@ -21,7 +21,31 @@ export type TablePreferences = {
   hidden?: string[];
   fontScale?: number;
   tableColor?: string;
+  columnTextStyles?: Record<string, ColumnTextStyle>;
 };
+
+export type ColumnTextStyle = {
+  weight?: "medium" | "super";
+  /**
+   * Legacy preference shape kept so saved localStorage from the first column-style build still works.
+   */
+  bold?: boolean;
+  italic?: boolean;
+};
+
+function normalizeColumnTextStyle(style: ColumnTextStyle | undefined): ColumnTextStyle | undefined {
+  if (!style) {
+    return undefined;
+  }
+  const weight = style.weight ?? (style.bold ? "super" : undefined);
+  if (!weight && !style.italic) {
+    return undefined;
+  }
+  return {
+    ...(weight ? { weight } : {}),
+    ...(style.italic ? { italic: true } : {})
+  };
+}
 
 export type ApiRecord = Record<string, unknown> & {
   id: string;
@@ -218,7 +242,14 @@ export function applyTablePreferences(columns: CrmTableColumn[], preferences: Ta
     if (!column) {
       return [];
     }
-    return [{ ...column, width: preferences.widths?.[id] ?? column.width }];
+    const textStyle = normalizeColumnTextStyle(preferences.columnTextStyles?.[id]);
+    return [
+      {
+        ...column,
+        width: preferences.widths?.[id] ?? column.width,
+        textStyle
+      }
+    ];
   });
 }
 
