@@ -2,6 +2,29 @@
 
 All notable LightCrm releases are documented here. Starting with `0.2.0`, every version bump must include a changelog entry.
 
+## 0.3.5 - 2026-06-11
+
+### Project Snapshot
+
+LightCrm now has safer production Telegram handoff behavior. Telegram CRM buttons can open the deployed CRM as a Telegram WebApp when a public HTTPS app URL is configured, and newly created leads include an immediate undo action for accidental draft creation.
+
+### Added
+
+- Added Telegram `web_app` CRM buttons for production HTTPS CRM URLs.
+- Added an `undo` inline button to newly created Telegram leads.
+- Added Telegram undo handling that archives the created lead through the CRM archive API.
+- Added `.env.example` guidance for `NEXT_PUBLIC_APP_URL` as the public HTTPS CRM URL used by Telegram WebApp buttons.
+
+### Changed
+
+- Kept local CRM URLs on the existing callback/link fallback path so localhost testing continues to work.
+- Cleared the active Telegram lead context after undo so later attachments do not keep linking to the archived draft.
+
+### Verification
+
+- `pnpm --filter @lightcrm/telegram-bot test`
+- `pnpm --filter @lightcrm/telegram-bot typecheck`
+
 ## 0.3.4 - 2026-06-11
 
 ### Project Snapshot

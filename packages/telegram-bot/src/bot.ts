@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 import {
   handleTelegramUpdate,
   parseAllowedChatIds,
+  type TelegramArchiveLeadInput,
   type PrepareTelegramAttachmentInput,
   type TelegramGeneratedDocument,
   type TelegramLeadSearchInput,
@@ -155,6 +156,14 @@ async function createReminder(input: TelegramReminderInput): Promise<TelegramRem
   return crmCall<TelegramReminderResult>("/api/crm/reminders/upsert", input);
 }
 
+async function archiveLead(input: TelegramArchiveLeadInput) {
+  return crmCall("/api/crm/archive", {
+    workspaceId: input.workspaceId,
+    entity: "lead",
+    ids: [input.leadId]
+  });
+}
+
 async function createClient(input: UpsertClientInput) {
   return crmCall<{ id: string; name: string }>("/api/crm/clients/upsert", input);
 }
@@ -267,8 +276,12 @@ async function runPolling() {
             ingestLeadIntake,
             prepareAttachment,
             sendDocument,
-            generateOffer
+            generateOffer,
+            archiveLead
           });
+          if (update.callback_query?.data?.startsWith("undo_lead:") && callbackChatId) {
+            activeLeads.delete(String(callbackChatId));
+          }
           if (lead && message) {
             activeLeads.set(String(message.chat.id), { lead, updatedAt: now });
           }

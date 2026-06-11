@@ -452,7 +452,10 @@ describe("telegram bot core", () => {
       expect.stringContaining("Intake: saved 1 attachment"),
       {
         replyMarkup: {
-          inline_keyboard: [[{ text: "offer", callback_data: "offer_lead:lead-1" }]]
+          inline_keyboard: [
+            [{ text: "offer", callback_data: "offer_lead:lead-1" }],
+            [{ text: "undo", callback_data: "undo_lead:lead-1" }]
+          ]
         }
       }
     );
@@ -516,7 +519,10 @@ describe("telegram bot core", () => {
       expect.stringContaining("Intake: saved 1 attachment"),
       {
         replyMarkup: {
-          inline_keyboard: [[{ text: "offer", callback_data: "offer_lead:lead-draft" }]]
+          inline_keyboard: [
+            [{ text: "offer", callback_data: "offer_lead:lead-draft" }],
+            [{ text: "undo", callback_data: "undo_lead:lead-draft" }]
+          ]
         }
       }
     );
@@ -592,7 +598,10 @@ describe("telegram bot core", () => {
       expect.stringContaining("Intake: saved 2 attachment"),
       {
         replyMarkup: {
-          inline_keyboard: [[{ text: "offer", callback_data: "offer_lead:lead-draft" }]]
+          inline_keyboard: [
+            [{ text: "offer", callback_data: "offer_lead:lead-draft" }],
+            [{ text: "undo", callback_data: "undo_lead:lead-draft" }]
+          ]
         }
       }
     );
@@ -650,9 +659,10 @@ describe("telegram bot core", () => {
         replyMarkup: {
           inline_keyboard: [
             [
-              { text: "CRM", url: "https://crm.example.com/leads?leadId=lead-301" },
+              { text: "CRM", web_app: { url: "https://crm.example.com/leads?leadId=lead-301" } },
               { text: "offer", callback_data: "offer_lead:lead-301" }
-            ]
+            ],
+            [{ text: "undo", callback_data: "undo_lead:lead-301" }]
           ]
         }
       }
@@ -715,7 +725,8 @@ describe("telegram bot core", () => {
             [
               { text: "CRM", callback_data: "crm_lead:lead-303" },
               { text: "offer", callback_data: "offer_lead:lead-303" }
-            ]
+            ],
+            [{ text: "undo", callback_data: "undo_lead:lead-303" }]
           ]
         }
       }
@@ -746,6 +757,31 @@ describe("telegram bot core", () => {
       111111,
       "http://localhost:4900/leads?leadId=lead-303"
     );
+  });
+
+  it("archives a created lead from the undo callback button", async () => {
+    const sendMessage = vi.fn();
+    const archiveLead = vi.fn().mockResolvedValue({});
+
+    await handleTelegramUpdate(
+      {
+        update_id: 100,
+        callback_query: {
+          id: "callback-undo",
+          data: "undo_lead:lead-303",
+          message: { chat: { id: 111111 }, message_id: 902 }
+        }
+      },
+      {
+        allowedChatIds: new Set([111111]),
+        workspaceId: "default",
+        sendMessage,
+        archiveLead
+      }
+    );
+
+    expect(archiveLead).toHaveBeenCalledWith({ workspaceId: "default", leadId: "lead-303" });
+    expect(sendMessage).toHaveBeenCalledWith(111111, "undone: lead-303");
   });
 
   it("answers full summary callback buttons with the long lead summary", async () => {
@@ -1170,7 +1206,8 @@ describe("telegram bot core", () => {
             [
               { text: "CRM", callback_data: "crm_lead:lead-500" },
               { text: "offer", callback_data: "offer_lead:lead-500" }
-            ]
+            ],
+            [{ text: "undo", callback_data: "undo_lead:lead-500" }]
           ]
         }
       })

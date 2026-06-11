@@ -68,7 +68,7 @@ export type TelegramReplyMessage = {
   text?: string;
   caption?: string;
   reply_markup?: {
-    inline_keyboard?: Array<Array<{ text?: string; url?: string; callback_data?: string }>>;
+    inline_keyboard?: Array<Array<{ text?: string; url?: string; callback_data?: string; web_app?: { url: string } }>>;
   };
 };
 
@@ -136,6 +136,7 @@ export type TelegramBotDeps = {
   createReminder?: (input: TelegramReminderInput) => Promise<TelegramReminderResult>;
   ingestLeadIntake?: (input: IngestLeadIntakeInput) => Promise<{ documents?: unknown[]; summary?: string }>;
   prepareAttachment?: (input: PrepareTelegramAttachmentInput) => Promise<LeadIntakeAttachmentInput>;
+  archiveLead?: (input: TelegramArchiveLeadInput) => Promise<unknown>;
 };
 
 export type TelegramLeadSearchInput = {
@@ -189,6 +190,11 @@ export type TelegramReminderResult = {
   dueAt: string | Date;
 };
 
+export type TelegramArchiveLeadInput = {
+  workspaceId: string;
+  leadId: string;
+};
+
 export type TelegramGeneratedDocument = {
   fileName: string;
   mimeType: string | null;
@@ -198,7 +204,7 @@ export type TelegramGeneratedDocument = {
 
 export type TelegramSendMessageOptions = {
   replyMarkup?: {
-    inline_keyboard: Array<Array<{ text: string; url?: string; callback_data?: string }>>;
+    inline_keyboard: Array<Array<{ text: string; url?: string; callback_data?: string; web_app?: { url: string } }>>;
   };
 };
 
@@ -645,13 +651,18 @@ function crmLeadUrl(deps: TelegramBotDeps, lead: Pick<Lead, "id" | "name">): str
   return `${baseUrl}/leads?leadId=${encodeURIComponent(lead.id)}`;
 }
 
-function isTelegramInlineUrl(value: string): boolean {
+function isTelegramLocalUrl(value: string): boolean {
   try {
     const url = new URL(value);
-    return (
-      (url.protocol === "https:" || url.protocol === "http:") &&
-      !["localhost", "127.0.0.1", "0.0.0.0"].includes(url.hostname)
-    );
+    return ["localhost", "127.0.0.1", "0.0.0.0"].includes(url.hostname);
+  } catch {
+    return false;
+  }
+}
+
+function isTelegramWebAppUrl(value: string): boolean {
+  try {
+    return new URL(value).protocol === "https:";
   } catch {
     return false;
   }
@@ -661,18 +672,23 @@ type TelegramLeadReplyCard = Pick<Lead, "id" | "name"> & {
   summaryLong?: string | null;
 };
 
-function crmLeadReplyMarkup(deps: TelegramBotDeps, lead: TelegramLeadReplyCard): TelegramSendMessageOptions | undefined {
+function crmLeadReplyMarkup(
+  deps: TelegramBotDeps,
+  lead: TelegramLeadReplyCard,
+  options: { includeUndo?: boolean } = {}
+): TelegramSendMessageOptions | undefined {
   const url = crmLeadUrl(deps, lead);
   const hasFullSummary = "summaryLong" in lead && Boolean(lead.summaryLong);
   const summaryRow = hasFullSummary ? [[{ text: "Full summary", callback_data: `summary_lead:${lead.id}` }]] : [];
+  const undoRow = options.includeUndo ? [[{ text: "undo", callback_data: `undo_lead:${lead.id}` }]] : [];
   if (!url) {
     return {
       replyMarkup: {
-        inline_keyboard: [[{ text: "offer", callback_data: `offer_lead:${lead.id}` }], ...summaryRow]
+        inline_keyboard: [[{ text: "offer", callback_data: `offer_lead:${lead.id}` }], ...undoRow, ...summaryRow]
       }
     };
   }
-  if (!isTelegramInlineUrl(url)) {
+  if (isTelegramLocalUrl(url)) {
     return {
       replyMarkup: {
         inline_keyboard: [
@@ -680,14 +696,18 @@ function crmLeadReplyMarkup(deps: TelegramBotDeps, lead: TelegramLeadReplyCard):
             { text: "CRM", callback_data: `crm_lead:${lead.id}` },
             { text: "offer", callback_data: `offer_lead:${lead.id}` }
           ],
+          ...undoRow,
           ...summaryRow
         ]
       }
     };
   }
+  const crmButton = isTelegramWebAppUrl(url)
+    ? { text: "CRM", web_app: { url } }
+    : { text: "CRM", url };
   return {
     replyMarkup: {
-      inline_keyboard: [[{ text: "CRM", url }, { text: "offer", callback_data: `offer_lead:${lead.id}` }], ...summaryRow]
+      inline_keyboard: [[crmButton, { text: "offer", callback_data: `offer_lead:${lead.id}` }], ...undoRow, ...summaryRow]
     }
   };
 }
@@ -697,7 +717,12 @@ function extractLeadIdFromReply(reply: TelegramReplyMessage | undefined): string
     ?.flat()
     .map((button) => button.callback_data)
     .find((value): value is string =>
-      Boolean(value?.startsWith("crm_lead:") || value?.startsWith("offer_lead:") || value?.startsWith("summary_lead:"))
+      Boolean(
+        value?.startsWith("crm_lead:") ||
+          value?.startsWith("offer_lead:") ||
+          value?.startsWith("summary_lead:") ||
+          value?.startsWith("undo_lead:")
+      )
     );
   if (callbackData?.startsWith("crm_lead:")) {
     return callbackData.slice("crm_lead:".length);
@@ -707,6 +732,9 @@ function extractLeadIdFromReply(reply: TelegramReplyMessage | undefined): string
   }
   if (callbackData?.startsWith("summary_lead:")) {
     return callbackData.slice("summary_lead:".length);
+  }
+  if (callbackData?.startsWith("undo_lead:")) {
+    return callbackData.slice("undo_lead:".length);
   }
   const text = [reply?.text, reply?.caption].filter(Boolean).join("\n");
   const match = text.match(/Lead ID:\s*([^\s]+)/i);
@@ -916,6 +944,16 @@ export async function handleTelegramCallback(update: TelegramUpdate, deps: Teleg
     await deps.sendMessage(chatId, url);
     return true;
   }
+  const undoLeadId = callback.data?.startsWith("undo_lead:") ? callback.data.slice("undo_lead:".length) : null;
+  if (undoLeadId) {
+    if (!deps.archiveLead) {
+      await deps.sendMessage(chatId, "undo is not connected yet");
+      return true;
+    }
+    await deps.archiveLead({ workspaceId: deps.workspaceId, leadId: undoLeadId });
+    await deps.sendMessage(chatId, `undone: ${undoLeadId}`);
+    return true;
+  }
   const summaryLeadId = callback.data?.startsWith("summary_lead:") ? callback.data.slice("summary_lead:".length) : null;
   if (summaryLeadId) {
     if (!deps.searchLeads) {
@@ -1017,10 +1055,11 @@ export async function handleTelegramUpdate(
   const action = result.actions[0];
   const shouldAttachToActiveLead =
     Boolean(activeLead && (attachments.length > 0 || text.trim()) && action?.type !== "create_lead");
+  let createdLead: Pick<Lead, "id" | "name"> | null = null;
   const lead =
     updatedLead ??
     (shouldAttachToActiveLead ? activeLead : null) ??
-    (await maybeCreateLead(message, orchestrationText, author, result, deps));
+    (createdLead = await maybeCreateLead(message, orchestrationText, author, result, deps));
   if (lead) {
     const reminderOutcome = await maybeCreateReminder(message, orchestrationText, result, lead.id, deps, { notify: false });
     const preparedAttachments =
@@ -1065,12 +1104,12 @@ export async function handleTelegramUpdate(
           ? `Reminder: ${reminderOutcome.reminder.id} at ${new Date(reminderOutcome.reminder.dueAt).toISOString()}`
           : null,
         `Intake: saved ${preparedAttachments.length} attachment(s) to ${lead.name}.`,
-        crmLeadReplyMarkup(deps, lead) ? null : crmLeadUrl(deps, lead)
+        crmLeadReplyMarkup(deps, lead, { includeUndo: Boolean(createdLead) }) ? null : crmLeadUrl(deps, lead)
       ]
         .filter((line): line is string => Boolean(line))
         .join("\n")
         .slice(0, 3900),
-      crmLeadReplyMarkup(deps, lead)
+      crmLeadReplyMarkup(deps, lead, { includeUndo: Boolean(createdLead) })
     );
     return lead;
   }
