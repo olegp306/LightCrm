@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import appPackage from "../package.json";
 import { ThemeToggle } from "./components/ThemeToggle";
 import "./globals.css";
 
@@ -36,7 +37,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <div className="brand">
               <Link href="/">
                 <strong>LightCrm</strong>
-                <span>Table workspace</span>
+                <span>v{appPackage.version}</span>
               </Link>
             </div>
             <nav className="nav" aria-label="CRM navigation">
@@ -46,7 +47,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                 </Link>
               ))}
             </nav>
-            <div className="sidebarFooter">
+            <div className="sidebarBottom">
               <ThemeToggle />
             </div>
           </aside>

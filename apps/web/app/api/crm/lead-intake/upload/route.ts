@@ -1,3 +1,5 @@
+import { summarizeLeadIntake } from "@lightcrm/orchestrator";
+import type { LeadIntakeAttachmentInput } from "@lightcrm/core";
 import { storeCrmFile } from "@lightcrm/storage";
 import { NextResponse } from "next/server";
 import { randomUUID } from "node:crypto";
@@ -50,7 +52,7 @@ export async function POST(request: Request) {
     const text = textField(form, "text");
     const fallbackSummary = textField(form, "summary");
     const summaries = textFields(form, "summaries");
-    const attachments = await Promise.all(
+    const attachments: LeadIntakeAttachmentInput[] = await Promise.all(
       files.map(async (file, index) => {
         const bytes = new Uint8Array(await file.arrayBuffer());
         const stored = await storeCrmFile({
@@ -74,7 +76,7 @@ export async function POST(request: Request) {
         };
       })
     );
-    const intake = await getCrm().ingestLeadIntake({
+    const intakeInput = {
       workspaceId,
       leadId,
       sourceChannel: textField(form, "sourceChannel") ?? "web",
@@ -82,6 +84,15 @@ export async function POST(request: Request) {
       sourceMessageId: textField(form, "sourceMessageId"),
       textItems: text ? [{ text, author: textField(form, "author") }] : [],
       attachments
+    };
+    const summary = summarizeLeadIntake(intakeInput);
+    const intake = await getCrm().ingestLeadIntake({
+      ...intakeInput,
+      attachments: intakeInput.attachments.map((attachment, index) => ({
+        ...attachment,
+        summary: attachment.summary ?? summary.attachments[index]?.shortSummary ?? null,
+        longSummary: attachment.longSummary ?? summary.attachments[index]?.longSummary ?? null
+      }))
     });
 
     return NextResponse.json(intake);

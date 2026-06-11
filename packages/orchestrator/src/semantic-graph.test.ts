@@ -468,6 +468,7 @@ describe("json llm client", () => {
 describe("semantic crm orchestration", () => {
   function semanticProviderFor(options: {
     intent: "create_lead" | "add_lead_note" | "generate_offer_task";
+    secondaryIntents?: Array<"create_reminder">;
     target?: {
       targetType: "lead" | "client" | "project" | "task" | "none";
       targetId: string | null;
@@ -481,7 +482,7 @@ describe("semantic crm orchestration", () => {
         if (input.system.includes("Classify")) {
           return {
             primaryIntent: options.intent,
-            secondaryIntents: [],
+            secondaryIntents: options.secondaryIntents ?? [],
             confidence: 0.91,
             reason: "The message describes a CRM write.",
             evidence: ["explicit CRM write request"]
@@ -519,6 +520,42 @@ describe("semantic crm orchestration", () => {
       }
     };
   }
+
+  it("plans lead intake and reminder from the same semantic message", async () => {
+    const result = await runSemanticCrmOrchestration(
+      {
+        workspaceId: "default",
+        messageId: "m-multi-1",
+        author: "director",
+        text: "Forwarded WhatsApp context: this is a new lead for a country house. Also remind me to email them in two weeks.",
+        sourceChannel: "telegram"
+      },
+      {
+        llmProvider: semanticProviderFor({
+          intent: "create_lead",
+          secondaryIntents: ["create_reminder"],
+          fields: {
+            requestType: {
+              value: "country house",
+              confidence: 0.88,
+              evidence: "new lead for a country house",
+              sourceMessageIds: ["m-multi-1"]
+            },
+            reminderDateTime: {
+              value: "2026-06-25T09:00:00.000Z",
+              confidence: 0.82,
+              evidence: "in two weeks",
+              sourceMessageIds: ["m-multi-1"]
+            }
+          }
+        })
+      }
+    );
+
+    expect(result.risk).toBe("auto");
+    expect(result.actions.map((action) => action.type)).toEqual(["create_lead", "create_reminder"]);
+    expect(result.facts.dueAt).toBe("2026-06-25T09:00:00.000Z");
+  });
 
   it("uses meaning-based intent, target resolution, extraction, and validation", async () => {
     const calls: string[] = [];
@@ -576,6 +613,20 @@ describe("semantic crm orchestration", () => {
     expect(result.intent).toBe("add_lead_note");
     expect(result.actions[0]).toMatchObject({ type: "update_lead", risk: "auto" });
     expect(result.actions[0]?.payload).toMatchObject({ targetId: "lead-maxim" });
+    expect(result.trace?.map((event) => event.node)).toEqual([
+      "collectInput",
+      "buildContext",
+      "classifyIntent",
+      "resolveTarget",
+      "extractEntities",
+      "validateAction",
+      "planAction"
+    ]);
+    expect(result.trace?.[0]).toMatchObject({
+      titleRu: "Получил входящее сообщение",
+      status: "done"
+    });
+    expect(result.trace?.some((event) => event.messageRu.includes("Основное намерение: add_lead_note"))).toBe(true);
   });
 
   it("routes create lead to review when auto-create lead policy is disabled", async () => {
@@ -847,6 +898,114 @@ describe("semantic crm orchestration", () => {
     expect(result.risk).toBe("auto");
     expect(result.actions[0]).toMatchObject({ type: "create_lead", risk: "auto" });
     expect(result.facts.contactName).toBe("Maxim");
+  });
+
+  it("creates a draft lead from lead intake even when client and project facts are missing", async () => {
+    const result = await runSemanticCrmOrchestration(
+      {
+        workspaceId: "default",
+        messageId: "m-10",
+        author: "architect",
+        text: "This is a new incoming request, save it so we can fill the details later.",
+        sourceChannel: "telegram"
+      },
+      {
+        llmProvider: {
+          async callJson(input) {
+            if (input.system.includes("Classify")) {
+              return {
+                primaryIntent: "create_lead",
+                secondaryIntents: [],
+                confidence: 0.88,
+                reason: "The message asks to save a new incoming request.",
+                evidence: ["new incoming request"]
+              };
+            }
+            if (input.system.includes("Resolve")) {
+              return {
+                targetType: "none",
+                targetId: null,
+                confidence: 0.8,
+                candidates: [],
+                needsClarification: true,
+                clarificationQuestion: "Who is the client?"
+              };
+            }
+            if (input.system.includes("Extract")) {
+              return {
+                fields: {},
+                missingData: ["clientName", "requestType"],
+                notes: ["Save as draft lead for enrichment."]
+              };
+            }
+            return {
+              approved: false,
+              riskLevel: "medium",
+              reason: "Client details are missing.",
+              needsHumanConfirmation: true
+            };
+          }
+        }
+      }
+    );
+
+    expect(result.risk).toBe("auto");
+    expect(result.actions[0]).toMatchObject({ type: "create_lead", risk: "auto" });
+    expect(result.facts.contactName).toBeNull();
+    expect(result.facts.projectType).toBeNull();
+  });
+
+  it("does not create a draft lead when validation marks intake as high risk", async () => {
+    const result = await runSemanticCrmOrchestration(
+      {
+        workspaceId: "default",
+        messageId: "m-11",
+        author: "architect",
+        text: "This looks like a new lead, but the extracted data is unsafe.",
+        sourceChannel: "telegram"
+      },
+      {
+        llmProvider: {
+          async callJson(input) {
+            if (input.system.includes("Classify")) {
+              return {
+                primaryIntent: "create_lead",
+                secondaryIntents: [],
+                confidence: 0.9,
+                reason: "The message may be a lead.",
+                evidence: ["new lead"]
+              };
+            }
+            if (input.system.includes("Resolve")) {
+              return {
+                targetType: "none",
+                targetId: null,
+                confidence: 0.8,
+                candidates: [],
+                needsClarification: false,
+                clarificationQuestion: null
+              };
+            }
+            if (input.system.includes("Extract")) {
+              return {
+                fields: {},
+                missingData: [],
+                notes: []
+              };
+            }
+            return {
+              approved: false,
+              riskLevel: "high",
+              reason: "The model detected unsafe hallucinated fields.",
+              needsHumanConfirmation: true
+            };
+          }
+        }
+      }
+    );
+
+    expect(result.risk).toBe("review");
+    expect(result.actions[0]).toMatchObject({ type: "request_review", risk: "review" });
   });
 
   it("sets top-level risk to review when executable mapping falls back to review", async () => {

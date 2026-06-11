@@ -13,6 +13,7 @@ const CrmTable = dynamic(() => import("@lightcrm/ui").then((module) => module.Cr
 type LiveTablePageProps = CrmTableProps & {
   endpoint: string;
   calendarFeedEndpoint?: string;
+  offerGenerateEndpoint?: string;
 };
 
 type CalendarFeedItem = {
@@ -49,6 +50,11 @@ function rowsWithCalendarItems(rows: CrmTableRow[], feed: CalendarFeedItem[]): C
 export function TablePage({ endpoint, rows, columns, calendarFeedEndpoint, ...props }: LiveTablePageProps) {
   const [liveRows, setLiveRows] = useState<CrmTableRow[] | null>(null);
   const [failed, setFailed] = useState(false);
+  const [initialFocusRowId, setInitialFocusRowId] = useState<string | null>(null);
+
+  useEffect(() => {
+    setInitialFocusRowId(new URLSearchParams(window.location.search).get("leadId"));
+  }, []);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -88,5 +94,13 @@ export function TablePage({ endpoint, rows, columns, calendarFeedEndpoint, ...pr
     props.description
   ]);
 
-  return <CrmTable {...props} description={description} columns={columns} rows={liveRows ?? rows} />;
+  return (
+    <CrmTable
+      {...props}
+      description={description}
+      columns={columns}
+      rows={liveRows ?? rows}
+      initialFocusRowId={initialFocusRowId}
+    />
+  );
 }

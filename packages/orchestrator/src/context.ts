@@ -1,8 +1,8 @@
 import type { OrchestrationContext, OrchestrationContextInput } from "./types";
 
 export async function buildOrchestrationContext(input: OrchestrationContextInput): Promise<OrchestrationContext> {
-  const recentLeads = (input.recentLeads ?? []).map((lead) => ({ ...lead }));
-  const recentMessages = (input.recentMessages ?? []).map((message) => ({ ...message }));
+  const recentLeads = (input.recentLeads ?? input.input.recentLeads ?? []).map((lead) => ({ ...lead }));
+  const recentMessages = (input.recentMessages ?? input.input.recentMessages ?? []).map((message) => ({ ...message }));
 
   return {
     source: input.input,

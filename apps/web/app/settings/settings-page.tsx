@@ -1,11 +1,42 @@
 "use client";
 
-import type { CrmIntent, LangGraphRuntimeSettings, SemanticIntent } from "@lightcrm/orchestrator";
+import type { CrmIntent, CrmOrchestrationResult, LangGraphRuntimeSettings, SemanticIntent } from "@lightcrm/orchestrator";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 type SettingsResponse = {
   settings: LangGraphRuntimeSettings;
   presets: LangGraphRuntimeSettings[];
+};
+
+type CrmSettingsResponse = {
+  settings: {
+    commercialOffers: {
+      activeTemplate: null | {
+        fileName: string;
+        uploadedAt: string;
+        placeholders: string[];
+      };
+      activeFeeTable: null | {
+        fileName: string;
+        uploadedAt: string;
+        year: number;
+        source: "parsed" | "fallback";
+        rows: Array<{
+          bgfFrom: number;
+          bgfTo: number;
+          wohnflaecheLabel: string;
+          lp1_3Net: number;
+          lp4Net: number;
+          totalNet: number;
+          vat: number;
+          totalGross: number;
+        }>;
+      };
+      vatRate: number;
+      offerValidityDays: number;
+      autoGenerateWhenReady: boolean;
+    };
+  };
 };
 
 const intentOptions: CrmIntent[] = [
@@ -50,10 +81,20 @@ function stableSettingsJson(value: LangGraphRuntimeSettings) {
 }
 
 export function LangGraphSettingsPage() {
+  const [activeTab, setActiveTab] = useState<"crm" | "langgraph">("crm");
   const [settings, setSettings] = useState<LangGraphRuntimeSettings | null>(null);
   const [presets, setPresets] = useState<LangGraphRuntimeSettings[]>([]);
+  const [crmSettings, setCrmSettings] = useState<CrmSettingsResponse["settings"] | null>(null);
   const [status, setStatus] = useState<"loading" | "saved" | "saving" | "error">("loading");
+  const [crmStatus, setCrmStatus] = useState<"loading" | "saved" | "saving" | "error">("loading");
   const [error, setError] = useState<string | null>(null);
+  const [crmError, setCrmError] = useState<string | null>(null);
+  const [traceText, setTraceText] = useState(
+    "Новый лид из WhatsApp: дом 140 м2. Напомни через две недели подготовить e-mail."
+  );
+  const [traceResult, setTraceResult] = useState<CrmOrchestrationResult | null>(null);
+  const [traceStatus, setTraceStatus] = useState<"idle" | "running" | "error">("idle");
+  const [traceError, setTraceError] = useState<string | null>(null);
   const firstLoad = useRef(true);
 
   useEffect(() => {
@@ -74,6 +115,30 @@ export function LangGraphSettingsPage() {
         if (!cancelled) {
           setError(reason instanceof Error ? reason.message : "Settings load failed");
           setStatus("error");
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/crm/settings")
+      .then(async (response) => {
+        const payload = (await response.json()) as CrmSettingsResponse & { error?: string };
+        if (!response.ok) {
+          throw new Error(payload.error ?? "CRM settings load failed");
+        }
+        if (!cancelled) {
+          setCrmSettings(payload.settings);
+          setCrmStatus("saved");
+        }
+      })
+      .catch((reason: unknown) => {
+        if (!cancelled) {
+          setCrmError(reason instanceof Error ? reason.message : "CRM settings load failed");
+          setCrmStatus("error");
         }
       });
     return () => {
@@ -209,6 +274,91 @@ export function LangGraphSettingsPage() {
     });
   }
 
+  async function uploadCrmFile(endpoint: string, file: File | null) {
+    if (!file) {
+      return;
+    }
+    setCrmStatus("saving");
+    const body = new FormData();
+    body.set("file", file);
+    try {
+      const response = await fetch(endpoint, { method: "POST", body });
+      const payload = (await response.json()) as CrmSettingsResponse & { error?: string };
+      if (!response.ok) {
+        throw new Error(payload.error ?? "CRM settings upload failed");
+      }
+      setCrmSettings(payload.settings);
+      setCrmError(null);
+      setCrmStatus("saved");
+    } catch (reason) {
+      setCrmError(reason instanceof Error ? reason.message : "CRM settings upload failed");
+      setCrmStatus("error");
+    }
+  }
+
+  async function patchCrmCommercialOffers(
+    value: Partial<CrmSettingsResponse["settings"]["commercialOffers"]>
+  ) {
+    if (!crmSettings) {
+      return;
+    }
+    const optimistic = {
+      ...crmSettings,
+      commercialOffers: {
+        ...crmSettings.commercialOffers,
+        ...value
+      }
+    };
+    setCrmSettings(optimistic);
+    setCrmStatus("saving");
+    try {
+      const response = await fetch("/api/crm/settings", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ commercialOffers: value })
+      });
+      const payload = (await response.json()) as CrmSettingsResponse & { error?: string };
+      if (!response.ok) {
+        throw new Error(payload.error ?? "CRM settings save failed");
+      }
+      setCrmSettings(payload.settings);
+      setCrmError(null);
+      setCrmStatus("saved");
+    } catch (reason) {
+      setCrmSettings(crmSettings);
+      setCrmError(reason instanceof Error ? reason.message : "CRM settings save failed");
+      setCrmStatus("error");
+    }
+  }
+
+  async function runTracePreview() {
+    if (!traceText.trim()) {
+      return;
+    }
+    setTraceStatus("running");
+    setTraceError(null);
+    try {
+      const response = await fetch("/api/crm/orchestrator/dry-run", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          text: traceText,
+          sourceChannel: "telegram",
+          author: "operator"
+        })
+      });
+      const payload = (await response.json()) as CrmOrchestrationResult & { error?: string };
+      if (!response.ok) {
+        throw new Error(payload.error ?? "Trace preview failed");
+      }
+      setTraceResult(payload);
+      setTraceStatus("idle");
+    } catch (reason) {
+      setTraceError(reason instanceof Error ? reason.message : "Trace preview failed");
+      setTraceStatus("error");
+    }
+  }
+
   if (!settings) {
     return (
       <section className="settingsSurface">
@@ -222,19 +372,137 @@ export function LangGraphSettingsPage() {
     );
   }
 
+  const feeRows = crmSettings?.commercialOffers.activeFeeTable?.rows ?? [];
+  const templatePlaceholders = crmSettings?.commercialOffers.activeTemplate?.placeholders ?? [];
+
   return (
     <section className="settingsSurface">
       <header className="settingsHeader">
         <div>
-          <h1>LangGraph Settings</h1>
-          <p>{activePreset?.description ?? settings.description}</p>
+          <h1>Settings</h1>
+          <p>
+            {activeTab === "crm"
+              ? "Commercial offer templates, fee tables, and CRM workflow defaults."
+              : activePreset?.description ?? settings.description}
+          </p>
         </div>
-        <span className={`liveStatus ${status}`}>{status === "saved" ? "Live" : status}</span>
+        <span className={`liveStatus ${activeTab === "crm" ? crmStatus : status}`}>
+          {(activeTab === "crm" ? crmStatus : status) === "saved" ? "Live" : activeTab === "crm" ? crmStatus : status}
+        </span>
       </header>
 
-      {error ? <div className="settingsError">{error}</div> : null}
+      <div className="settingsTabs">
+        <button className={activeTab === "crm" ? "active" : ""} type="button" onClick={() => setActiveTab("crm")}>
+          CRM Settings
+        </button>
+        <button
+          className={activeTab === "langgraph" ? "active" : ""}
+          type="button"
+          onClick={() => setActiveTab("langgraph")}
+        >
+          LangGraph Settings
+        </button>
+      </div>
 
-      <div className="presetGrid">
+      {activeTab === "crm" ? (
+        <>
+          {crmError ? <div className="settingsError">{crmError}</div> : null}
+          <div className="settingsGrid">
+            <section className="settingsPanel">
+              <h2>Commercial Offer Template</h2>
+              <label>
+                <span>DOCX template</span>
+                <input
+                  accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                  type="file"
+                  onChange={(event) => uploadCrmFile("/api/crm/settings/offer-template", event.target.files?.[0] ?? null)}
+                />
+              </label>
+              <div className="settingsSummary">
+                <strong>{crmSettings?.commercialOffers.activeTemplate?.fileName ?? "No template uploaded"}</strong>
+                <span>{templatePlaceholders.length} placeholders detected</span>
+              </div>
+              <div className="placeholderGrid">
+                {templatePlaceholders.map((placeholder) => (
+                  <span key={placeholder}>{placeholder}</span>
+                ))}
+              </div>
+            </section>
+
+            <section className="settingsPanel">
+              <h2>Honorartabelle</h2>
+              <label>
+                <span>Fee table PDF / text</span>
+                <input
+                  accept=".pdf,.txt,.csv"
+                  type="file"
+                  onChange={(event) => uploadCrmFile("/api/crm/settings/fee-table", event.target.files?.[0] ?? null)}
+                />
+              </label>
+              <div className="settingsSummary">
+                <strong>{crmSettings?.commercialOffers.activeFeeTable?.fileName ?? "No fee table uploaded"}</strong>
+                <span>
+                  {feeRows.length} rows · {crmSettings?.commercialOffers.activeFeeTable?.source ?? "fallback"}
+                </span>
+              </div>
+              <div className="feePreview">
+                {feeRows.slice(0, 6).map((row) => (
+                  <div key={`${row.bgfFrom}-${row.bgfTo}`}>
+                    <span>
+                      {row.bgfFrom}-{row.bgfTo} m2
+                    </span>
+                    <strong>{row.totalGross.toLocaleString("de-DE")} EUR gross</strong>
+                  </div>
+                ))}
+              </div>
+            </section>
+
+            <section className="settingsPanel wide">
+              <h2>Offer Automation Plan</h2>
+              <label className="switchRow">
+                <input
+                  checked={crmSettings?.commercialOffers.autoGenerateWhenReady ?? false}
+                  type="checkbox"
+                  onChange={(event) => patchCrmCommercialOffers({ autoGenerateWhenReady: event.target.checked })}
+                />
+                <span>Auto-generate offer when numbers are ready</span>
+              </label>
+              <label>
+                <span>Offer validity days</span>
+                <input
+                  min="1"
+                  type="number"
+                  value={crmSettings?.commercialOffers.offerValidityDays ?? 90}
+                  onChange={(event) =>
+                    patchCrmCommercialOffers({ offerValidityDays: Math.max(1, Number(event.target.value) || 90) })
+                  }
+                />
+              </label>
+              <div className="versionPlanGrid">
+                <div>
+                  <strong>V0.1 now</strong>
+                  <span>Settings split, template parsing, fee table activation, lead readiness.</span>
+                </div>
+                <div>
+                  <strong>V0.2 next</strong>
+                  <span>Generate DOCX from template and save it into lead documents.</span>
+                </div>
+                <div>
+                  <strong>V0.3 next</strong>
+                  <span>Telegram command/button to download the generated commercial offer.</span>
+                </div>
+                <div>
+                  <strong>V1.0 later</strong>
+                  <span>Offer history, manual overrides, non-standard pricing workflows, sent/follow-up states.</span>
+                </div>
+              </div>
+            </section>
+          </div>
+        </>
+      ) : (
+        <>
+          {error ? <div className="settingsError">{error}</div> : null}
+          <div className="presetGrid">
         {presets.map((preset) => (
           <button
             className={`presetCard ${preset.id === settings.id ? "active" : ""}`}
@@ -247,9 +515,48 @@ export function LangGraphSettingsPage() {
             <small>{preset.description}</small>
           </button>
         ))}
-      </div>
+          </div>
 
-      <div className="settingsGrid">
+          <div className="settingsGrid">
+        <section className="settingsPanel wide">
+          <h2>Trace Chat</h2>
+          <label>
+            <span>Test message</span>
+            <textarea rows={4} value={traceText} onChange={(event) => setTraceText(event.target.value)} />
+          </label>
+          <div className="tracePreviewToolbar">
+            <button type="button" onClick={runTracePreview} disabled={traceStatus === "running" || !traceText.trim()}>
+              {traceStatus === "running" ? "Running" : "Run trace"}
+            </button>
+            <span>
+              {traceResult
+                ? `${traceResult.intent} В· ${traceResult.risk} В· ${traceResult.actions[0]?.type ?? "none"}`
+                : "No trace yet"}
+            </span>
+          </div>
+          {traceError ? <div className="settingsError">{traceError}</div> : null}
+          <div className="traceChat" aria-label="LangGraph readable trace">
+            {(traceResult?.trace ?? []).map((event) => (
+              <article className={`traceBubble ${event.status}`} key={event.id}>
+                <div>
+                  <strong>{event.titleRu}</strong>
+                  <span>{event.node}</span>
+                </div>
+                <p>{event.messageRu}</p>
+              </article>
+            ))}
+            {traceResult && (traceResult.trace?.length ?? 0) === 0 ? (
+              <article className="traceBubble review">
+                <div>
+                  <strong>Trace пока пустой</strong>
+                  <span>legacy</span>
+                </div>
+                <p>Ответ получен, но узлы не вернули подробный trace.</p>
+              </article>
+            ) : null}
+          </div>
+        </section>
+
         <section className="settingsPanel">
           <h2>Runtime</h2>
           <label className="switchRow">
@@ -482,7 +789,9 @@ export function LangGraphSettingsPage() {
             ))}
           </div>
         </section>
-      </div>
+          </div>
+        </>
+      )}
     </section>
   );
 }

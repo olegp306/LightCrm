@@ -7,9 +7,22 @@ import {
   handleTelegramUpdate,
   parseAllowedChatIds,
   type PrepareTelegramAttachmentInput,
+  type TelegramGeneratedDocument,
+  type TelegramLeadSearchInput,
+  type TelegramLeadSearchResult,
+  type TelegramLeadUpdateInput,
+  type TelegramReminderInput,
+  type TelegramReminderResult,
+  type TelegramSendMessageOptions,
   type TelegramUpdate,
   uploadTelegramAttachmentToWeb
 } from "./bot-core";
+import {
+  collectReadyChatIntakeUpdates,
+  collectReadyMediaGroupUpdates,
+  type ChatIntakeBuffer,
+  type MediaGroupBuffer
+} from "./media-groups";
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
 config({ path: resolve(repoRoot, ".env") });
@@ -24,6 +37,16 @@ const telegramFileBase = `https://api.telegram.org/file/bot${token}`;
 const crmApiBase = process.env.LIGHTCRM_API_BASE ?? "http://localhost:4900";
 const allowedChatIds = parseAllowedChatIds(process.env.TELEGRAM_ALLOWED_CHAT_IDS);
 const workspaceId = process.env.LIGHTCRM_WORKSPACE_ID ?? "default";
+const pollIntervalMs = Number(process.env.TELEGRAM_POLL_INTERVAL_MS ?? 2500);
+const mediaGroupFlushMs = 1400;
+const chatIntakeFlushMs = Number(process.env.TELEGRAM_INTAKE_FLUSH_MS ?? 3500);
+const activeLeadTtlMs = Number(process.env.TELEGRAM_ACTIVE_LEAD_TTL_MS ?? 30 * 60 * 1000);
+const crmAppBaseUrl = process.env.NEXT_PUBLIC_APP_URL ?? process.env.NEXTAUTH_URL ?? crmApiBase;
+const serverErrorReply = "server error, developer notified";
+
+function crmApiUrl(path: string): string {
+  return `${crmApiBase.replace(/\/$/, "")}${path}`;
+}
 
 async function telegramCall<T>(method: string, body: Record<string, unknown>): Promise<T> {
   const response = await fetch(`${apiBase}/${method}`, {
@@ -38,8 +61,20 @@ async function telegramCall<T>(method: string, body: Record<string, unknown>): P
   return payload.result as T;
 }
 
+async function telegramFormCall<T>(method: string, form: FormData): Promise<T> {
+  const response = await fetch(`${apiBase}/${method}`, {
+    method: "POST",
+    body: form
+  });
+  const payload = (await response.json()) as { ok: boolean; result?: T; description?: string };
+  if (!response.ok || !payload.ok) {
+    throw new Error(payload.description ?? `Telegram ${method} failed`);
+  }
+  return payload.result as T;
+}
+
 async function crmCall<T>(path: string, body: unknown): Promise<T> {
-  const response = await fetch(`${crmApiBase}${path}`, {
+  const response = await fetch(crmApiUrl(path), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body)
@@ -51,19 +86,36 @@ async function crmCall<T>(path: string, body: unknown): Promise<T> {
   return payload as T;
 }
 
-async function sendMessage(chatId: number, text: string) {
+async function sendMessage(chatId: number, text: string, options?: TelegramSendMessageOptions) {
   return telegramCall("sendMessage", {
     chat_id: chatId,
     text,
-    disable_web_page_preview: true
+    disable_web_page_preview: true,
+    ...(options?.replyMarkup ? { reply_markup: options.replyMarkup } : {})
   });
+}
+
+async function sendDocument(chatId: number, document: TelegramGeneratedDocument) {
+  const form = new FormData();
+  form.set("chat_id", String(chatId));
+  if (document.caption) {
+    form.set("caption", document.caption);
+  }
+  form.set(
+    "document",
+    new Blob([Buffer.from(document.bytes)], {
+      type: document.mimeType ?? "application/octet-stream"
+    }),
+    document.fileName
+  );
+  return telegramFormCall("sendDocument", form);
 }
 
 async function getUpdates(offset: number | undefined): Promise<TelegramUpdate[]> {
   return telegramCall("getUpdates", {
     offset,
-    timeout: 25,
-    allowed_updates: ["message"]
+    timeout: Math.max(1, Math.ceil(pollIntervalMs / 1000)),
+    allowed_updates: ["message", "callback_query"]
   });
 }
 
@@ -90,6 +142,19 @@ async function createLead(input: UpsertLeadInput) {
   return crmCall<{ id: string; name: string }>("/api/crm/leads/upsert", input);
 }
 
+async function updateLead(input: TelegramLeadUpdateInput) {
+  const payload = await crmCall<{ lead: { id: string; name: string } }>("/api/crm/leads/update", input);
+  return payload.lead;
+}
+
+async function searchLeads(input: TelegramLeadSearchInput): Promise<TelegramLeadSearchResult> {
+  return crmCall<TelegramLeadSearchResult>("/api/crm/leads/search", input);
+}
+
+async function createReminder(input: TelegramReminderInput): Promise<TelegramReminderResult> {
+  return crmCall<TelegramReminderResult>("/api/crm/reminders/upsert", input);
+}
+
 async function createClient(input: UpsertClientInput) {
   return crmCall<{ id: string; name: string }>("/api/crm/clients/upsert", input);
 }
@@ -100,6 +165,44 @@ async function ingestLeadIntake(input: IngestLeadIntakeInput) {
 
 async function orchestrate(input: CrmOrchestrationInput) {
   return crmCall<CrmOrchestrationResult>("/api/crm/orchestrator/dry-run", input);
+}
+
+type GenerateOfferResponse = {
+  document?: {
+    fileName?: string;
+    downloadUrl?: string | null;
+    mimeType?: string | null;
+  };
+};
+
+function absoluteCrmUrl(value: string): string {
+  if (/^https?:\/\//i.test(value)) {
+    return value;
+  }
+  return crmApiUrl(value.startsWith("/") ? value : `/${value}`);
+}
+
+async function generateOffer(leadId: string): Promise<TelegramGeneratedDocument> {
+  const payload = await crmCall<GenerateOfferResponse>("/api/crm/leads/generate-offer", {
+    workspaceId,
+    leadId
+  });
+  const document = payload.document;
+  if (!document?.downloadUrl) {
+    throw new Error("Commercial offer generation did not return a download URL");
+  }
+  const response = await fetch(absoluteCrmUrl(document.downloadUrl));
+  if (!response.ok) {
+    throw new Error(`Commercial offer download failed: ${response.status}`);
+  }
+  return {
+    fileName: document.fileName ?? `${leadId}-commercial-offer.docx`,
+    mimeType:
+      document.mimeType ??
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    bytes: new Uint8Array(await response.arrayBuffer()),
+    caption: "commercial offer ready"
+  };
 }
 
 async function prepareAttachment(input: PrepareTelegramAttachmentInput): Promise<LeadIntakeAttachmentInput> {
@@ -120,25 +223,68 @@ async function prepareAttachment(input: PrepareTelegramAttachmentInput): Promise
   });
 }
 
+async function notifyServerError(chatId: number) {
+  try {
+    await sendMessage(chatId, serverErrorReply);
+  } catch (error) {
+    console.error("Failed to send Telegram server error notice", error);
+  }
+}
+
 async function runPolling() {
   console.log(`LightCrm Telegram bot polling started. Allowed chats: ${allowedChatIds.size || "all"}.`);
   let offset: number | undefined;
+  const mediaGroups = new Map<string, MediaGroupBuffer>();
+  const chatIntakes = new Map<string, ChatIntakeBuffer>();
+  const activeLeads = new Map<string, { lead: { id: string; name: string }; updatedAt: number }>();
   for (;;) {
     try {
       const updates = await getUpdates(offset);
-      for (const update of updates) {
-        offset = update.update_id + 1;
-        await handleTelegramUpdate(update, {
-          allowedChatIds,
-          workspaceId,
-          sendMessage,
-          orchestrate,
-          createClient,
-          createLead,
-          ingestLeadIntake,
-          prepareAttachment
-        });
+      const now = Date.now();
+      const nextOffset =
+        updates.length > 0 ? Math.max(...updates.map((update) => update.update_id)) + 1 : offset;
+      const mediaReady = collectReadyMediaGroupUpdates(updates, mediaGroups, mediaGroupFlushMs, now);
+      const intakeReady = collectReadyChatIntakeUpdates(mediaReady, chatIntakes, chatIntakeFlushMs, now);
+      for (const update of intakeReady) {
+        const message = update.message;
+        const callbackChatId = update.callback_query?.message?.chat.id;
+        const active = message ? activeLeads.get(String(message.chat.id)) : null;
+        const activeLead =
+          active && now - active.updatedAt <= activeLeadTtlMs ? active.lead : null;
+        try {
+          const lead = await handleTelegramUpdate(update, {
+            allowedChatIds,
+            workspaceId,
+            crmAppBaseUrl,
+            activeLead,
+            sendMessage,
+            orchestrate,
+            createClient,
+            createLead,
+            searchLeads,
+            updateLead,
+            createReminder,
+            ingestLeadIntake,
+            prepareAttachment,
+            sendDocument,
+            generateOffer
+          });
+          if (lead && message) {
+            activeLeads.set(String(message.chat.id), { lead, updatedAt: now });
+          }
+        } catch (error) {
+          console.error("Telegram update failed", {
+            updateId: update.update_id,
+            chatId: message?.chat.id,
+            messageId: message?.message_id,
+            error
+          });
+          if (message?.chat.id ?? callbackChatId) {
+            await notifyServerError(message?.chat.id ?? callbackChatId!);
+          }
+        }
       }
+      offset = nextOffset;
     } catch (error) {
       console.error(error);
       await new Promise((resolve) => setTimeout(resolve, 2500));

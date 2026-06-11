@@ -141,7 +141,9 @@ export async function GET(request: Request) {
         location: null,
         related: resolveRelated(reminder, lookup)
       }));
+    const visibleReminderIds = new Set(reminderItems.map((reminder) => reminder.id));
     const eventItems: CalendarFeedItem[] = events
+      .filter((event) => !event.reminderId || !visibleReminderIds.has(event.reminderId))
       .filter((event) => entityMatches(event, filters))
       .filter((event) => overlapsRange(event.startsAt, event.endsAt, from, to))
       .map((event) => ({

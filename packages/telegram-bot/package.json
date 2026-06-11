@@ -9,6 +9,7 @@
     "build": "tsc -p tsconfig.json --noEmit",
     "dev": "tsx src/bot.ts",
     "lint": "tsc -p tsconfig.json --noEmit",
+    "smoke:telegram": "tsx src/smoke.ts",
     "test": "vitest run",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },

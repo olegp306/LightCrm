@@ -89,10 +89,19 @@ export type ExtractedFacts = {
 };
 
 export type PlannedCrmAction = {
-  type: "create_lead" | "update_lead" | "create_reminder" | "create_contact" | "request_review";
+  type: "create_lead" | "update_lead" | "search_leads" | "create_reminder" | "create_contact" | "request_review";
   risk: RiskLevel;
   reason: string;
   payload: Record<string, unknown>;
+};
+
+export type LangGraphTraceEvent = {
+  id: string;
+  node: SemanticNodeName | "legacy";
+  status: "done" | "review" | "blocked" | "skipped";
+  titleRu: string;
+  messageRu: string;
+  details?: Record<string, string | number | boolean | null>;
 };
 
 export type CrmOrchestrationInput = {
@@ -101,6 +110,8 @@ export type CrmOrchestrationInput = {
   author?: string | null;
   text: string;
   sourceChannel?: "telegram" | "manual" | "import";
+  recentLeads?: ContextLeadCandidate[];
+  recentMessages?: ContextMessage[];
 };
 
 export type ContextLeadCandidate = {
@@ -138,10 +149,12 @@ export type CrmOrchestrationResult = {
   risk: RiskLevel;
   explanations: string[];
   settings: LangGraphRuntimeSettings;
+  trace?: LangGraphTraceEvent[];
 };
 
 export type SemanticIntent =
   | "create_lead"
+  | "search_leads"
   | "update_lead"
   | "create_task"
   | "create_reminder"

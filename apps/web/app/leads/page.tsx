@@ -8,6 +8,9 @@ export default function LeadsPage() {
       endpoint="/api/crm/leads"
       calendarFeedEndpoint="/api/crm/calendar-feed"
       documentUploadEndpoint="/api/crm/lead-intake/upload"
+      leadSummariesEndpoint="/api/crm/leads/summaries"
+      updateRecordEndpoint="/api/crm/leads/update"
+      offerGenerateEndpoint="/api/crm/leads/generate-offer"
     />
   );
 }

@@ -6,6 +6,7 @@ import type {
   CrmEntity,
   DocumentFile,
   EntityMap,
+  LeadSummary,
   Lead,
   OutreachTouch,
   Reminder
@@ -29,5 +30,6 @@ export type CrmRepositorySnapshot = {
   reminders: Reminder[];
   calendarEvents: CalendarEvent[];
   documentFiles: DocumentFile[];
+  leadSummaries: LeadSummary[];
   auditLogs: AuditLog[];
 };

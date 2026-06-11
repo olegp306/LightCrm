@@ -6,10 +6,12 @@ import type {
   Client,
   ColdTarget,
   CreateOutreachTouchInput,
+  CreateLeadSummaryInput,
   DocumentFile,
   EntityMap,
   IngestLeadIntakeInput,
   Lead,
+  LeadSummary,
   LeadIntakeAttachmentInput,
   LeadIntakeResult,
   OutreachTouch,
@@ -48,6 +50,7 @@ const idPrefixes: Record<CrmCollection | "auditLog", string> = {
   reminder: "reminder",
   calendarEvent: "event",
   documentFile: "doc",
+  leadSummary: "leadSummary",
   auditLog: "audit"
 };
 
@@ -59,6 +62,32 @@ function now(): Date {
   return new Date();
 }
 
+function businessCodeYear(date: Date): string {
+  return String(date.getFullYear());
+}
+
+async function nextBusinessCode(
+  repository: CrmRepository,
+  entity: "client" | "lead",
+  workspaceId: string,
+  prefix: "C" | "L",
+  timestamp: Date
+): Promise<string> {
+  const year = businessCodeYear(timestamp);
+  const pattern = new RegExp(`^${prefix}-${year}-(\\d+)$`);
+  const records = await repository.list(entity, workspaceId);
+  const maxNumber = records.reduce((max, record) => {
+    const code = "code" in record && typeof record.code === "string" ? record.code : null;
+    const match = code?.match(pattern);
+    if (!match) {
+      return max;
+    }
+    const number = Number.parseInt(match[1] ?? "", 10);
+    return Number.isFinite(number) ? Math.max(max, number) : max;
+  }, 0);
+  return `${prefix}-${year}-${String(maxNumber + 1).padStart(3, "0")}`;
+}
+
 function nullable(value: string | null | undefined): string | null {
   return value ?? null;
 }
@@ -66,6 +95,14 @@ function nullable(value: string | null | undefined): string | null {
 function trimText(value: string | null | undefined): string | null {
   const trimmed = value?.trim();
   return trimmed ? trimmed : null;
+}
+
+function compactText(value: string, maxLength = 240): string {
+  const compacted = value.replace(/\s+/g, " ").trim();
+  if (compacted.length <= maxLength) {
+    return compacted;
+  }
+  return `${compacted.slice(0, Math.max(0, maxLength - 1)).trimEnd()}...`;
 }
 
 function attachmentSummary(attachment: LeadIntakeAttachmentInput): string {
@@ -85,26 +122,38 @@ function attachmentSummary(attachment: LeadIntakeAttachmentInput): string {
 }
 
 function buildLeadIntakeSummary(input: IngestLeadIntakeInput): { summary: string; originalTakes: string[] } {
+  const textItems = input.textItems ?? [];
+  const attachments = input.attachments ?? [];
   const originalTakes = [
-    ...(input.textItems ?? []).map((item) => {
+    ...textItems.map((item) => {
       const prefix = [item.author, item.sourceMessageId ? `#${item.sourceMessageId}` : null].filter(Boolean).join(" ");
       return prefix ? `${prefix}: ${item.text}` : item.text;
     }),
-    ...(input.attachments ?? []).map((attachment) => `${attachment.kind}: ${attachment.fileName}`)
+    ...attachments.map((attachment) => {
+      const source = attachment.sourceMessageId ? ` #${attachment.sourceMessageId}` : "";
+      return `${attachment.kind}${source}: ${attachment.fileName} - ${attachmentSummary(attachment)}`;
+    })
   ].filter((value) => trimText(value)) as string[];
 
-  const textSummary = (input.textItems ?? [])
+  const textSummary = textItems
     .map((item) => item.text.trim())
     .filter(Boolean)
     .join(" ");
-  const attachmentCount = input.attachments?.length ?? 0;
+  const attachmentCount = attachments.length;
+  const attachmentKinds = [...new Set(attachments.map((attachment) => attachment.kind))];
+  const attachmentDetails = attachments
+    .map((attachment) => `${attachment.fileName} (${attachment.kind}; ${attachmentSummary(attachment)})`)
+    .join("; ");
   const parts = [
-    textSummary || "No text notes yet.",
-    attachmentCount > 0 ? `${attachmentCount} attachment(s): ${(input.attachments ?? []).map((item) => item.fileName).join(", ")}.` : null
+    `Source: ${input.sourceChannel ?? "intake"}${input.sourceThreadId ? ` thread ${input.sourceThreadId}` : ""}.`,
+    textSummary ? `Text: ${compactText(textSummary)}.` : "Text: no text notes yet.",
+    attachmentCount > 0
+      ? `Files: ${attachmentCount} attachment(s)${attachmentKinds.length > 0 ? ` [${attachmentKinds.join(", ")}]` : ""}: ${attachmentDetails}.`
+      : "Files: no attachments."
   ];
 
   return {
-    summary: parts.filter(Boolean).join(" "),
+    summary: parts.join(" "),
     originalTakes
   };
 }
@@ -135,6 +184,10 @@ export function createCrmService(repository: CrmRepository) {
     const record: Client = {
       id: existing?.id ?? input.id ?? createId("client"),
       workspaceId: input.workspaceId,
+      code:
+        nullable(input.code) ??
+        existing?.code ??
+        (await nextBusinessCode(repository, "client", input.workspaceId, "C", timestamp)),
       name: input.name,
       email: nullable(input.email ?? existing?.email),
       phone: nullable(input.phone ?? existing?.phone),
@@ -167,6 +220,10 @@ export function createCrmService(repository: CrmRepository) {
     const record: Lead = {
       id: existing?.id ?? input.id ?? createId("lead"),
       workspaceId: input.workspaceId,
+      code:
+        nullable(input.code) ??
+        existing?.code ??
+        (await nextBusinessCode(repository, "lead", input.workspaceId, "L", timestamp)),
       clientId: input.clientId ?? existing?.clientId ?? null,
       name: input.name,
       email: nullable(input.email ?? existing?.email),
@@ -351,6 +408,35 @@ export function createCrmService(repository: CrmRepository) {
     return record;
   }
 
+  async function createLeadSummary(input: CreateLeadSummaryInput): Promise<LeadSummary> {
+    const lead = await repository.get("lead", input.leadId);
+    if (!lead || lead.workspaceId !== input.workspaceId) {
+      throw new Error("Lead not found");
+    }
+    const timestamp = now();
+    const record: LeadSummary = {
+      id: createId("leadSummary"),
+      workspaceId: input.workspaceId,
+      leadId: input.leadId,
+      shortSummary: compactText(input.shortSummary, 220),
+      longSummary: nullable(input.longSummary),
+      source: nullable(input.source),
+      createdAt: timestamp,
+      updatedAt: timestamp,
+      archivedAt: null
+    };
+    await repository.save("leadSummary", record);
+    await audit({
+      workspaceId: input.workspaceId,
+      actorId: null,
+      action: "leadSummary.create",
+      entity: "leadSummary",
+      entityId: record.id,
+      metadata: { leadId: record.leadId, source: record.source }
+    });
+    return record;
+  }
+
   async function ingestLeadIntake(input: IngestLeadIntakeInput): Promise<LeadIntakeResult> {
     const lead = await repository.get("lead", input.leadId);
     if (!lead || lead.workspaceId !== input.workspaceId) {
@@ -404,7 +490,15 @@ export function createCrmService(repository: CrmRepository) {
       }
     });
 
-    return { lead: updatedLead, documents, summary, originalTakes };
+    const leadSummary = await createLeadSummary({
+      workspaceId: input.workspaceId,
+      leadId: lead.id,
+      shortSummary: summary,
+      longSummary: summary,
+      source: input.sourceChannel ?? "intake"
+    });
+
+    return { lead: updatedLead, documents, leadSummary, summary, originalTakes };
   }
 
   async function linkLeadToClient(input: LinkLeadToClientInput): Promise<Lead> {
@@ -471,6 +565,7 @@ export function createCrmService(repository: CrmRepository) {
     upsertReminder,
     upsertCalendarEvent,
     upsertDocumentFile,
+    createLeadSummary,
     ingestLeadIntake,
     linkLeadToClient,
     archiveRecord,

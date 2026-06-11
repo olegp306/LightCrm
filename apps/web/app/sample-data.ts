@@ -16,6 +16,7 @@ export const tables: Record<string, TableDefinition> = {
     description: "Warm and confirmed relationships with contact context.",
     archiveEntity: "client",
     columns: [
+      { id: "code", title: "Client ID", width: 120, mobilePriority: 1 },
       { id: "name", title: "Name", width: 190, mobilePriority: 1 },
       { id: "company", title: "Company", width: 180, mobilePriority: 2 },
       { id: "email", title: "Email", width: 230, mobilePriority: 3 },
@@ -36,8 +37,8 @@ export const tables: Record<string, TableDefinition> = {
       ]
     },
     rows: [
-      { id: "1", values: { name: "Ada Lovelace", company: "Analytical Studio", email: "ada@example.com", phone: "+33 600 000 001", status: "active", sourceChannel: "referral", notes: "Prefers WhatsApp" } },
-      { id: "2", values: { name: "Grace Hopper", company: "Compiler Works", email: "grace@example.com", phone: "+33 600 000 002", status: "warm", sourceChannel: "website", notes: "Interested in June rollout" } }
+      { id: "1", values: { code: "C-2026-001", name: "Ada Lovelace", company: "Analytical Studio", email: "ada@example.com", phone: "+33 600 000 001", status: "active", sourceChannel: "referral", notes: "Prefers WhatsApp" } },
+      { id: "2", values: { code: "C-2026-002", name: "Grace Hopper", company: "Compiler Works", email: "grace@example.com", phone: "+33 600 000 002", status: "warm", sourceChannel: "website", notes: "Interested in June rollout" } }
     ]
   },
   leads: {
@@ -46,12 +47,18 @@ export const tables: Record<string, TableDefinition> = {
     tableKey: "leads.v3",
     archiveEntity: "lead",
     columns: [
+      { id: "code", title: "Lead ID", width: 120, mobilePriority: 1 },
       { id: "client.name", title: "Client", width: 190, mobilePriority: 1, group: "Client" },
       { id: "project", title: "Project", width: 240, mobilePriority: 2 },
       { id: "calendar", title: "Calendar", width: 260, mobilePriority: 3, valueKind: "calendar" },
       { id: "area", title: "Area", width: 120, mobilePriority: 3 },
       { id: "description", title: "Description", width: 280, mobilePriority: 4 },
+      { id: "summaryShort", title: "Summary", width: 260, defaultVisible: false },
+      { id: "summaryLong", title: "Full summary", width: 360, defaultVisible: false },
+      { id: "summaryUpdatedAt", title: "Summary date", width: 170, defaultVisible: false },
       { id: "documents", title: "Documents", width: 300, mobilePriority: 5, valueKind: "documents" },
+      { id: "offerStatus", title: "Offer", width: 140, mobilePriority: 6 },
+      { id: "offerTotalGross", title: "Offer gross", width: 130, mobilePriority: 6 },
       { id: "interest", title: "Interest", width: 120, mobilePriority: 6 },
       { id: "urgency", title: "Urgency", width: 120 },
       { id: "todo", title: "Todo", width: 180 },
@@ -66,6 +73,7 @@ export const tables: Record<string, TableDefinition> = {
       { id: "name", title: "Lead name", width: 240, defaultVisible: false },
       { id: "email", title: "Lead email", width: 230, defaultVisible: false },
       { id: "phone", title: "Lead phone", width: 150, defaultVisible: false },
+      { id: "offerMissingFields", title: "Offer missing", width: 260, defaultVisible: false },
       { id: "rawInput", title: "Raw input", width: 320, defaultVisible: false },
       { id: "notes", title: "All notes", width: 320, defaultVisible: false }
     ],
@@ -111,6 +119,10 @@ export const tables: Record<string, TableDefinition> = {
             }
           ],
           area: "140 m2",
+          summaryShort: "Source: telegram thread. Text: planning request. Files: initial brief and budget table.",
+          summaryLong:
+            "Source: telegram thread. Text: planning request. Files: initial brief and budget table. Original intake describes a private house request with early budget material attached.",
+          summaryUpdatedAt: "2026-06-09T09:00:00.000Z",
           description: "Planning request",
           interest: "hot",
           urgency: "June",

@@ -1,3 +1,4 @@
+import { summarizeLeadIntake } from "@lightcrm/orchestrator";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getCrm, handleRouteError, optionalText, parseJson, workspaceId } from "../_shared";
@@ -35,7 +36,17 @@ const schema = z.object({
 export async function POST(request: Request) {
   try {
     const input = await parseJson(request, schema);
-    return NextResponse.json(await getCrm().ingestLeadIntake(input));
+    const summary = summarizeLeadIntake(input);
+    return NextResponse.json(
+      await getCrm().ingestLeadIntake({
+        ...input,
+        attachments: input.attachments?.map((attachment, index) => ({
+          ...attachment,
+          summary: attachment.summary ?? summary.attachments[index]?.shortSummary ?? null,
+          longSummary: attachment.longSummary ?? summary.attachments[index]?.longSummary ?? null
+        }))
+      })
+    );
   } catch (error) {
     return handleRouteError(error);
   }

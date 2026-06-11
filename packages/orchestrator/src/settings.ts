@@ -39,7 +39,7 @@ function createDefaultPrompts(): LangGraphRuntimeSettings["prompts"] {
     targetResolver:
       "Resolve whether the message refers to an existing CRM entity or a new opportunity. Use candidates and context. If ambiguous, ask a clarification question.",
     validationGuard:
-      "Reject unsafe actions: duplicate creation, writes without resolved target, hallucinated fields, missing required offer fields, or destructive operations without confirmation.",
+      "Reject unsafe actions: duplicate creation, hallucinated fields, missing required offer fields for final offer generation, or destructive operations without confirmation. Do not reject draft lead creation only because clientName, contact details, or project details are missing; draft leads may be enriched later.",
     actionPlanner: "Plan CRM actions only after intent, target, extracted entities, and validation are available."
   };
 }
@@ -48,6 +48,7 @@ function createDefaultTaxonomy(): LangGraphRuntimeSettings["taxonomy"] {
   return {
     intents: [
       "create_lead",
+      "search_leads",
       "update_lead",
       "create_task",
       "create_reminder",
@@ -75,6 +76,7 @@ function createDefaultTaxonomy(): LangGraphRuntimeSettings["taxonomy"] {
     ],
     requiredFieldsByAction: {
       create_lead: [],
+      search_leads: [],
       update_lead: [],
       create_meeting: ["meetingDateTime"],
       create_reminder: ["reminderDateTime"],
@@ -123,6 +125,10 @@ function cloneSettings(settings: LangGraphRuntimeSettings): LangGraphRuntimeSett
     reminderPhrases: [...settings.reminderPhrases],
     enabledNodes: { ...settings.enabledNodes }
   };
+}
+
+function uniqueValues<T>(values: T[]): T[] {
+  return Array.from(new Set(values));
 }
 
 export const LANGGRAPH_PRESETS: LangGraphRuntimeSettings[] = [
@@ -255,8 +261,8 @@ export function mergeLangGraphSettings(
       ...(value?.prompts ?? {})
     },
     taxonomy: {
-      intents: [...mergedTaxonomy.intents],
-      entityFields: [...mergedTaxonomy.entityFields],
+      intents: uniqueValues([...base.taxonomy.intents, ...mergedTaxonomy.intents]),
+      entityFields: uniqueValues([...base.taxonomy.entityFields, ...mergedTaxonomy.entityFields]),
       requiredFieldsByAction: Object.fromEntries(
         Object.entries({
           ...base.taxonomy.requiredFieldsByAction,

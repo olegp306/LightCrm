@@ -6,7 +6,12 @@ import type {
   UpsertClientInput,
   UpsertLeadInput
 } from "@lightcrm/core";
-import { runCrmOrchestration, type CrmOrchestrationInput, type CrmOrchestrationResult } from "@lightcrm/orchestrator";
+import {
+  DEFAULT_LANGGRAPH_SETTINGS,
+  runCrmOrchestration,
+  type CrmOrchestrationInput,
+  type CrmOrchestrationResult
+} from "@lightcrm/orchestrator";
 import { createHash } from "node:crypto";
 
 export type TelegramUser = {
@@ -22,15 +27,49 @@ export type TelegramMessage = {
   media_group_id?: string;
   chat: { id: number };
   from?: TelegramUser;
+  forward_origin?: TelegramForwardOrigin;
+  forward_from?: TelegramUser;
+  forward_sender_name?: string;
+  forward_date?: number;
   document?: TelegramFile;
   voice?: TelegramFile;
   audio?: TelegramFile;
   photo?: TelegramPhotoSize[];
+  groupedAttachments?: TelegramAttachment[];
+  reply_to_message?: TelegramReplyMessage;
 };
 
 export type TelegramUpdate = {
   update_id: number;
   message?: TelegramMessage;
+  callback_query?: TelegramCallbackQuery;
+};
+
+export type TelegramCallbackQuery = {
+  id: string;
+  data?: string;
+  message?: {
+    chat: { id: number };
+    message_id: number;
+  };
+  from?: TelegramUser;
+};
+
+export type TelegramForwardOrigin = {
+  type?: string;
+  sender_user?: TelegramUser;
+  sender_user_name?: string;
+  chat?: { id: number; title?: string; username?: string; type?: string };
+  date?: number;
+};
+
+export type TelegramReplyMessage = {
+  message_id: number;
+  text?: string;
+  caption?: string;
+  reply_markup?: {
+    inline_keyboard?: Array<Array<{ text?: string; url?: string; callback_data?: string }>>;
+  };
 };
 
 export type TelegramFile = {
@@ -84,12 +123,83 @@ export type UploadTelegramAttachmentToWebInput = {
 export type TelegramBotDeps = {
   allowedChatIds: Set<number>;
   workspaceId: string;
-  sendMessage: (chatId: number, text: string) => Promise<unknown> | unknown;
+  crmAppBaseUrl?: string;
+  activeLead?: Pick<Lead, "id" | "name"> | null;
+  sendMessage: (chatId: number, text: string, options?: TelegramSendMessageOptions) => Promise<unknown> | unknown;
+  sendDocument?: (chatId: number, document: TelegramGeneratedDocument) => Promise<unknown> | unknown;
+  generateOffer?: (leadId: string) => Promise<TelegramGeneratedDocument>;
   orchestrate?: (input: CrmOrchestrationInput) => Promise<CrmOrchestrationResult>;
   createClient?: (input: UpsertClientInput) => Promise<Pick<Client, "id" | "name">>;
   createLead?: (input: UpsertLeadInput) => Promise<Pick<Lead, "id" | "name">>;
+  searchLeads?: (input: TelegramLeadSearchInput) => Promise<TelegramLeadSearchResult>;
+  updateLead?: (input: TelegramLeadUpdateInput) => Promise<Pick<Lead, "id" | "name">>;
+  createReminder?: (input: TelegramReminderInput) => Promise<TelegramReminderResult>;
   ingestLeadIntake?: (input: IngestLeadIntakeInput) => Promise<{ documents?: unknown[]; summary?: string }>;
   prepareAttachment?: (input: PrepareTelegramAttachmentInput) => Promise<LeadIntakeAttachmentInput>;
+};
+
+export type TelegramLeadSearchInput = {
+  workspaceId: string;
+  query: string;
+  limit?: number;
+};
+
+export type TelegramLeadSearchResult = {
+  matches: Array<
+    Pick<Lead, "id" | "name" | "status" | "code"> & {
+      score: number;
+      clientName?: string | null;
+      project?: string | null;
+      area?: string | null;
+      description?: string | null;
+      interest?: string | null;
+      urgency?: string | null;
+      todo?: string | null;
+      address?: string | null;
+      messenger?: string | null;
+      summaryShort?: string | null;
+      summaryLong?: string | null;
+      summaryUpdatedAt?: string | null;
+    }
+  >;
+};
+
+export type TelegramLeadUpdateInput = {
+  workspaceId: string;
+  leadId: string;
+  patch: Partial<Pick<UpsertLeadInput, "name" | "phone" | "company" | "notes">>;
+  source?: {
+    channel?: string | null;
+    messageId?: string | null;
+  };
+};
+
+export type TelegramReminderInput = {
+  workspaceId: string;
+  leadId?: string | null;
+  title: string;
+  description?: string | null;
+  dueAt: string;
+  sourceChannel?: string | null;
+};
+
+export type TelegramReminderResult = {
+  id: string;
+  title: string;
+  dueAt: string | Date;
+};
+
+export type TelegramGeneratedDocument = {
+  fileName: string;
+  mimeType: string | null;
+  bytes: Uint8Array;
+  caption?: string;
+};
+
+export type TelegramSendMessageOptions = {
+  replyMarkup?: {
+    inline_keyboard: Array<Array<{ text: string; url?: string; callback_data?: string }>>;
+  };
 };
 
 export function parseAllowedChatIds(value: string | undefined): Set<number> {
@@ -120,12 +230,17 @@ function shortValue(value: unknown): string {
   return String(value);
 }
 
-export function formatOrchestrationReply(result: CrmOrchestrationResult): string {
+export function formatOrchestrationReply(
+  result: CrmOrchestrationResult,
+  options: { status?: "preview" | "executed" } = {}
+): string {
   const action = result.actions[0];
   const payload = action?.payload && typeof action.payload === "object" ? action.payload : null;
   const targetId = payload && "targetId" in payload ? payload.targetId : null;
+  const status = options.status ?? "preview";
   const lines = [
-    "LightCrm dry-run",
+    status === "executed" ? "LightCrm result" : "LightCrm plan",
+    `Status: ${status}`,
     `Intent: ${result.intent}`,
     `Risk: ${result.risk}`,
     `Action: ${action?.type ?? "none"}`,
@@ -144,9 +259,39 @@ export function formatOrchestrationReply(result: CrmOrchestrationResult): string
 function helpText(): string {
   return [
     "LightCrm bot is running.",
-    "Send a lead/update/reminder message and I will return a LangGraph dry-run plan.",
+    "Send a lead/update/reminder message and I will return a LangGraph plan or execution result.",
     "Current mode: auto-safe lead/client writes are enabled; review-risk actions stay as previews."
   ].join("\n");
+}
+
+function forwardedSource(message: TelegramMessage): string | null {
+  const origin = message.forward_origin;
+  const sender =
+    origin?.sender_user_name ??
+    origin?.sender_user?.username ??
+    [origin?.sender_user?.first_name, origin?.sender_user?.last_name].filter(Boolean).join(" ") ??
+    origin?.chat?.title ??
+    origin?.chat?.username ??
+    message.forward_sender_name ??
+    message.forward_from?.username ??
+    [message.forward_from?.first_name, message.forward_from?.last_name].filter(Boolean).join(" ");
+  const source = sender || origin?.type || (message.forward_date ? "forwarded message" : "");
+  return source ? source : null;
+}
+
+function buildOrchestrationText(message: TelegramMessage, text: string, attachments: TelegramAttachment[]): string {
+  const source = forwardedSource(message);
+  const attachmentSummary = attachments.map((attachment) => `${attachment.kind}: ${attachment.fileName}`).join("; ");
+  if (!source) {
+    return text;
+  }
+  return [
+    text.trim() ? `Director instruction: ${text.trim()}` : "Director instruction: not provided.",
+    `Forwarded context source: ${source}.`,
+    attachmentSummary ? `Forwarded attachments: ${attachmentSummary}.` : null
+  ]
+    .filter((line): line is string => Boolean(line))
+    .join("\n");
 }
 
 function pickPhoto(message: TelegramMessage): TelegramPhotoSize | null {
@@ -154,6 +299,9 @@ function pickPhoto(message: TelegramMessage): TelegramPhotoSize | null {
 }
 
 export function extractTelegramAttachments(message: TelegramMessage): TelegramAttachment[] {
+  if (message.groupedAttachments) {
+    return message.groupedAttachments;
+  }
   const attachments: TelegramAttachment[] = [];
   if (message.document) {
     attachments.push({
@@ -199,9 +347,17 @@ export function extractTelegramAttachments(message: TelegramMessage): TelegramAt
   return attachments;
 }
 
-function actionPayload(result: CrmOrchestrationResult): Record<string, unknown> {
-  const payload = result.actions[0]?.payload;
+function actionPayload(result: CrmOrchestrationResult, action = result.actions[0]): Record<string, unknown> {
+  const payload = action?.payload;
   return payload && typeof payload === "object" ? payload : {};
+}
+
+function actionOfType(result: CrmOrchestrationResult, type: CrmOrchestrationResult["actions"][number]["type"]) {
+  return result.actions.find((action) => action.type === type);
+}
+
+function hasAutoAction(result: CrmOrchestrationResult, type: CrmOrchestrationResult["actions"][number]["type"]) {
+  return result.actions.some((action) => action.type === type && action.risk === "auto");
 }
 
 function stableTelegramClientId(workspaceId: string, contactName: string): string {
@@ -222,6 +378,14 @@ function leadNameFromFacts(result: CrmOrchestrationResult, fallbackText: string)
     return projectParts.join(" - ").slice(0, 120);
   }
   return fallbackText.slice(0, 80) || "Telegram lead";
+}
+
+function draftLeadName(message: TelegramMessage, attachments: TelegramAttachment[]): string {
+  if (attachments.length === 0) {
+    return `Draft lead from Telegram #${message.message_id}`;
+  }
+  const kinds = [...new Set(attachments.map((attachment) => attachment.kind))].join(", ");
+  return `Draft lead - ${kinds} from Telegram #${message.message_id}`;
 }
 
 function crmNoteFields(result: CrmOrchestrationResult, rawText: string): string[] {
@@ -304,11 +468,11 @@ async function maybeCreateLead(
   result: CrmOrchestrationResult,
   deps: TelegramBotDeps
 ): Promise<Pick<Lead, "id" | "name"> | null> {
-  const action = result.actions[0];
+  const action = actionOfType(result, "create_lead");
   if (!deps.createLead || action?.type !== "create_lead" || action.risk !== "auto") {
     return null;
   }
-  const payload = actionPayload(result);
+  const payload = actionPayload(result, action);
   const name =
     typeof payload.name === "string" && payload.name.trim()
       ? payload.name.trim()
@@ -340,44 +504,526 @@ async function maybeCreateLead(
   });
 }
 
-export async function handleTelegramUpdate(update: TelegramUpdate, deps: TelegramBotDeps): Promise<void> {
+async function maybeUpdateLead(
+  message: TelegramMessage,
+  text: string,
+  author: string | null,
+  result: CrmOrchestrationResult,
+  replyLeadId: string | null,
+  deps: TelegramBotDeps
+): Promise<Pick<Lead, "id" | "name"> | null> {
+  const action = actionOfType(result, "update_lead");
+  if (!deps.updateLead || action?.type !== "update_lead" || action.risk !== "auto") {
+    return null;
+  }
+  const payload = actionPayload(result, action);
+  const targetId = replyLeadId ?? (typeof payload.targetId === "string" ? payload.targetId : null);
+  if (!targetId) {
+    return null;
+  }
+  const patch: TelegramLeadUpdateInput["patch"] = {};
+  if (result.facts.contactName) {
+    patch.name = result.facts.contactName;
+  }
+  if (result.facts.phone) {
+    patch.phone = result.facts.phone;
+  }
+  if (result.facts.projectName) {
+    patch.company = result.facts.projectName;
+  }
+  patch.notes = [`Telegram author: ${author ?? "unknown"}`, ...crmNoteFields(result, text)].join("\n\n");
+  return deps.updateLead({
+    workspaceId: deps.workspaceId,
+    leadId: targetId,
+    patch,
+    source: {
+      channel: "telegram",
+      messageId: String(message.message_id)
+    }
+  });
+}
+
+function draftOrchestrationResult(
+  workspaceId: string,
+  message: TelegramMessage,
+  text: string,
+  author: string | null,
+  attachments: TelegramAttachment[]
+): CrmOrchestrationResult {
+  const attachmentSummary = attachments
+    .map((attachment) => `${attachment.kind}: ${attachment.fileName}`)
+    .join("; ");
+  const snippet = [text.trim(), attachmentSummary].filter(Boolean).join("\n");
+  return {
+    workspaceId,
+    normalizedText: snippet || `Telegram attachment intake #${message.message_id}`,
+    intent: "create_lead",
+    risk: "auto",
+    explanations: ["Received telegram attachment intake; saved as draft lead for later enrichment."],
+    settings: DEFAULT_LANGGRAPH_SETTINGS,
+    facts: {
+      contactName: null,
+      projectName: null,
+      projectType: null,
+      location: null,
+      areaM2: null,
+      phone: null,
+      budgetEur: null,
+      dueAt: null,
+      sourceMessageId: String(message.message_id),
+      evidence: {
+        sourceMessageId: String(message.message_id),
+        author,
+        sourceChannel: "telegram",
+        textSnippet: snippet.slice(0, 240)
+      }
+    },
+    actions: [
+      {
+        type: "create_lead",
+        risk: "auto",
+        reason: "Created draft lead from Telegram intake. Client and project details can be filled later.",
+        payload: { name: draftLeadName(message, attachments) }
+      }
+    ]
+  };
+}
+
+function attachmentUpdateOrchestrationResult(
+  workspaceId: string,
+  message: TelegramMessage,
+  text: string,
+  author: string | null,
+  attachments: TelegramAttachment[],
+  lead: Pick<Lead, "id" | "name">
+): CrmOrchestrationResult {
+  const attachmentSummary = attachments
+    .map((attachment) => `${attachment.kind}: ${attachment.fileName}`)
+    .join("; ");
+  const snippet = [text.trim(), attachmentSummary].filter(Boolean).join("\n");
+  return {
+    workspaceId,
+    normalizedText: snippet || `Telegram attachment update #${message.message_id}`,
+    intent: "attach_document",
+    risk: "auto",
+    explanations: ["Received extra Telegram attachment intake; linked it to the active lead."],
+    settings: DEFAULT_LANGGRAPH_SETTINGS,
+    facts: {
+      contactName: null,
+      projectName: lead.name,
+      projectType: null,
+      location: null,
+      areaM2: null,
+      phone: null,
+      budgetEur: null,
+      dueAt: null,
+      sourceMessageId: String(message.message_id),
+      evidence: {
+        sourceMessageId: String(message.message_id),
+        author,
+        sourceChannel: "telegram",
+        textSnippet: snippet.slice(0, 240)
+      }
+    },
+    actions: [
+      {
+        type: "update_lead",
+        risk: "auto",
+        reason: "Linked extra Telegram attachment intake to the active lead.",
+        payload: { targetId: lead.id }
+      }
+    ]
+  };
+}
+
+function crmLeadUrl(deps: TelegramBotDeps, lead: Pick<Lead, "id" | "name">): string | null {
+  if (!deps.crmAppBaseUrl) {
+    return null;
+  }
+  const baseUrl = deps.crmAppBaseUrl.replace(/\/$/, "");
+  return `${baseUrl}/leads?leadId=${encodeURIComponent(lead.id)}`;
+}
+
+function isTelegramInlineUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return (
+      (url.protocol === "https:" || url.protocol === "http:") &&
+      !["localhost", "127.0.0.1", "0.0.0.0"].includes(url.hostname)
+    );
+  } catch {
+    return false;
+  }
+}
+
+type TelegramLeadReplyCard = Pick<Lead, "id" | "name"> & {
+  summaryLong?: string | null;
+};
+
+function crmLeadReplyMarkup(deps: TelegramBotDeps, lead: TelegramLeadReplyCard): TelegramSendMessageOptions | undefined {
+  const url = crmLeadUrl(deps, lead);
+  const hasFullSummary = "summaryLong" in lead && Boolean(lead.summaryLong);
+  const summaryRow = hasFullSummary ? [[{ text: "Full summary", callback_data: `summary_lead:${lead.id}` }]] : [];
+  if (!url) {
+    return {
+      replyMarkup: {
+        inline_keyboard: [[{ text: "offer", callback_data: `offer_lead:${lead.id}` }], ...summaryRow]
+      }
+    };
+  }
+  if (!isTelegramInlineUrl(url)) {
+    return {
+      replyMarkup: {
+        inline_keyboard: [
+          [
+            { text: "CRM", callback_data: `crm_lead:${lead.id}` },
+            { text: "offer", callback_data: `offer_lead:${lead.id}` }
+          ],
+          ...summaryRow
+        ]
+      }
+    };
+  }
+  return {
+    replyMarkup: {
+      inline_keyboard: [[{ text: "CRM", url }, { text: "offer", callback_data: `offer_lead:${lead.id}` }], ...summaryRow]
+    }
+  };
+}
+
+function extractLeadIdFromReply(reply: TelegramReplyMessage | undefined): string | null {
+  const callbackData = reply?.reply_markup?.inline_keyboard
+    ?.flat()
+    .map((button) => button.callback_data)
+    .find((value): value is string =>
+      Boolean(value?.startsWith("crm_lead:") || value?.startsWith("offer_lead:") || value?.startsWith("summary_lead:"))
+    );
+  if (callbackData?.startsWith("crm_lead:")) {
+    return callbackData.slice("crm_lead:".length);
+  }
+  if (callbackData?.startsWith("offer_lead:")) {
+    return callbackData.slice("offer_lead:".length);
+  }
+  if (callbackData?.startsWith("summary_lead:")) {
+    return callbackData.slice("summary_lead:".length);
+  }
+  const text = [reply?.text, reply?.caption].filter(Boolean).join("\n");
+  const match = text.match(/Lead ID:\s*([^\s]+)/i);
+  return match?.[1] ?? null;
+}
+
+function leadCardReplyMarkup(deps: TelegramBotDeps, lead: Pick<Lead, "id" | "name">): TelegramSendMessageOptions | undefined {
+  return crmLeadReplyMarkup(deps, lead);
+}
+
+type TelegramLeadCard = Pick<Lead, "id" | "name"> &
+  Partial<Pick<Lead, "code" | "status">> & {
+    clientName?: string | null;
+    project?: string | null;
+    area?: string | null;
+    description?: string | null;
+    interest?: string | null;
+    urgency?: string | null;
+    todo?: string | null;
+    address?: string | null;
+    messenger?: string | null;
+    summaryShort?: string | null;
+    summaryLong?: string | null;
+    summaryUpdatedAt?: string | null;
+    score?: number | null;
+  };
+
+function compactLine(value: string, maxLength: number): string {
+  const compacted = value.replace(/\s+/g, " ").trim();
+  if (compacted.length <= maxLength) {
+    return compacted;
+  }
+  return `${compacted.slice(0, Math.max(0, maxLength - 1)).trimEnd()}...`;
+}
+
+function optionalStringProperty(value: object, key: string): string | null {
+  if (!(key in value)) {
+    return null;
+  }
+  const candidate = (value as Record<string, unknown>)[key];
+  return typeof candidate === "string" && candidate.trim() ? candidate : null;
+}
+
+function cardField(label: string, value: string | number | null | undefined, maxLength = 120): string | null {
+  if (value === null || value === undefined || value === "") {
+    return null;
+  }
+  return `${label}: ${compactLine(String(value), maxLength)}`;
+}
+
+function telegramLeadCardText(lead: TelegramLeadCard): string {
+  return [
+    lead.code ? `${lead.code} · ${lead.name}` : lead.name,
+    `Lead ID: ${lead.id}`,
+    cardField("Client", lead.clientName, 90),
+    cardField("Project", lead.project, 120),
+    cardField("Area", lead.area, 60),
+    cardField("Description", lead.description, 180),
+    cardField("Interest", lead.interest, 60),
+    cardField("Urgency", lead.urgency, 60),
+    cardField("Todo", lead.todo, 120),
+    cardField("Address", lead.address, 120),
+    cardField("Messenger", lead.messenger, 80),
+    lead.status ? `Status: ${lead.status}` : null,
+    lead.summaryShort ? `Summary: ${compactLine(lead.summaryShort, 180)}` : null,
+    lead.summaryUpdatedAt ? `Summary date: ${lead.summaryUpdatedAt}` : null,
+    typeof lead.score === "number" ? `Score: ${Math.round(lead.score * 100)}%` : null
+  ]
+    .filter((line): line is string => Boolean(line))
+    .join("\n")
+    .slice(0, 1600);
+}
+
+function telegramLeadFullSummaryText(lead: TelegramLeadCard): string {
+  const summary = lead.summaryLong ?? lead.summaryShort;
+  return [
+    "Full summary",
+    lead.code ? `${lead.code} · ${lead.name}` : lead.name,
+    `Lead ID: ${lead.id}`,
+    summary ? compactLine(summary, 2400) : "No full summary is available yet.",
+    lead.summaryUpdatedAt ? `Summary date: ${lead.summaryUpdatedAt}` : null
+  ]
+    .filter((line): line is string => Boolean(line))
+    .join("\n")
+    .slice(0, 3900);
+}
+
+function leadCardFieldsFromFacts(result: CrmOrchestrationResult): Partial<TelegramLeadCard> {
+  return {
+    clientName: result.facts.contactName,
+    project: result.facts.projectName ?? result.facts.projectType,
+    area: result.facts.areaM2 === null || result.facts.areaM2 === undefined ? null : String(result.facts.areaM2),
+    address: result.facts.location,
+    messenger: result.facts.phone
+  };
+}
+
+function leadSearchQuery(text: string, result: CrmOrchestrationResult): string {
+  return (
+    result.facts.contactName ??
+    result.facts.projectName ??
+    result.facts.phone ??
+    result.facts.location ??
+    text
+  ).trim();
+}
+
+async function maybeSearchLeads(
+  message: TelegramMessage,
+  text: string,
+  result: CrmOrchestrationResult,
+  deps: TelegramBotDeps
+): Promise<boolean> {
+  const action = actionOfType(result, "search_leads");
+  if (!deps.searchLeads || action?.type !== "search_leads") {
+    return false;
+  }
+  const query = leadSearchQuery(text, result);
+  const search = await deps.searchLeads({ workspaceId: deps.workspaceId, query, limit: 5 });
+  if (search.matches.length === 0) {
+    await deps.sendMessage(message.chat.id, `No leads found for: ${query}`);
+    return true;
+  }
+
+  await deps.sendMessage(message.chat.id, `Found ${search.matches.length} lead(s) for: ${query}`);
+  for (const match of search.matches) {
+    await deps.sendMessage(
+      message.chat.id,
+      telegramLeadCardText(match),
+      leadCardReplyMarkup(deps, match)
+    );
+  }
+  return true;
+}
+
+function reminderTitle(text: string, result: CrmOrchestrationResult): string {
+  return (
+    result.facts.projectName ??
+    result.facts.contactName ??
+    result.facts.projectType ??
+    text.replace(/\s+/g, " ").trim().slice(0, 80) ??
+    "Telegram reminder"
+  );
+}
+
+async function maybeCreateReminder(
+  message: TelegramMessage,
+  text: string,
+  result: CrmOrchestrationResult,
+  replyLeadId: string | null,
+  deps: TelegramBotDeps,
+  options: { notify?: boolean } = {}
+): Promise<{ handled: boolean; reminder: TelegramReminderResult | null }> {
+  const action = actionOfType(result, "create_reminder");
+  if (!deps.createReminder || action?.type !== "create_reminder" || action.risk !== "auto") {
+    return { handled: false, reminder: null };
+  }
+  if (!result.facts.dueAt) {
+    await deps.sendMessage(message.chat.id, "reminder date is missing");
+    return { handled: true, reminder: null };
+  }
+  const reminder = await deps.createReminder({
+    workspaceId: deps.workspaceId,
+    leadId: replyLeadId,
+    title: reminderTitle(text, result),
+    description: [
+      result.explanations[0] ?? null,
+      `Telegram message: ${message.message_id}`,
+      text.trim() ? `Context: ${text.trim().slice(0, 500)}` : null
+    ]
+      .filter((line): line is string => Boolean(line))
+      .join("\n"),
+    dueAt: result.facts.dueAt,
+    sourceChannel: "telegram"
+  });
+  if (options.notify ?? true) {
+    await deps.sendMessage(
+      message.chat.id,
+      [
+        "Reminder created",
+        `Reminder ID: ${reminder.id}`,
+        replyLeadId ? `Lead ID: ${replyLeadId}` : null,
+        `Due: ${new Date(reminder.dueAt).toISOString()}`,
+        `Title: ${reminder.title}`
+      ]
+        .filter((line): line is string => Boolean(line))
+        .join("\n")
+    );
+  }
+  return { handled: true, reminder };
+}
+
+export async function handleTelegramCallback(update: TelegramUpdate, deps: TelegramBotDeps): Promise<boolean> {
+  const callback = update.callback_query;
+  if (!callback?.message) {
+    return false;
+  }
+  const chatId = callback.message.chat.id;
+  if (deps.allowedChatIds.size > 0 && !deps.allowedChatIds.has(chatId)) {
+    await deps.sendMessage(chatId, "This chat is not allowed to use this LightCrm bot.");
+    return true;
+  }
+  const leadId = callback.data?.startsWith("crm_lead:") ? callback.data.slice("crm_lead:".length) : null;
+  if (leadId) {
+    if (!deps.crmAppBaseUrl) {
+      return false;
+    }
+    const url = `${deps.crmAppBaseUrl.replace(/\/$/, "")}/leads?leadId=${encodeURIComponent(leadId)}`;
+    await deps.sendMessage(chatId, url);
+    return true;
+  }
+  const summaryLeadId = callback.data?.startsWith("summary_lead:") ? callback.data.slice("summary_lead:".length) : null;
+  if (summaryLeadId) {
+    if (!deps.searchLeads) {
+      await deps.sendMessage(chatId, "full summary is not available yet");
+      return true;
+    }
+    const search = await deps.searchLeads({ workspaceId: deps.workspaceId, query: summaryLeadId, limit: 1 });
+    const lead = search.matches.find((match) => match.id === summaryLeadId) ?? search.matches[0] ?? null;
+    if (!lead) {
+      await deps.sendMessage(chatId, "full summary is not available yet");
+      return true;
+    }
+    await deps.sendMessage(chatId, telegramLeadFullSummaryText(lead), crmLeadReplyMarkup(deps, { ...lead, summaryLong: null }));
+    return true;
+  }
+  const offerLeadId = callback.data?.startsWith("offer_lead:") ? callback.data.slice("offer_lead:".length) : null;
+  if (offerLeadId) {
+    if (!deps.generateOffer || !deps.sendDocument) {
+      await deps.sendMessage(chatId, "offer generation is not connected yet");
+      return true;
+    }
+    await deps.sendMessage(chatId, "generating offer, back shortly");
+    const document = await deps.generateOffer(offerLeadId);
+    await deps.sendDocument(chatId, document);
+    return true;
+  }
+  return false;
+}
+
+export async function handleTelegramUpdate(
+  update: TelegramUpdate,
+  deps: TelegramBotDeps
+): Promise<Pick<Lead, "id" | "name"> | null> {
+  if (await handleTelegramCallback(update, deps)) {
+    return null;
+  }
   const message = update.message;
   if (!message) {
-    return;
+    return null;
   }
 
   const chatId = message.chat.id;
   if (deps.allowedChatIds.size > 0 && !deps.allowedChatIds.has(chatId)) {
     await deps.sendMessage(chatId, "This chat is not allowed to use this LightCrm bot.");
-    return;
+    return null;
   }
 
   const text = message.text ?? message.caption ?? "";
   const attachments = extractTelegramAttachments(message);
+  const orchestrationText = buildOrchestrationText(message, text, attachments);
   if (text === "/start" || text === "/help") {
     await deps.sendMessage(chatId, helpText());
-    return;
+    return null;
   }
   if (!text.trim() && attachments.length === 0) {
-    await deps.sendMessage(chatId, "Please send text or a caption. Attachments will be connected after the file pipeline is enabled.");
-    return;
-  }
-  if (!text.trim()) {
-    await deps.sendMessage(chatId, "Please add a caption or forward the context with this attachment so I can link it to the right lead.");
-    return;
+    await deps.sendMessage(chatId, "Please send text or attach files so I can save a draft lead.");
+    return null;
   }
 
   const orchestrate = deps.orchestrate ?? runCrmOrchestration;
   const author = authorName(message.from);
-  const result = await orchestrate({
-    workspaceId: deps.workspaceId,
-    messageId: String(message.message_id),
-    author,
-    text,
-    sourceChannel: "telegram"
-  });
-  const lead = await maybeCreateLead(message, text, author, result, deps);
-  if (lead && deps.ingestLeadIntake) {
+  const replyLeadId = extractLeadIdFromReply(message.reply_to_message);
+  const replyLead = replyLeadId ? { id: replyLeadId, name: "replied lead" } : null;
+  if (attachments.length > 1) {
+    await deps.sendMessage(chatId, "reviewing the files, back shortly");
+  }
+  const activeLead = replyLead ?? (deps.activeLead && (attachments.length > 0 || text.trim()) ? deps.activeLead : null);
+  const result = activeLead
+    ? !text.trim() && attachments.length > 0
+      ? attachmentUpdateOrchestrationResult(deps.workspaceId, message, text, author, attachments, activeLead)
+      : await orchestrate({
+          workspaceId: deps.workspaceId,
+          messageId: String(message.message_id),
+          author,
+          text: orchestrationText,
+          sourceChannel: "telegram",
+          recentLeads: [{ id: activeLead.id, label: activeLead.name, summary: null, lastTouchedAt: null }]
+        })
+    : text.trim()
+      ? await orchestrate({
+          workspaceId: deps.workspaceId,
+          messageId: String(message.message_id),
+          author,
+          text: orchestrationText,
+          sourceChannel: "telegram"
+        })
+      : draftOrchestrationResult(deps.workspaceId, message, orchestrationText, author, attachments);
+  if (await maybeSearchLeads(message, orchestrationText, result, deps)) {
+    return null;
+  }
+  const shouldCreateLead = hasAutoAction(result, "create_lead");
+  const standaloneReminder = shouldCreateLead
+    ? { handled: false, reminder: null }
+    : await maybeCreateReminder(message, orchestrationText, result, replyLeadId, deps);
+  if (standaloneReminder.handled) {
+    return replyLeadId ? { id: replyLeadId, name: "replied lead" } : null;
+  }
+  const updatedLead = await maybeUpdateLead(message, orchestrationText, author, result, replyLeadId, deps);
+  const action = result.actions[0];
+  const shouldAttachToActiveLead =
+    Boolean(activeLead && (attachments.length > 0 || text.trim()) && action?.type !== "create_lead");
+  const lead =
+    updatedLead ??
+    (shouldAttachToActiveLead ? activeLead : null) ??
+    (await maybeCreateLead(message, orchestrationText, author, result, deps));
+  if (lead) {
+    const reminderOutcome = await maybeCreateReminder(message, orchestrationText, result, lead.id, deps, { notify: false });
     const preparedAttachments =
       deps.prepareAttachment && attachments.length > 0
         ? await Promise.all(
@@ -387,31 +1033,49 @@ export async function handleTelegramUpdate(update: TelegramUpdate, deps: Telegra
                 leadId: lead.id,
                 attachment,
                 message,
-                text: index === 0 ? text : "",
+                text: index === 0 ? orchestrationText : "",
                 author
               })
             )
           )
         : [];
-    if (preparedAttachments.length === 0) {
-      await deps.ingestLeadIntake({
+    const intake =
+      preparedAttachments.length === 0 && deps.ingestLeadIntake
+        ? await deps.ingestLeadIntake({
         workspaceId: deps.workspaceId,
         leadId: lead.id,
         sourceChannel: "telegram",
         sourceThreadId: String(message.chat.id),
         sourceMessageId: String(message.message_id),
-        textItems: [{ sourceMessageId: String(message.message_id), author, text }],
+        textItems: [{ sourceMessageId: String(message.message_id), author, text: orchestrationText }],
         attachments: []
-      });
-    }
+          })
+        : null;
     await deps.sendMessage(
       chatId,
-      [formatOrchestrationReply(result), `Intake: saved ${preparedAttachments.length} attachment(s) to ${lead.name}.`]
+      [
+        "LightCrm result",
+        telegramLeadCardText({
+          ...lead,
+          ...leadCardFieldsFromFacts(result),
+          code: optionalStringProperty(lead, "code"),
+          status: (optionalStringProperty(lead, "status") as Lead["status"] | null) ?? undefined,
+          summaryShort: intake?.summary ?? null
+        }),
+        reminderOutcome.reminder
+          ? `Reminder: ${reminderOutcome.reminder.id} at ${new Date(reminderOutcome.reminder.dueAt).toISOString()}`
+          : null,
+        `Intake: saved ${preparedAttachments.length} attachment(s) to ${lead.name}.`,
+        crmLeadReplyMarkup(deps, lead) ? null : crmLeadUrl(deps, lead)
+      ]
+        .filter((line): line is string => Boolean(line))
         .join("\n")
-        .slice(0, 3900)
+        .slice(0, 3900),
+      crmLeadReplyMarkup(deps, lead)
     );
-    return;
+    return lead;
   }
 
   await deps.sendMessage(chatId, formatOrchestrationReply(result));
+  return null;
 }

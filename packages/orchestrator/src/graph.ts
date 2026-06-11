@@ -7,6 +7,7 @@ import type {
   CrmOrchestrationInput,
   CrmOrchestrationResult,
   ExtractedFacts,
+  LangGraphTraceEvent,
   LangGraphRuntimeSettings,
   PlannedCrmAction,
   RiskLevel
@@ -23,6 +24,10 @@ const OrchestrationAnnotation = Annotation.Root({
   riskReason: Annotation<string>,
   actions: Annotation<PlannedCrmAction[]>,
   explanations: Annotation<string[]>({
+    reducer: (left, right) => [...left, ...right],
+    default: () => []
+  }),
+  trace: Annotation<LangGraphTraceEvent[]>({
     reducer: (left, right) => [...left, ...right],
     default: () => []
   })
@@ -68,7 +73,16 @@ function extractFacts(state: OrchestrationState): Partial<OrchestrationState> {
 function classifyIntent(state: OrchestrationState): Partial<OrchestrationState> {
   return {
     intent: "unknown",
-    explanations: ["Legacy rule parser is disabled. Enable semantic mode for CRM orchestration."]
+    explanations: ["Legacy rule parser is disabled. Enable semantic mode for CRM orchestration."],
+    trace: [
+      {
+        id: "01-legacy",
+        node: "legacy",
+        status: "review",
+        titleRu: "Старый режим отключён",
+        messageRu: "Rule parser больше не принимает CRM-решения. Включите semantic mode, чтобы LangGraph прошёл по узлам и вернул подробный trace."
+      }
+    ]
   };
 }
 
@@ -136,6 +150,7 @@ export async function runCrmOrchestration(
     actions: result.actions,
     risk: result.risk,
     explanations: result.explanations,
-    settings: result.settings
+    settings: result.settings,
+    trace: result.trace
   };
 }

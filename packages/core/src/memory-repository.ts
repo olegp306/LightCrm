@@ -8,7 +8,8 @@ const collectionKeys: Record<CrmCollection, keyof CrmRepositorySnapshot> = {
   outreachTouch: "outreachTouches",
   reminder: "reminders",
   calendarEvent: "calendarEvents",
-  documentFile: "documentFiles"
+  documentFile: "documentFiles",
+  leadSummary: "leadSummaries"
 };
 
 export class MemoryCrmRepository implements CrmRepository {
@@ -20,6 +21,7 @@ export class MemoryCrmRepository implements CrmRepository {
     reminders: [],
     calendarEvents: [],
     documentFiles: [],
+    leadSummaries: [],
     auditLogs: []
   };
 

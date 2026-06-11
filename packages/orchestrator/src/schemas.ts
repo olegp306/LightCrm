@@ -15,6 +15,7 @@ const StringListSchema = z
 
 export const SemanticIntentSchema = z.enum([
   "create_lead",
+  "search_leads",
   "update_lead",
   "create_task",
   "create_reminder",

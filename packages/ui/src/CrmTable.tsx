@@ -15,7 +15,7 @@ import {
   type Item,
   type Theme
 } from "@glideapps/glide-data-grid";
-import { Check, Columns3, Download, Merge, Palette, Plus, Search, Trash2, X } from "lucide-react";
+import { Check, Columns3, Download, FileText, Merge, Palette, Plus, Search, Trash2, X } from "lucide-react";
 import type { ChangeEvent, ComponentProps, FormEvent } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -97,7 +97,11 @@ export type CrmTableProps = {
   columns: CrmTableColumn[];
   rows: CrmTableRow[];
   tableKey?: string;
+  initialFocusRowId?: string | null;
   documentUploadEndpoint?: string;
+  leadSummariesEndpoint?: string;
+  updateRecordEndpoint?: string;
+  offerGenerateEndpoint?: string;
   archiveEntity?: ArchiveRecordEntity;
   createRecord?: CreateRecordConfig;
 };
@@ -120,7 +124,43 @@ type DocumentUploadTarget = {
   files: File[];
 };
 
+type LeadSummaryHistoryItem = {
+  id: string;
+  leadId: string;
+  shortSummary: string;
+  longSummary: string | null;
+  source: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+type LeadSummaryHistoryResponse = {
+  leadId: string;
+  latest: LeadSummaryHistoryItem | null;
+  summaries: LeadSummaryHistoryItem[];
+};
+
+type LeadSummaryHistoryTarget = {
+  row: CrmTableRow;
+  loading: boolean;
+  error: string | null;
+  summaries: LeadSummaryHistoryItem[];
+};
+
 type BulkActionDialog = "delete" | "merge" | null;
+
+type MobileEditTarget = {
+  rowId: string;
+  columnId: string;
+  value: string;
+  saving: boolean;
+};
+
+type LeadSummaryDraft = {
+  shortSummary: string;
+  longSummary: string;
+  saving: boolean;
+};
 
 function defaultPreferences(columns: CrmTableColumn[]): TablePreferences {
   return {
@@ -447,6 +487,14 @@ function calendarCellDisplayData(items: CalendarCellValue): string {
   return items.map((item) => `${calendarDateLabel(item.startsAt)} ${calendarTimeLabel(item.startsAt)} ${item.title}`).join(", ");
 }
 
+function sortCalendarItemsByStart(items: CalendarCellValue): CalendarCellValue {
+  return [...items].sort((left, right) => left.startsAt.localeCompare(right.startsAt));
+}
+
+function mobileCalendarTitle(item: CalendarCellItem): string {
+  return `${calendarDateLabel(item.startsAt)} ${calendarTimeLabel(item.startsAt)} ${item.title}`;
+}
+
 function cellDocuments(value: CrmTableCellValue | undefined): DocumentCellValue {
   return Array.isArray(value) && value.every(isDocumentCellItem) ? value : [];
 }
@@ -491,6 +539,52 @@ function mobileDisplayValue(value: CrmTableCellValue | undefined): string | numb
     return "n/a";
   }
   return value ?? "n/a";
+}
+
+function textCellValue(value: CrmTableCellValue | undefined): string | null {
+  if (typeof value === "string" && value.trim()) {
+    return value.trim();
+  }
+  if (typeof value === "number") {
+    return String(value);
+  }
+  return null;
+}
+
+function mobileLeadSummary(row: CrmTableRow): { short: string; long: string | null; updatedAt: string | null } | null {
+  const short = textCellValue(row.values.summaryShort);
+  if (!short) {
+    return null;
+  }
+  const long = textCellValue(row.values.summaryLong);
+  return {
+    short,
+    long: long && long !== short ? long : null,
+    updatedAt: textCellValue(row.values.summaryUpdatedAt)
+  };
+}
+
+const mobileReadonlyColumnIds = new Set([
+  "code",
+  "client.name",
+  "client.phone",
+  "client.email",
+  "calendar",
+  "documents",
+  "offerStatus",
+  "offerTotalGross",
+  "offerMissingFields",
+  "summaryShort",
+  "summaryLong",
+  "summaryUpdatedAt"
+]);
+
+function isMobileEditableColumn(column: CrmTableColumn): boolean {
+  return !mobileReadonlyColumnIds.has(column.id) && column.valueKind !== "documents" && column.valueKind !== "calendar";
+}
+
+function isMobileMultilineColumn(columnId: string): boolean {
+  return ["description", "todo", "address", "notes", "rawInput"].includes(columnId);
 }
 
 function documentChipTitle(fileName: string): string {
@@ -710,7 +804,11 @@ export function CrmTable({
   columns,
   rows,
   tableKey = title.toLowerCase(),
+  initialFocusRowId,
   documentUploadEndpoint,
+  leadSummariesEndpoint,
+  updateRecordEndpoint,
+  offerGenerateEndpoint,
   archiveEntity,
   createRecord
 }: CrmTableProps) {
@@ -723,6 +821,7 @@ export function CrmTable({
   const [sort, setSort] = useState<TableSort | null>(null);
   const [gridSelection, setGridSelection] = useState<GridSelection>(() => emptySelection());
   const [showColumnMenu, setShowColumnMenu] = useState(false);
+  const lastMobileTapRef = useRef<{ key: string; at: number } | null>(null);
   const [editableRows, setEditableRows] = useState<CrmTableRow[]>(rows);
   const [draftRowIds, setDraftRowIds] = useState<Set<string>>(() => new Set());
   const [savingDraftIds, setSavingDraftIds] = useState<Set<string>>(() => new Set());
@@ -737,6 +836,7 @@ export function CrmTable({
   const [pendingDocumentUploads, setPendingDocumentUploads] = useState<Record<string, number>>({});
   const [uploadPulse, setUploadPulse] = useState(0);
   const [isUploading, setIsUploading] = useState(false);
+  const [isGeneratingOffer, setIsGeneratingOffer] = useState(false);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [createValues, setCreateValues] = useState<Record<string, string>>({});
   const [createError, setCreateError] = useState<string | null>(null);
@@ -744,6 +844,9 @@ export function CrmTable({
   const [isColorPickerOpen, setIsColorPickerOpen] = useState(false);
   const [linkedTableColor, setLinkedTableColor] = useState(defaultTableColor);
   const [bulkActionDialog, setBulkActionDialog] = useState<BulkActionDialog>(null);
+  const [mobileEditTarget, setMobileEditTarget] = useState<MobileEditTarget | null>(null);
+  const [summaryHistoryTarget, setSummaryHistoryTarget] = useState<LeadSummaryHistoryTarget | null>(null);
+  const [leadSummaryDraft, setLeadSummaryDraft] = useState<LeadSummaryDraft>({ shortSummary: "", longSummary: "", saving: false });
   const isDarkMode = useDarkModeEnabled();
   const tableFontScale = normalizedFontScale(preferences.fontScale);
   const tableColor = preferences.tableColor ?? defaultTableColor;
@@ -868,6 +971,22 @@ export function CrmTable({
       : editableRows;
     return sortRows(searchedRows, sort);
   }, [editableRows, query, sort]);
+
+  useEffect(() => {
+    if (!initialFocusRowId || filteredRows.length === 0 || configuredColumns.length === 0) {
+      return;
+    }
+    const rowIndex = filteredRows.findIndex((row) => row.id === initialFocusRowId);
+    if (rowIndex < 0) {
+      return;
+    }
+    setGridSelection(rowSelection([rowIndex]));
+    setFlashRowId(initialFocusRowId);
+    gridRef.current?.scrollTo(createTargetColumnIndex, rowIndex);
+    const timeout = window.setTimeout(() => setFlashRowId(null), 2200);
+    return () => window.clearTimeout(timeout);
+  }, [configuredColumns.length, createTargetColumnIndex, filteredRows, initialFocusRowId]);
+
   const selectedIndexes = useMemo(() => selectedRowIndexes(gridSelection, filteredRows.length), [filteredRows.length, gridSelection]);
   const selectedRows = useMemo(
     () => selectedIndexes.flatMap((index) => (filteredRows[index] ? [filteredRows[index]] : [])),
@@ -899,11 +1018,7 @@ export function CrmTable({
       const value = record?.values[String(column?.id)] ?? "";
       const isDraftRow = record ? draftRowIds.has(record.id) : false;
       const isFlashing = record?.id === flashRowId;
-      const themeOverride = isDraftRow
-        ? isFlashing
-          ? activeDraftRowTheme.flash
-          : activeDraftRowTheme.idle
-        : undefined;
+      const themeOverride = isFlashing ? activeDraftRowTheme.flash : isDraftRow ? activeDraftRowTheme.idle : undefined;
       if (column?.valueKind === "calendar") {
         const items = cellCalendarItems(value);
         return {
@@ -1395,6 +1510,171 @@ export function CrmTable({
     [closeDocumentUpload, decrementPendingDocumentUploads, documentUploadEndpoint, uploadSummaries, uploadTarget]
   );
 
+  const openMobileEdit = useCallback((row: CrmTableRow, column: CrmTableColumn) => {
+    if (!updateRecordEndpoint || !isMobileEditableColumn(column)) {
+      return;
+    }
+    setMobileEditTarget({
+      rowId: row.id,
+      columnId: column.id,
+      value: String(mobileDisplayValue(row.values[column.id]) === "n/a" ? "" : mobileDisplayValue(row.values[column.id])),
+      saving: false
+    });
+  }, [updateRecordEndpoint]);
+
+  const handleMobileFieldTap = useCallback((row: CrmTableRow, column: CrmTableColumn) => {
+    if (!updateRecordEndpoint || !isMobileEditableColumn(column)) {
+      return;
+    }
+    const key = `${row.id}:${column.id}`;
+    const now = Date.now();
+    const previous = lastMobileTapRef.current;
+    lastMobileTapRef.current = { key, at: now };
+    if (previous?.key === key && now - previous.at < 480) {
+      openMobileEdit(row, column);
+      lastMobileTapRef.current = null;
+    }
+  }, [openMobileEdit, updateRecordEndpoint]);
+
+  const cancelMobileEdit = useCallback(() => {
+    setMobileEditTarget(null);
+  }, []);
+
+  const saveMobileEdit = useCallback(async () => {
+    if (!mobileEditTarget || !updateRecordEndpoint || mobileEditTarget.saving) {
+      return;
+    }
+    const { rowId, columnId, value } = mobileEditTarget;
+    setMobileEditTarget((current) => (current ? { ...current, saving: true } : current));
+    try {
+      const response = await fetch(updateRecordEndpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          workspaceId: "default",
+          leadId: rowId,
+          patch: { [columnId]: value },
+          source: { channel: "web-mobile" }
+        })
+      });
+      const payload = (await response.json()) as { error?: string };
+      if (!response.ok) {
+        throw new Error(payload.error ?? "Update failed.");
+      }
+      setEditableRows((current) => updateRowCell(current, rowId, columnId, value));
+      setCreateError(null);
+      setMobileEditTarget(null);
+    } catch (error) {
+      setCreateError(error instanceof Error ? error.message : "Update failed.");
+      setMobileEditTarget((current) => (current ? { ...current, saving: false } : current));
+    }
+  }, [mobileEditTarget, updateRecordEndpoint]);
+
+  const openLeadSummaryHistory = useCallback(async (row: CrmTableRow) => {
+    if (!leadSummariesEndpoint) {
+      return;
+    }
+    const currentSummary = mobileLeadSummary(row);
+    setLeadSummaryDraft({
+      shortSummary: currentSummary?.short ?? "",
+      longSummary: currentSummary?.long ?? "",
+      saving: false
+    });
+    setSummaryHistoryTarget({ row, loading: true, error: null, summaries: [] });
+    try {
+      const url = new URL(leadSummariesEndpoint, window.location.origin);
+      url.searchParams.set("leadId", row.id);
+      const response = await fetch(url);
+      const payload = (await response.json()) as LeadSummaryHistoryResponse & { error?: string };
+      if (!response.ok) {
+        throw new Error(payload.error ?? "Summary history failed.");
+      }
+      setSummaryHistoryTarget({ row, loading: false, error: null, summaries: payload.summaries ?? [] });
+    } catch (error) {
+      setSummaryHistoryTarget({
+        row,
+        loading: false,
+        error: error instanceof Error ? error.message : "Summary history failed.",
+        summaries: []
+      });
+    }
+  }, [leadSummariesEndpoint]);
+
+  const submitLeadSummaryDraft = useCallback(async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!summaryHistoryTarget || !leadSummariesEndpoint || leadSummaryDraft.saving) {
+      return;
+    }
+    const shortSummary = leadSummaryDraft.shortSummary.trim();
+    const longSummary = leadSummaryDraft.longSummary.trim();
+    if (!shortSummary) {
+      setSummaryHistoryTarget((current) =>
+        current ? { ...current, error: "Short summary is required." } : current
+      );
+      return;
+    }
+    setLeadSummaryDraft((current) => ({ ...current, saving: true }));
+    try {
+      const response = await fetch(leadSummariesEndpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          workspaceId: "default",
+          leadId: summaryHistoryTarget.row.id,
+          shortSummary,
+          longSummary: longSummary || null,
+          source: "manual"
+        })
+      });
+      const payload = (await response.json()) as { summary?: LeadSummaryHistoryItem; error?: string };
+      if (!response.ok || !payload.summary) {
+        throw new Error(payload.error ?? "Summary save failed.");
+      }
+      const summary = payload.summary;
+      setEditableRows((current) =>
+        current.map((row) =>
+          row.id === summary.leadId
+            ? {
+                ...row,
+                values: {
+                  ...row.values,
+                  summaryShort: summary.shortSummary,
+                  summaryLong: summary.longSummary,
+                  summaryUpdatedAt: summary.createdAt
+                }
+              }
+            : row
+        )
+      );
+      setSummaryHistoryTarget((current) =>
+        current
+          ? {
+              ...current,
+              row: {
+                ...current.row,
+                values: {
+                  ...current.row.values,
+                  summaryShort: summary.shortSummary,
+                  summaryLong: summary.longSummary,
+                  summaryUpdatedAt: summary.createdAt
+                }
+              },
+              error: null,
+              summaries: [summary, ...current.summaries]
+            }
+          : current
+      );
+      setLeadSummaryDraft({ shortSummary: summary.shortSummary, longSummary: summary.longSummary ?? "", saving: false });
+    } catch (error) {
+      setSummaryHistoryTarget((current) =>
+        current
+          ? { ...current, error: error instanceof Error ? error.message : "Summary save failed." }
+          : current
+      );
+      setLeadSummaryDraft((current) => ({ ...current, saving: false }));
+    }
+  }, [leadSummariesEndpoint, leadSummaryDraft, summaryHistoryTarget]);
+
   const drawCell = useCallback<NonNullable<ComponentProps<typeof DataEditor>["drawCell"]>>(
     (args, drawContent) => {
       drawContent();
@@ -1471,9 +1751,48 @@ export function CrmTable({
     setBulkActionDialog(null);
   }, [archiveEntity, selectedRows]);
 
+  const generateOfferForSelectedRow = useCallback(async () => {
+    const row = selectedRows[0];
+    if (!row || !offerGenerateEndpoint || isGeneratingOffer) {
+      return;
+    }
+    setIsGeneratingOffer(true);
+    setCreateError(null);
+    try {
+      const response = await fetch(offerGenerateEndpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ leadId: row.id })
+      });
+      const payload = (await response.json()) as { document?: DocumentCellItem; error?: string };
+      if (!response.ok || !payload.document) {
+        throw new Error(payload.error ?? "Commercial offer generation failed.");
+      }
+      const document = payload.document;
+      setEditableRows((current) =>
+        current.map((item) =>
+          item.id === row.id
+            ? {
+                ...item,
+                values: {
+                ...item.values,
+                  documents: [...cellDocuments(item.values.documents), document]
+                }
+              }
+            : item
+        )
+      );
+    } catch (reason) {
+      setCreateError(reason instanceof Error ? reason.message : "Commercial offer generation failed.");
+    } finally {
+      setIsGeneratingOffer(false);
+    }
+  }, [isGeneratingOffer, offerGenerateEndpoint, selectedRows]);
+
   const visibleColumnIds = new Set(configuredColumns.map((column) => column.id));
   const allColumnsByPreference = applyTablePreferences(columns, { ...preferences, hidden: [] });
   const mobileColumns = configuredColumns
+    .filter((column) => !["description", "summaryShort", "summaryLong", "summaryUpdatedAt"].includes(column.id))
     .slice()
     .sort((left, right) => (left.mobilePriority ?? 99) - (right.mobilePriority ?? 99))
     .slice(0, 6);
@@ -1493,10 +1812,18 @@ export function CrmTable({
               </span>
               <div>
                 {selectedRows.length === 1 ? (
-                  <button type="button" className="danger" onClick={() => setBulkActionDialog("delete")}>
-                    <Trash2 size={13} />
-                    Delete
-                  </button>
+                  <>
+                    {offerGenerateEndpoint ? (
+                      <button type="button" onClick={generateOfferForSelectedRow} disabled={isGeneratingOffer}>
+                        <FileText size={14} />
+                        {isGeneratingOffer ? "Generating" : "Generate offer"}
+                      </button>
+                    ) : null}
+                    <button type="button" className="danger" onClick={() => setBulkActionDialog("delete")}>
+                      <Trash2 size={13} />
+                      Delete
+                    </button>
+                  </>
                 ) : (
                   <button type="button" onClick={() => setBulkActionDialog("merge")}>
                     <Merge size={15} />
@@ -1684,16 +2011,116 @@ export function CrmTable({
         />
       </div>
       <div className="mobileTableList">
-        {filteredRows.map((row) => (
-          <article className="mobileTableRow" key={row.id}>
-            {mobileColumns.map((column) => (
-              <div key={column.id}>
-                <span>{column.title}</span>
-                <strong>{mobileDisplayValue(row.values[column.id])}</strong>
-              </div>
-            ))}
-          </article>
-        ))}
+        {filteredRows.map((row) => {
+          const summary = mobileLeadSummary(row) ?? { short: "", long: null, updatedAt: null };
+          const hasSummary = Boolean(summary.short);
+          const description = textCellValue(row.values.description);
+          return (
+            <article className="mobileTableRow" key={row.id}>
+              {mobileColumns.map((column) => {
+                const isEditing = mobileEditTarget?.rowId === row.id && mobileEditTarget.columnId === column.id;
+                const canEdit = isMobileEditableColumn(column) && Boolean(updateRecordEndpoint);
+                if (column.valueKind === "calendar") {
+                  const calendarItems = sortCalendarItemsByStart(cellCalendarItems(row.values[column.id]));
+                  const firstCalendarItem = calendarItems[0] ?? null;
+                  return (
+                    <div className="mobileField mobileCalendarField" key={column.id}>
+                      {firstCalendarItem ? (
+                        <details>
+                          <summary>
+                            <span>{column.title}</span>
+                            <strong>{mobileCalendarTitle(firstCalendarItem)}</strong>
+                            {calendarItems.length > 1 ? <em aria-label={`${calendarItems.length - 1} more events`}>...</em> : null}
+                          </summary>
+                          {calendarItems.length > 1 ? (
+                            <ul>
+                              {calendarItems.map((item) => (
+                                <li key={`${item.kind}-${item.id}`}>
+                                  <span>{calendarDateLabel(item.startsAt)} {calendarTimeLabel(item.startsAt)}</span>
+                                  <strong>{item.title}</strong>
+                                </li>
+                              ))}
+                            </ul>
+                          ) : (
+                            <p>No more events.</p>
+                          )}
+                        </details>
+                      ) : (
+                        <>
+                          <span>{column.title}</span>
+                          <strong>No events</strong>
+                        </>
+                      )}
+                    </div>
+                  );
+                }
+                return (
+                  <div
+                    className={`mobileField ${canEdit ? "editable" : ""} ${isEditing ? "editing" : ""}`}
+                    key={column.id}
+                    onClick={() => handleMobileFieldTap(row, column)}
+                    onDoubleClick={() => openMobileEdit(row, column)}
+                  >
+                    <span>{column.title}</span>
+                    {isEditing ? (
+                      <div className="mobileInlineEditor">
+                        {isMobileMultilineColumn(column.id) ? (
+                          <textarea
+                            autoFocus
+                            rows={2}
+                            value={mobileEditTarget.value}
+                            onChange={(event) =>
+                              setMobileEditTarget((current) => (current ? { ...current, value: event.target.value } : current))
+                            }
+                          />
+                        ) : (
+                          <input
+                            autoFocus
+                            value={mobileEditTarget.value}
+                            onChange={(event) =>
+                              setMobileEditTarget((current) => (current ? { ...current, value: event.target.value } : current))
+                            }
+                          />
+                        )}
+                        <button type="button" onClick={saveMobileEdit} disabled={mobileEditTarget.saving} aria-label="Save field">
+                          <Check size={14} />
+                        </button>
+                        <button type="button" onClick={cancelMobileEdit} aria-label="Cancel edit">
+                          <X size={14} />
+                        </button>
+                      </div>
+                    ) : (
+                      <strong>{mobileDisplayValue(row.values[column.id])}</strong>
+                    )}
+                  </div>
+                );
+              })}
+              {description ? (
+                <details className="mobileDescriptionDetails">
+                  <summary>Description</summary>
+                  <p>{description}</p>
+                </details>
+              ) : null}
+              {hasSummary ? (
+                <div className="mobileLeadSummary">
+                  <span>Summary{summary.updatedAt ? ` · ${mobileDisplayValue(summary.updatedAt)}` : ""}</span>
+                  <strong>{summary.short}</strong>
+                  {summary.long ? (
+                    <details>
+                      <summary>Full summary</summary>
+                      <p>{summary.long}</p>
+                      {leadSummariesEndpoint ? (
+                        <button type="button" onClick={() => openLeadSummaryHistory(row)}>
+                          History
+                        </button>
+                      ) : null}
+                    </details>
+                  ) : null}
+                </div>
+              ) : null}
+            </article>
+          );
+        })}
       </div>
       {bulkActionDialog === "merge" ? (
         <div className="documentModalBackdrop" role="presentation" onMouseDown={() => setBulkActionDialog(null)}>
@@ -1743,6 +2170,67 @@ export function CrmTable({
                 Delete
               </button>
             </footer>
+          </section>
+        </div>
+      ) : null}
+      {summaryHistoryTarget ? (
+        <div className="documentModalBackdrop" role="presentation" onMouseDown={() => setSummaryHistoryTarget(null)}>
+          <section className="documentModal leadSummaryHistoryModal" role="dialog" aria-modal="true" onMouseDown={(event) => event.stopPropagation()}>
+            <header>
+              <div>
+                <span>SUMMARY</span>
+                <h2>{String(mobileDisplayValue(summaryHistoryTarget.row.values.code) || summaryHistoryTarget.row.id)}</h2>
+              </div>
+              <button type="button" onClick={() => setSummaryHistoryTarget(null)} aria-label="Close summary history">
+                <X size={18} />
+              </button>
+            </header>
+            {summaryHistoryTarget.loading ? <p>Loading summary history...</p> : null}
+            {summaryHistoryTarget.error ? <p className="documentUploadError">{summaryHistoryTarget.error}</p> : null}
+            <form className="leadSummaryComposer" onSubmit={submitLeadSummaryDraft}>
+              <label>
+                <span>Short summary</span>
+                <textarea
+                  rows={2}
+                  maxLength={240}
+                  value={leadSummaryDraft.shortSummary}
+                  onChange={(event) =>
+                    setLeadSummaryDraft((current) => ({ ...current, shortSummary: event.target.value }))
+                  }
+                  placeholder="Two-line lead summary"
+                />
+              </label>
+              <label>
+                <span>Full summary</span>
+                <textarea
+                  rows={4}
+                  maxLength={1200}
+                  value={leadSummaryDraft.longSummary}
+                  onChange={(event) =>
+                    setLeadSummaryDraft((current) => ({ ...current, longSummary: event.target.value }))
+                  }
+                  placeholder="Longer summary for the collapsible card section"
+                />
+              </label>
+              <button type="submit" disabled={leadSummaryDraft.saving || !leadSummaryDraft.shortSummary.trim()}>
+                {leadSummaryDraft.saving ? "Saving" : "Save summary"}
+              </button>
+            </form>
+            {!summaryHistoryTarget.loading && summaryHistoryTarget.summaries.length === 0 ? (
+              <p>No summary history yet.</p>
+            ) : null}
+            <div className="leadSummaryHistoryList">
+              {summaryHistoryTarget.summaries.map((summaryItem) => (
+                <article key={summaryItem.id}>
+                  <span>
+                    {formatDocumentCreatedAt(summaryItem.createdAt) ?? summaryItem.createdAt}
+                    {summaryItem.source ? ` · ${summaryItem.source}` : ""}
+                  </span>
+                  <strong>{summaryItem.shortSummary}</strong>
+                  {summaryItem.longSummary ? <p>{summaryItem.longSummary}</p> : null}
+                </article>
+              ))}
+            </div>
           </section>
         </div>
       ) : null}

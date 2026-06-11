@@ -9,6 +9,7 @@ import type {
   CrmRepository,
   EntityMap,
   Lead,
+  LeadSummary,
   OutreachTouch,
   Reminder
 } from "@lightcrm/core";
@@ -83,6 +84,13 @@ function mapDocumentFile(record: Awaited<ReturnType<PrismaClient["documentFile"]
   return record;
 }
 
+function mapLeadSummary(record: Awaited<ReturnType<PrismaClient["leadSummary"]["findFirst"]>>): LeadSummary {
+  if (!record) {
+    throw new Error("Lead summary not found");
+  }
+  return record;
+}
+
 function mapAuditLog(record: Awaited<ReturnType<PrismaClient["auditLog"]["findFirst"]>>): AuditLog {
   if (!record) {
     throw new Error("Audit log not found");
@@ -135,6 +143,10 @@ export class PrismaCrmRepository implements CrmRepository {
         const record = await this.prisma.documentFile.findFirst({ where: { id } });
         return record ? (mapDocumentFile(record) as EntityMap[K]) : null;
       }
+      case "leadSummary": {
+        const record = await this.prisma.leadSummary.findFirst({ where: { id } });
+        return record ? (mapLeadSummary(record) as EntityMap[K]) : null;
+      }
     }
   }
 
@@ -168,6 +180,10 @@ export class PrismaCrmRepository implements CrmRepository {
         return (
           await this.prisma.documentFile.findMany({ where: { workspaceId }, orderBy: { updatedAt: "desc" } })
         ).map(mapDocumentFile) as EntityMap[K][];
+      case "leadSummary":
+        return (
+          await this.prisma.leadSummary.findMany({ where: { workspaceId }, orderBy: { createdAt: "desc" } })
+        ).map(mapLeadSummary) as EntityMap[K][];
     }
   }
 
@@ -228,6 +244,14 @@ export class PrismaCrmRepository implements CrmRepository {
             where: { id: record.id },
             create: record as DocumentFile,
             update: record as DocumentFile
+          })
+        ) as EntityMap[K];
+      case "leadSummary":
+        return mapLeadSummary(
+          await this.prisma.leadSummary.upsert({
+            where: { id: record.id },
+            create: record as LeadSummary,
+            update: record as LeadSummary
           })
         ) as EntityMap[K];
     }

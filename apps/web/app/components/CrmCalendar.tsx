@@ -110,6 +110,10 @@ function itemMeta(item: CalendarFeedItem) {
   return [item.related.label, item.location, item.sourceChannel].filter(Boolean).join(" · ");
 }
 
+function sortItemsByStart(items: CalendarFeedItem[]) {
+  return [...items].sort((left, right) => new Date(left.startsAt).getTime() - new Date(right.startsAt).getTime());
+}
+
 function addQuery(params: URLSearchParams, key: string, value: string | undefined) {
   if (value) {
     params.set(key, value);
@@ -126,6 +130,61 @@ function CalendarChip({ item, compact = false }: { item: CalendarFeedItem; compa
       </div>
       {!compact && meta ? <p>{meta}</p> : null}
     </article>
+  );
+}
+
+function CalendarInspector({ selectedDate, items }: { selectedDate: Date; items: CalendarFeedItem[] }) {
+  const sortedItems = sortItemsByStart(items);
+  return (
+    <aside className="calendarInspector" aria-label="Selected day events">
+      <header>
+        <span>{dayFormatter.format(selectedDate)}</span>
+        <strong>{fullDateFormatter.format(selectedDate)}</strong>
+      </header>
+      {sortedItems.length > 0 ? (
+        <div className="calendarTimeline">
+          {sortedItems.map((item) => {
+            const meta = itemMeta(item);
+            return (
+              <article className="calendarTimelineItem" key={`${item.kind}-${item.id}`}>
+                <div className="calendarTimelineRail">
+                  <span />
+                </div>
+                <div className="calendarTimelineCard">
+                  <div className="calendarTimelineTopline">
+                    <span>{itemTimeLabel(item)}</span>
+                    <b>{item.kind}</b>
+                  </div>
+                  <strong>{item.title}</strong>
+                  {item.description ? <p>{item.description}</p> : null}
+                  {meta ? <small>{meta}</small> : null}
+                  <div className="calendarTimelineActions">
+                    {item.related.href ? (
+                      <a href={item.related.href}>Open</a>
+                    ) : (
+                      <button type="button" onClick={() => window.alert("No linked CRM record for this item yet.")}>
+                        Open
+                      </button>
+                    )}
+                    <button type="button" onClick={() => window.alert("Calendar item completion is not implemented yet.")}>
+                      Done
+                    </button>
+                    <button type="button" onClick={() => window.alert("Calendar rescheduling is not implemented yet.")}>
+                      Move
+                    </button>
+                  </div>
+                </div>
+              </article>
+            );
+          })}
+        </div>
+      ) : (
+        <div className="calendarInspectorEmpty">
+          <strong>No events for this day</strong>
+          <span>Select a day with scheduled work or add a reminder from a lead/client card.</span>
+        </div>
+      )}
+    </aside>
   );
 }
 
@@ -148,9 +207,11 @@ export function CrmCalendar({
 }: CrmCalendarProps) {
   const [mode, setMode] = useState<CalendarViewMode>("month");
   const [anchorDate, setAnchorDate] = useState(() => startOfDay(new Date()));
+  const [selectedDate, setSelectedDate] = useState(() => startOfDay(new Date()));
   const [items, setItems] = useState<CalendarFeedItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [failed, setFailed] = useState(false);
+  const [isCompactCalendar, setIsCompactCalendar] = useState(false);
   const range = useMemo(() => viewRange(mode, anchorDate), [anchorDate, mode]);
   const visibleDays = useMemo(() => {
     const totalDays = mode === "month" ? 42 : mode === "week" ? 7 : mode === "day" ? 1 : 31;
@@ -176,6 +237,14 @@ export function CrmCalendar({
     }
     return monthFormatter.format(anchorDate);
   }, [anchorDate, mode, range.from, range.to]);
+
+  useEffect(() => {
+    const query = window.matchMedia("(max-width: 860px)");
+    const syncCompactCalendar = () => setIsCompactCalendar(query.matches);
+    syncCompactCalendar();
+    query.addEventListener("change", syncCompactCalendar);
+    return () => query.removeEventListener("change", syncCompactCalendar);
+  }, []);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -209,7 +278,11 @@ export function CrmCalendar({
 
   const move = (direction: -1 | 1) => {
     if (mode === "month") {
-      setAnchorDate((current) => addMonths(current, direction));
+      setAnchorDate((current) => {
+        const next = addMonths(current, direction);
+        setSelectedDate(startOfDay(new Date(next.getFullYear(), next.getMonth(), 1)));
+        return next;
+      });
       return;
     }
     if (mode === "week") {
@@ -219,6 +292,7 @@ export function CrmCalendar({
     setAnchorDate((current) => addDays(current, direction));
   };
   const visibleItemCount = items.length;
+  const selectedItems = itemsByDay.get(dateKey(selectedDate)) ?? [];
 
   return (
     <section className="calendarPage">
@@ -232,7 +306,14 @@ export function CrmCalendar({
             <button type="button" onClick={() => move(-1)} aria-label="Previous calendar range">
               ‹
             </button>
-            <button type="button" onClick={() => setAnchorDate(startOfDay(new Date()))}>
+            <button
+              type="button"
+              onClick={() => {
+                const today = startOfDay(new Date());
+                setAnchorDate(today);
+                setSelectedDate(today);
+              }}
+            >
               Today
             </button>
             <button type="button" onClick={() => move(1)} aria-label="Next calendar range">
@@ -275,14 +356,60 @@ export function CrmCalendar({
           })}
           {!isLoading && visibleItemCount === 0 ? <EmptyCalendarState /> : null}
         </div>
+      ) : mode === "month" ? (
+        <div
+          className="calendarSplit"
+          style={isCompactCalendar ? { maxWidth: "min(360px, calc(100vw - 24px))", minWidth: 0, width: "100%" } : undefined}
+        >
+          <div
+            className="calendarGrid calendarGridMonth"
+            style={
+              isCompactCalendar
+                ? {
+                    gridTemplateColumns: "repeat(7, minmax(0, 1fr))",
+                    maxWidth: "min(360px, calc(100vw - 24px))",
+                    minWidth: 0,
+                    width: "min(360px, calc(100vw - 24px))"
+                  }
+                : { gridTemplateColumns: "repeat(7, minmax(0, 1fr))" }
+            }
+          >
+            {visibleDays.map((day) => {
+              const dayItems = sortItemsByStart(itemsByDay.get(dateKey(day)) ?? []);
+              const outsideMonth = day.getMonth() !== anchorDate.getMonth();
+              const isSelected = sameDay(day, selectedDate);
+              return (
+                <button
+                  type="button"
+                  className={`calendarDay calendarDayButton ${outsideMonth ? "muted" : ""} ${
+                    sameDay(day, new Date()) ? "today" : ""
+                  } ${isSelected ? "selected" : ""}`}
+                  key={dateKey(day)}
+                  onClick={() => setSelectedDate(startOfDay(day))}
+                >
+                  <header>
+                    <span>{dayFormatter.format(day)}</span>
+                    <strong>{day.getDate()}</strong>
+                  </header>
+                  <div className="calendarDayItems">
+                    {dayItems.slice(0, 3).map((item) => (
+                      <CalendarChip item={item} key={`${item.kind}-${item.id}`} compact />
+                    ))}
+                    {dayItems.length > 3 ? <span className="calendarMore">+{dayItems.length - 3} more</span> : null}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+          <CalendarInspector selectedDate={selectedDate} items={selectedItems} />
+        </div>
       ) : (
         <div className={`calendarGrid calendarGrid${mode[0].toUpperCase()}${mode.slice(1)}`}>
           {visibleDays.map((day) => {
-            const dayItems = itemsByDay.get(dateKey(day)) ?? [];
-            const outsideMonth = mode === "month" && day.getMonth() !== anchorDate.getMonth();
+            const dayItems = sortItemsByStart(itemsByDay.get(dateKey(day)) ?? []);
             return (
               <section
-                className={`calendarDay ${outsideMonth ? "muted" : ""} ${sameDay(day, new Date()) ? "today" : ""}`}
+                className={`calendarDay ${sameDay(day, new Date()) ? "today" : ""}`}
                 key={dateKey(day)}
               >
                 <header>
@@ -290,10 +417,9 @@ export function CrmCalendar({
                   <strong>{day.getDate()}</strong>
                 </header>
                 <div className="calendarDayItems">
-                  {dayItems.slice(0, mode === "month" ? 4 : 12).map((item) => (
-                    <CalendarChip item={item} key={`${item.kind}-${item.id}`} compact={mode === "month"} />
+                  {dayItems.slice(0, 12).map((item) => (
+                    <CalendarChip item={item} key={`${item.kind}-${item.id}`} />
                   ))}
-                  {dayItems.length > 4 && mode === "month" ? <span className="calendarMore">+{dayItems.length - 4} more</span> : null}
                 </div>
               </section>
             );

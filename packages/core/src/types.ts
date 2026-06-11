@@ -6,6 +6,7 @@ export type CrmEntity =
   | "reminder"
   | "calendarEvent"
   | "documentFile"
+  | "leadSummary"
   | "tablePreference"
   | "auditLog";
 
@@ -24,6 +25,7 @@ export type BaseRecord = {
 };
 
 export type Client = BaseRecord & {
+  code: string | null;
   name: string;
   email: string | null;
   phone: string | null;
@@ -37,6 +39,7 @@ export type Client = BaseRecord & {
 };
 
 export type Lead = BaseRecord & {
+  code: string | null;
   clientId: string | null;
   name: string;
   email: string | null;
@@ -119,6 +122,13 @@ export type DocumentFile = BaseRecord & {
   sizeBytes: number | null;
 };
 
+export type LeadSummary = BaseRecord & {
+  leadId: string;
+  shortSummary: string;
+  longSummary: string | null;
+  source: string | null;
+};
+
 export type TablePreference = {
   id: string;
   workspaceId: string;
@@ -150,6 +160,7 @@ export type EntityMap = {
   reminder: Reminder;
   calendarEvent: CalendarEvent;
   documentFile: DocumentFile;
+  leadSummary: LeadSummary;
   tablePreference: TablePreference;
   auditLog: AuditLog;
 };
@@ -157,6 +168,7 @@ export type EntityMap = {
 export type UpsertClientInput = {
   id?: string;
   workspaceId: string;
+  code?: string | null;
   name: string;
   email?: string | null;
   phone?: string | null;
@@ -172,6 +184,7 @@ export type UpsertClientInput = {
 export type UpsertLeadInput = {
   id?: string;
   workspaceId: string;
+  code?: string | null;
   clientId?: string | null;
   name: string;
   email?: string | null;
@@ -247,6 +260,14 @@ export type UpsertDocumentFileInput = {
   sizeBytes?: number | null;
 };
 
+export type CreateLeadSummaryInput = {
+  workspaceId: string;
+  leadId: string;
+  shortSummary: string;
+  longSummary?: string | null;
+  source?: string | null;
+};
+
 export type LeadIntakeTextItem = {
   sourceMessageId?: string | null;
   author?: string | null;
@@ -282,6 +303,7 @@ export type IngestLeadIntakeInput = {
 export type LeadIntakeResult = {
   lead: Lead;
   documents: DocumentFile[];
+  leadSummary: LeadSummary;
   summary: string;
   originalTakes: string[];
 };

@@ -12,6 +12,7 @@ import type {
   CrmOrchestrationInput,
   CrmOrchestrationResult,
   ExtractedFacts,
+  LangGraphTraceEvent,
   LangGraphRuntimeSettings,
   OrchestrationContext,
   PlannedCrmAction,
@@ -52,23 +53,75 @@ const SemanticOrchestrationAnnotation = Annotation.Root({
   explanations: Annotation<string[]>({
     reducer: (left, right) => [...left, ...right],
     default: () => []
+  }),
+  trace: Annotation<LangGraphTraceEvent[]>({
+    reducer: (left, right) => [...left, ...right],
+    default: () => []
   })
 });
 
 type SemanticOrchestrationState = typeof SemanticOrchestrationAnnotation.State;
+
+function traceEvent(
+  state: SemanticOrchestrationState,
+  node: LangGraphTraceEvent["node"],
+  status: LangGraphTraceEvent["status"],
+  titleRu: string,
+  messageRu: string,
+  details?: LangGraphTraceEvent["details"]
+): LangGraphTraceEvent {
+  const index = state.trace.length + 1;
+  return {
+    id: `${String(index).padStart(2, "0")}-${node}`,
+    node,
+    status,
+    titleRu,
+    messageRu,
+    details
+  };
+}
 
 function collectInput(state: SemanticOrchestrationState): Partial<SemanticOrchestrationState> {
   const normalizedText = state.input.text.trim().replace(/\s+/g, " ");
   return {
     workspaceId: state.input.workspaceId,
     normalizedText,
-    explanations: [`Received ${state.input.sourceChannel ?? "telegram"} message.`]
+    explanations: [`Received ${state.input.sourceChannel ?? "telegram"} message.`],
+    trace: [
+      traceEvent(
+        state,
+        "collectInput",
+        "done",
+        "Получил входящее сообщение",
+        `Источник: ${state.input.sourceChannel ?? "telegram"}. Текст приведён к рабочему виду без лишних пробелов.`,
+        {
+          sourceChannel: state.input.sourceChannel ?? "telegram",
+          messageId: state.input.messageId ?? null,
+          textLength: normalizedText.length
+        }
+      )
+    ]
   };
 }
 
 async function buildContext(state: SemanticOrchestrationState): Promise<Partial<SemanticOrchestrationState>> {
+  const context = await buildOrchestrationContext({ input: state.input });
   return {
-    context: await buildOrchestrationContext({ input: state.input })
+    context,
+    trace: [
+      traceEvent(
+        state,
+        "buildContext",
+        "done",
+        "Собрал CRM-контекст",
+        `Поднял ближайшие лиды и недавние сообщения, чтобы не принимать решение только по одной фразе.`,
+        {
+          recentLeads: context.recentLeads.length,
+          recentMessages: context.recentMessages.length,
+          relationshipHints: context.relationshipHints.length
+        }
+      )
+    ]
   };
 }
 
@@ -79,7 +132,7 @@ function semanticSystemPrompt(state: SemanticOrchestrationState, nodeInstruction
 const intentJsonContract = [
   "Return exactly this JSON shape:",
   "{",
-  '  "primaryIntent": "create_lead | update_lead | create_task | create_reminder | create_meeting | attach_document | generate_offer_task | add_lead_note | ask_clarification | no_action",',
+  '  "primaryIntent": "create_lead | search_leads | update_lead | create_task | create_reminder | create_meeting | attach_document | generate_offer_task | add_lead_note | ask_clarification | no_action",',
   '  "secondaryIntents": [],',
   '  "confidence": 0.0,',
   '  "reason": "short explanation",',
@@ -132,7 +185,22 @@ async function classifyIntent(state: SemanticOrchestrationState): Promise<Partia
   return {
     intent: result.primaryIntent,
     intentClassification: result,
-    explanations: [`Classified intent as ${result.primaryIntent} (${result.confidence}). ${result.reason}`]
+    explanations: [`Classified intent as ${result.primaryIntent} (${result.confidence}). ${result.reason}`],
+    trace: [
+      traceEvent(
+        state,
+        "classifyIntent",
+        "done",
+        "Определил намерение",
+        `Основное намерение: ${result.primaryIntent}. Дополнительные намерения: ${
+          result.secondaryIntents.length > 0 ? result.secondaryIntents.join(", ") : "не найдены"
+        }.`,
+        {
+          confidence: result.confidence,
+          reason: result.reason
+        }
+      )
+    ]
   };
 }
 
@@ -154,7 +222,24 @@ async function resolveTarget(state: SemanticOrchestrationState): Promise<Partial
 
   return {
     target: result,
-    explanations: [`Resolved target as ${result.targetType}:${result.targetId ?? "none"} (${result.confidence}).`]
+    explanations: [`Resolved target as ${result.targetType}:${result.targetId ?? "none"} (${result.confidence}).`],
+    trace: [
+      traceEvent(
+        state,
+        "resolveTarget",
+        result.needsClarification ? "review" : "done",
+        "Проверил, к какой записи это относится",
+        result.targetId
+          ? `Нашёл целевую запись: ${result.targetType}:${result.targetId}.`
+          : "Не нашёл точную существующую запись; это может быть новая заявка или нужен выбор цели.",
+        {
+          targetType: result.targetType,
+          targetId: result.targetId,
+          confidence: result.confidence,
+          candidates: result.candidates.length
+        }
+      )
+    ]
   };
 }
 
@@ -178,7 +263,23 @@ async function extractEntities(state: SemanticOrchestrationState): Promise<Parti
 
   return {
     entities: result,
-    explanations: [`Extracted ${Object.keys(result.fields).length} semantic field(s).`]
+    explanations: [`Extracted ${Object.keys(result.fields).length} semantic field(s).`],
+    trace: [
+      traceEvent(
+        state,
+        "extractEntities",
+        "done",
+        "Вытащил факты из сообщения",
+        `Нашёл ${Object.keys(result.fields).length} полей. Недостающие данные: ${
+          result.missingData.length > 0 ? result.missingData.join(", ") : "критичных пробелов нет"
+        }.`,
+        {
+          fields: Object.keys(result.fields).length,
+          missingData: result.missingData.length,
+          notes: result.notes.length
+        }
+      )
+    ]
   };
 }
 
@@ -223,7 +324,21 @@ async function validateAction(state: SemanticOrchestrationState): Promise<Partia
   return {
     validation,
     risk,
-    explanations: [`Validated action as ${risk}. ${validation.reason}`]
+    explanations: [`Validated action as ${risk}. ${validation.reason}`],
+    trace: [
+      traceEvent(
+        state,
+        "validateAction",
+        risk === "blocked" ? "blocked" : risk === "review" ? "review" : "done",
+        "Проверил безопасность действия",
+        `Риск: ${risk}. Причина: ${validation.reason}`,
+        {
+          approved: validation.approved,
+          riskLevel: validation.riskLevel,
+          needsHumanConfirmation: validation.needsHumanConfirmation
+        }
+      )
+    ]
   };
 }
 
@@ -276,6 +391,29 @@ function createReviewAction(state: SemanticOrchestrationState, reason: string): 
   };
 }
 
+const actionTypeByIntent: Partial<Record<SemanticIntent, PlannedCrmAction["type"]>> = {
+  create_lead: "create_lead",
+  search_leads: "search_leads",
+  create_reminder: "create_reminder",
+  add_lead_note: "update_lead",
+  update_lead: "update_lead"
+};
+
+function plannedActionTypes(state: SemanticOrchestrationState): PlannedCrmAction["type"][] {
+  const intents = [state.intent, ...state.intentClassification.secondaryIntents];
+  const actionTypes: PlannedCrmAction["type"][] = [];
+
+  for (const intent of intents) {
+    const actionType =
+      intent === "generate_offer_task" && shouldCreateLeadFromOfferIntake(state) ? "create_lead" : actionTypeByIntent[intent];
+    if (actionType && !actionTypes.includes(actionType)) {
+      actionTypes.push(actionType);
+    }
+  }
+
+  return actionTypes;
+}
+
 function semanticPayload(state: SemanticOrchestrationState): Record<string, unknown> {
   return {
     intent: state.intent,
@@ -325,9 +463,7 @@ function shouldCreateLeadFromLeadIntake(state: SemanticOrchestrationState): bool
     state.intent === "create_lead" &&
     state.target.targetId === null &&
     !hasLikelyDuplicate &&
-    (state.target.targetType === "none" || state.target.targetType === "project" || state.target.targetType === "lead") &&
-    hasEvidencedEntityValue(state, "clientName") &&
-    (hasEvidencedEntityValue(state, "requestType") || hasEvidencedEntityValue(state, "projectAddress"))
+    (state.target.targetType === "none" || state.target.targetType === "project" || state.target.targetType === "lead")
   );
 }
 
@@ -337,28 +473,62 @@ function planAction(state: SemanticOrchestrationState): Partial<SemanticOrchestr
     state.validation.reason ??
     "Semantic orchestration requires human review before execution.";
 
-  if (shouldCreateLeadFromOfferIntake(state) || shouldCreateLeadFromLeadIntake(state)) {
+  if (
+    state.validation.riskLevel !== "high" &&
+    (shouldCreateLeadFromOfferIntake(state) || shouldCreateLeadFromLeadIntake(state))
+  ) {
     if (!state.settings.confirmationPolicy.allowAutoCreateLead) {
       return {
         risk: "review",
         facts: compatibilityFacts(state),
-        actions: [createReviewAction(state, "Runtime settings do not allow automatic lead creation.")]
+        actions: [createReviewAction(state, "Runtime settings do not allow automatic lead creation.")],
+        trace: [
+          traceEvent(
+            state,
+            "planAction",
+            "review",
+            "Подготовил действие",
+            "Автоматическое создание лида отключено в настройках, поэтому нужен review."
+          )
+        ]
       };
+    }
+
+    const actions: PlannedCrmAction[] = [
+      {
+        type: "create_lead",
+        risk: "auto",
+        reason:
+          "The final project workflow is not ready yet, but the message is a lead intake and can be saved as a needs-data draft lead.",
+        payload: semanticPayload(state)
+      }
+    ];
+    if (
+      state.intentClassification.secondaryIntents.includes("create_reminder") &&
+      state.settings.confirmationPolicy.allowAutoCreateReminder
+    ) {
+      actions.push({
+        type: "create_reminder",
+        risk: "auto",
+        reason: "The same message also asks to create a reminder.",
+        payload: semanticPayload(state)
+      });
     }
 
     return {
       risk: "auto",
       facts: compatibilityFacts(state),
-      actions: [
-        {
-          type: "create_lead",
-          risk: "auto",
-          reason:
-            "The final project workflow is not ready yet, but the message contains enough evidenced intake data to create a needs-data lead.",
-          payload: semanticPayload(state)
-        }
-      ],
-      explanations: ["Converted project-only offer intake into a needs-data lead."]
+      actions,
+      explanations: ["Converted project-only offer intake into a needs-data lead."],
+      trace: [
+        traceEvent(
+          state,
+          "planAction",
+          "done",
+          "Подготовил действие",
+          "Это похоже на новую заявку/КП без полной карточки клиента, поэтому готовлю черновик лида."
+        )
+      ]
     };
   }
 
@@ -366,52 +536,93 @@ function planAction(state: SemanticOrchestrationState): Partial<SemanticOrchestr
     return {
       risk: "review",
       facts: compatibilityFacts(state),
-      actions: [createReviewAction(state, reviewReason)]
+      actions: [createReviewAction(state, reviewReason)],
+      trace: [
+        traceEvent(
+          state,
+          "planAction",
+          "review",
+          "Подготовил действие",
+          `Автоматическое действие не выполняю: ${reviewReason}`
+        )
+      ]
     };
   }
 
-  const actionByIntent: Partial<Record<SemanticIntent, PlannedCrmAction["type"]>> = {
-    create_lead: "create_lead",
-    generate_offer_task: shouldCreateLeadFromOfferIntake(state) ? "create_lead" : undefined,
-    create_reminder: "create_reminder",
-    add_lead_note: "update_lead",
-    update_lead: "update_lead"
-  };
-  const actionType = actionByIntent[state.intent];
+  const actionTypes = plannedActionTypes(state);
+  const actionType = actionTypes[0];
 
   if (!actionType) {
     return {
       risk: "review",
       facts: compatibilityFacts(state),
-      actions: [createReviewAction(state, `No executable CRM action is mapped for semantic intent ${state.intent}.`)]
+      actions: [createReviewAction(state, `No executable CRM action is mapped for semantic intent ${state.intent}.`)],
+      trace: [
+        traceEvent(
+          state,
+          "planAction",
+          "review",
+          "Не нашёл безопасного действия",
+          `Для намерения ${state.intent} пока нет подключенного CRM-действия.`
+        )
+      ]
     };
   }
 
-  if (actionType === "create_lead" && !state.settings.confirmationPolicy.allowAutoCreateLead) {
+  if (actionTypes.includes("create_lead") && !state.settings.confirmationPolicy.allowAutoCreateLead) {
     return {
       risk: "review",
       facts: compatibilityFacts(state),
-      actions: [createReviewAction(state, "Runtime settings do not allow automatic lead creation.")]
+      actions: [createReviewAction(state, "Runtime settings do not allow automatic lead creation.")],
+      trace: [
+        traceEvent(
+          state,
+          "planAction",
+          "review",
+          "Остановил автоматическое создание лида",
+          "Настройки требуют review перед созданием лида."
+        )
+      ]
     };
   }
 
-  if (actionType === "create_reminder" && !state.settings.confirmationPolicy.allowAutoCreateReminder) {
+  if (actionTypes.includes("create_reminder") && !state.settings.confirmationPolicy.allowAutoCreateReminder) {
     return {
       risk: "review",
       facts: compatibilityFacts(state),
-      actions: [createReviewAction(state, "Runtime settings do not allow automatic reminder creation.")]
+      actions: [createReviewAction(state, "Runtime settings do not allow automatic reminder creation.")],
+      trace: [
+        traceEvent(
+          state,
+          "planAction",
+          "review",
+          "Остановил автоматическое напоминание",
+          "Настройки требуют review перед созданием reminder."
+        )
+      ]
     };
   }
 
   return {
     facts: compatibilityFacts(state),
-    actions: [
-      {
-        type: actionType,
-        risk: state.risk,
-        reason: state.validation.reason,
-        payload: semanticPayload(state)
-      }
+    actions: actionTypes.map((type) => ({
+      type,
+      risk: state.risk,
+      reason: type === actionType ? state.validation.reason : `Secondary intent action: ${type}.`,
+      payload: semanticPayload(state)
+    })),
+    trace: [
+      traceEvent(
+        state,
+        "planAction",
+        "done",
+        "Подготовил CRM-действие",
+        `Планирую действие ${actionType} с уровнем риска ${state.risk}.`,
+        {
+          actionType,
+          risk: state.risk
+        }
+      )
     ]
   };
 }
@@ -432,7 +643,16 @@ function executionGate(state: SemanticOrchestrationState): Partial<SemanticOrche
         payload: semanticPayload(state)
       }
     ],
-    explanations: ["Runtime settings require confirmation for write operations."]
+    explanations: ["Runtime settings require confirmation for write operations."],
+    trace: [
+      traceEvent(
+        state,
+        "executionGate",
+        "review",
+        "Проверил финальный gate",
+        "Настройки требуют подтверждение для write-действий, поэтому перевожу результат в review."
+      )
+    ]
   };
 }
 
@@ -485,6 +705,7 @@ export async function runSemanticCrmOrchestration(
     actions: result.actions,
     risk: result.risk,
     explanations: result.explanations,
-    settings: result.settings
+    settings: result.settings,
+    trace: result.trace
   };
 }

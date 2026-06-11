@@ -20,6 +20,7 @@ const CrmIntent = z.enum([
 
 const SemanticIntent = z.enum([
   "create_lead",
+  "search_leads",
   "update_lead",
   "create_task",
   "create_reminder",

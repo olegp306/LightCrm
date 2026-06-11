@@ -110,12 +110,16 @@ input {
   margin-bottom: 28px;
 }
 
+.brand a {
+  min-width: 0;
+}
+
 .brand strong {
   display: block;
   font-size: 18px;
 }
 
-.brand span {
+.brand a span {
   color: var(--muted);
   font-size: 13px;
 }
@@ -137,8 +141,10 @@ input {
   color: var(--accent);
 }
 
-.sidebarFooter {
+.sidebarBottom {
   border-top: 1px solid var(--line);
+  display: grid;
+  gap: 8px;
   margin-top: auto;
   padding-top: 14px;
 }
@@ -157,8 +163,13 @@ input {
   gap: 10px;
   font-size: 13px;
   justify-content: space-between;
+  margin-top: 1px;
   user-select: none;
-  width: 100%;
+  width: auto;
+}
+
+.themeToggle span {
+  white-space: nowrap;
 }
 
 .themeToggle input {
@@ -328,6 +339,19 @@ input {
   grid-template-columns: repeat(7, minmax(118px, 1fr));
 }
 
+.calendarSplit {
+  align-items: stretch;
+  display: grid;
+  gap: 14px;
+  grid-template-columns: minmax(0, 1.35fr) minmax(320px, 0.9fr);
+  min-height: 620px;
+}
+
+.calendarSplit .calendarGridMonth {
+  grid-template-columns: repeat(7, minmax(72px, 1fr));
+  min-height: 620px;
+}
+
 .calendarGridWeek {
   grid-template-columns: repeat(7, minmax(132px, 1fr));
 }
@@ -344,6 +368,26 @@ input {
   min-height: 112px;
   min-width: 0;
   padding: 9px;
+}
+
+.calendarDayButton {
+  background: var(--panel);
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+  transition:
+    background 140ms ease,
+    box-shadow 140ms ease,
+    transform 140ms ease;
+}
+
+.calendarDayButton:hover {
+  background: var(--control);
+}
+
+.calendarDay.selected {
+  box-shadow: inset 0 0 0 2px var(--accent);
 }
 
 .calendarGridWeek .calendarDay,
@@ -497,6 +541,164 @@ input {
 }
 
 .calendarEmpty strong {
+  color: var(--ink);
+}
+
+.calendarInspector {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  min-width: 0;
+  overflow: hidden;
+}
+
+.calendarInspector > header {
+  border-bottom: 1px solid var(--line);
+  display: grid;
+  gap: 4px;
+  padding: 14px;
+}
+
+.calendarInspector > header span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.calendarInspector > header strong {
+  font-size: 16px;
+}
+
+.calendarTimeline {
+  align-content: start;
+  display: grid;
+  gap: 10px;
+  overflow-y: auto;
+  padding: 14px;
+}
+
+.calendarTimelineItem {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: 18px minmax(0, 1fr);
+}
+
+.calendarTimelineRail {
+  display: grid;
+  justify-items: center;
+  position: relative;
+}
+
+.calendarTimelineRail::after {
+  background: var(--line);
+  bottom: -10px;
+  content: "";
+  position: absolute;
+  top: 18px;
+  width: 1px;
+}
+
+.calendarTimelineItem:last-child .calendarTimelineRail::after {
+  display: none;
+}
+
+.calendarTimelineRail span {
+  background: var(--accent);
+  border: 3px solid var(--panel);
+  border-radius: 999px;
+  box-shadow: 0 0 0 1px var(--line);
+  height: 13px;
+  margin-top: 6px;
+  width: 13px;
+  z-index: 1;
+}
+
+.calendarTimelineCard {
+  background: var(--control);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+  padding: 10px;
+}
+
+.calendarTimelineTopline {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.calendarTimelineTopline span,
+.calendarTimelineCard small {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.calendarTimelineTopline b {
+  background: var(--accent-soft);
+  border-radius: 999px;
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 7px;
+  text-transform: capitalize;
+}
+
+.calendarTimelineCard strong {
+  font-size: 14px;
+  line-height: 1.25;
+}
+
+.calendarTimelineCard p {
+  color: var(--ink-soft);
+  font-size: 12px;
+  line-height: 1.45;
+  margin: 0;
+}
+
+.calendarTimelineActions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding-top: 2px;
+}
+
+.calendarTimelineActions a,
+.calendarTimelineActions button {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--ink-soft);
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  min-height: 28px;
+  padding: 5px 9px;
+}
+
+.calendarTimelineActions a:hover,
+.calendarTimelineActions button:hover {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.calendarInspectorEmpty {
+  align-content: center;
+  color: var(--muted);
+  display: grid;
+  gap: 6px;
+  justify-items: center;
+  padding: 24px;
+  text-align: center;
+}
+
+.calendarInspectorEmpty strong {
   color: var(--ink);
 }
 
@@ -1203,13 +1405,74 @@ input {
   border: 1px solid var(--line);
   border-radius: 8px;
   display: grid;
-  gap: 10px;
-  padding: 12px;
+  gap: 3px;
+  padding: 3px 12px;
 }
 
-.mobileTableRow div {
+.mobileTableRow .mobileField {
   display: grid;
-  gap: 3px;
+  gap: 0;
+  min-width: 0;
+}
+
+.mobileCalendarField details,
+.mobileDescriptionDetails {
+  min-width: 0;
+}
+
+.mobileCalendarField summary {
+  align-items: baseline;
+  cursor: pointer;
+  display: grid;
+  gap: 6px;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  list-style: none;
+}
+
+.mobileCalendarField summary::-webkit-details-marker,
+.mobileDescriptionDetails summary::-webkit-details-marker {
+  display: none;
+}
+
+.mobileCalendarField summary em {
+  color: var(--accent);
+  font-style: normal;
+  font-weight: 800;
+  letter-spacing: 1px;
+}
+
+.mobileCalendarField ul {
+  display: grid;
+  gap: 4px;
+  list-style: none;
+  margin: 5px 0 0;
+  padding: 0;
+}
+
+.mobileCalendarField li {
+  display: grid;
+  gap: 1px;
+  padding-left: 56px;
+}
+
+.mobileDescriptionDetails {
+  border-bottom: 1px solid var(--line);
+  padding: 2px 0 4px;
+}
+
+.mobileDescriptionDetails summary {
+  color: var(--accent);
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.mobileDescriptionDetails p {
+  color: var(--ink);
+  font-size: 13px;
+  line-height: 1.35;
+  margin: 3px 0 0;
+  overflow-wrap: anywhere;
 }
 
 .mobileTableRow span {
@@ -1223,6 +1486,165 @@ input {
   font-weight: 600;
   min-width: 0;
   overflow-wrap: anywhere;
+}
+
+.mobileField.editable {
+  cursor: text;
+}
+
+.mobileField.editable:active {
+  background: color-mix(in srgb, var(--accent-soft) 42%, transparent);
+}
+
+.mobileInlineEditor {
+  align-items: stretch;
+  display: grid;
+  gap: 4px;
+  grid-template-columns: minmax(0, 1fr) 30px 30px;
+}
+
+.mobileInlineEditor input,
+.mobileInlineEditor textarea {
+  background: var(--control);
+  border: 1px solid var(--accent-line);
+  border-radius: 6px;
+  color: var(--ink);
+  font: inherit;
+  min-width: 0;
+  padding: 5px 7px;
+}
+
+.mobileInlineEditor button,
+.mobileLeadSummary button {
+  align-items: center;
+  background: var(--control);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--ink);
+  display: inline-flex;
+  justify-content: center;
+}
+
+.mobileLeadSummary {
+  display: grid;
+  gap: 2px;
+  border-bottom: 1px solid var(--line);
+  margin-top: 3px;
+  padding: 3px 0 5px;
+}
+
+.mobileLeadSummary strong {
+  display: -webkit-box;
+  line-height: 1.28;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.mobileLeadSummary details {
+  color: var(--ink-soft);
+  font-size: 12px;
+  margin-top: 1px;
+}
+
+.mobileLeadSummary summary {
+  color: var(--accent);
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.mobileLeadSummary p {
+  line-height: 1.35;
+  margin: 2px 0 0;
+}
+
+.mobileLeadSummary button {
+  justify-self: start;
+  margin-top: 2px;
+  padding: 3px 7px;
+}
+
+.leadSummaryHistoryModal {
+  max-width: 560px;
+}
+
+.leadSummaryComposer {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: grid;
+  gap: 7px;
+  padding: 9px;
+}
+
+.leadSummaryComposer label {
+  display: grid;
+  gap: 3px;
+}
+
+.leadSummaryComposer label span {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.leadSummaryComposer textarea {
+  background: var(--control);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--ink);
+  font: inherit;
+  min-height: 0;
+  padding: 7px 8px;
+  resize: vertical;
+}
+
+.leadSummaryComposer button {
+  background: var(--accent);
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  color: white;
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  justify-self: start;
+  min-height: 30px;
+  padding: 5px 10px;
+}
+
+.leadSummaryComposer button:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+.leadSummaryHistoryList {
+  display: grid;
+  gap: 8px;
+}
+
+.leadSummaryHistoryList article {
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  display: grid;
+  gap: 3px;
+  padding: 8px;
+}
+
+.leadSummaryHistoryList article span {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.leadSummaryHistoryList article strong {
+  color: var(--ink);
+  font-size: 13px;
+}
+
+.leadSummaryHistoryList article p {
+  color: var(--ink-soft);
+  font-size: 12px;
+  line-height: 1.35;
+  margin: 0;
 }
 
 .status {
@@ -1301,6 +1723,111 @@ input {
   border-radius: 8px;
   font-size: 13px;
   padding: 10px 12px;
+}
+
+.settingsTabs {
+  display: inline-flex;
+  gap: 6px;
+}
+
+.settingsTabs button {
+  background: var(--control);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 13px;
+  min-height: 34px;
+  padding: 7px 12px;
+}
+
+.settingsTabs button.active {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--ink);
+  font-weight: 700;
+}
+
+.settingsSummary {
+  background: var(--control);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: grid;
+  gap: 4px;
+  padding: 10px;
+}
+
+.settingsSummary strong {
+  color: var(--ink);
+  font-size: 13px;
+}
+
+.settingsSummary span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.placeholderGrid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.placeholderGrid span {
+  background: var(--info-soft);
+  border: 1px solid var(--info-line);
+  border-radius: 999px;
+  color: var(--ink-soft);
+  font-size: 12px;
+  padding: 5px 8px;
+}
+
+.feePreview {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.feePreview div {
+  align-items: center;
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+  padding: 8px 10px;
+}
+
+.feePreview div:last-child {
+  border-bottom: 0;
+}
+
+.feePreview span,
+.feePreview strong {
+  font-size: 12px;
+}
+
+.versionPlanGrid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.versionPlanGrid div {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: grid;
+  gap: 6px;
+  padding: 10px;
+}
+
+.versionPlanGrid strong {
+  font-size: 13px;
+}
+
+.versionPlanGrid span {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.35;
 }
 
 .presetGrid {
@@ -1454,23 +1981,179 @@ input {
   gap: 8px;
 }
 
+.tracePreviewToolbar {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.tracePreviewToolbar button {
+  background: var(--accent);
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  color: white;
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+  min-height: 32px;
+  padding: 6px 10px;
+}
+
+.tracePreviewToolbar button:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+.tracePreviewToolbar span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.traceChat {
+  align-content: start;
+  background: var(--control);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: grid;
+  gap: 8px;
+  max-height: 360px;
+  overflow-y: auto;
+  padding: 10px;
+}
+
+.traceBubble {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--accent);
+  border-radius: 8px;
+  display: grid;
+  gap: 5px;
+  padding: 9px 10px;
+}
+
+.traceBubble.review {
+  border-left-color: var(--warn);
+}
+
+.traceBubble.blocked {
+  border-left-color: var(--danger);
+}
+
+.traceBubble.skipped {
+  border-left-color: var(--muted);
+}
+
+.traceBubble div {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  justify-content: space-between;
+}
+
+.traceBubble strong {
+  font-size: 13px;
+}
+
+.traceBubble span {
+  color: var(--muted);
+  font-family: var(--mono-font, monospace);
+  font-size: 11px;
+}
+
+.traceBubble p {
+  color: var(--ink-soft);
+  font-size: 12px;
+  line-height: 1.4;
+  margin: 0;
+}
+
 @media (max-width: 860px) {
+  html,
+  body {
+    max-width: 100%;
+    overflow-x: hidden;
+  }
+
   .appShell {
     grid-template-columns: 1fr;
+    max-width: 100vw;
+    min-width: 0;
+    overflow-x: hidden;
   }
 
   .sidebar {
     border-bottom: 1px solid var(--line);
     border-right: 0;
+    min-width: 0;
+    overflow: hidden;
+    padding: 14px 14px 10px;
+    position: relative;
+  }
+
+  .brand {
+    align-items: center;
+    display: flex;
+    gap: 12px;
+    justify-content: space-between;
+    margin-bottom: 12px;
+  }
+
+  .sidebarBottom {
+    border-top: 0;
+    margin-top: 0;
+    padding-top: 0;
+    position: absolute;
+    right: 14px;
+    top: 16px;
   }
 
   .nav {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    display: flex;
+    gap: 6px;
+    margin-inline: -14px;
+    max-width: 100vw;
+    min-width: 0;
+    overflow-x: auto;
+    padding: 0 14px 4px;
+    scrollbar-width: thin;
+    white-space: nowrap;
+  }
+
+  .nav a {
+    flex: 0 0 auto;
+    padding: 7px 9px;
+  }
+
+  .themeToggle {
+    gap: 7px;
+    font-size: 12px;
+  }
+
+  .themeToggle i {
+    height: 20px;
+    width: 38px;
+  }
+
+  .themeToggle i::after {
+    height: 16px;
+    width: 16px;
+  }
+
+  .themeToggle input:checked + i::after {
+    transform: translateX(18px);
   }
 
   .tableHeader {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .content {
+    max-width: 100vw;
+    min-width: 0;
+    overflow-x: hidden;
+    padding: 18px 12px;
   }
 
   .calendarHeader {
@@ -1491,16 +2174,231 @@ input {
   }
 
   .calendarGrid {
-    overflow-x: auto;
+    box-sizing: border-box;
+    inline-size: 100%;
+    max-inline-size: 100%;
+    overflow: hidden;
+    width: 100%;
+  }
+
+  .calendarSplit {
+    gap: 10px;
+    grid-template-columns: 1fr;
+    inline-size: calc(100vw - 24px);
+    max-inline-size: calc(100vw - 24px);
+    min-height: 0;
+  }
+
+  .calendarSplit .calendarGridMonth {
+    inline-size: calc(100vw - 24px);
+    max-inline-size: calc(100vw - 24px);
+    min-height: 0;
   }
 
   .calendarGridMonth,
   .calendarGridWeek {
-    grid-template-columns: repeat(7, minmax(148px, 1fr));
+    background: var(--line);
+    border: 1px solid var(--line);
+    gap: 1px;
+    grid-template-columns: repeat(7, minmax(0, 1fr)) !important;
+    min-width: 0;
+  }
+
+  .calendarSplit .calendarGridMonth {
+    grid-template-columns: repeat(7, minmax(0, 1fr)) !important;
+  }
+
+  .calendarPage {
+    gap: 10px;
+    min-height: 0;
+  }
+
+  .calendarHeader {
+    gap: 10px;
+  }
+
+  .calendarHeader h1 {
+    font-size: 22px;
+    margin-bottom: 3px;
+  }
+
+  .calendarHeader p {
+    font-size: 12px;
+    line-height: 1.35;
+  }
+
+  .calendarToolbar {
+    gap: 6px;
+  }
+
+  .calendarNav button,
+  .calendarViewSwitch button {
+    font-size: 12px;
+    height: 30px;
+    min-width: 32px;
+    padding: 0 8px;
+  }
+
+  .calendarViewSwitch {
+    display: none;
+  }
+
+  .calendarSummary {
+    min-height: 36px;
+    padding: 7px 10px;
+  }
+
+  .calendarSummary strong {
+    font-size: 14px;
+  }
+
+  .calendarSummary span {
+    font-size: 12px;
+  }
+
+  .calendarDay {
+    border: 0;
+    box-sizing: border-box;
+    min-height: 46px;
+    min-width: 0;
+    padding: 5px 3px;
+  }
+
+  .calendarDayButton {
+    touch-action: manipulation;
+  }
+
+  .calendarDay header {
+    align-items: center;
+    display: grid;
+    gap: 1px;
+    justify-items: center;
+    margin-bottom: 2px;
+  }
+
+  .calendarDay header span {
+    font-size: 8px;
+    line-height: 1;
+  }
+
+  .calendarDay header strong {
+    font-size: 13px;
+    line-height: 1.1;
+    min-width: 0;
+    text-align: center;
+  }
+
+  .calendarDayItems {
+    align-items: center;
+    display: flex;
+    gap: 2px;
+    justify-content: center;
+    min-height: 8px;
+    overflow: hidden;
+  }
+
+  .calendarDayItems .calendarChip {
+    border: 0;
+    border-radius: 999px;
+    display: block;
+    height: 5px;
+    overflow: hidden;
+    padding: 0;
+    width: 5px;
+  }
+
+  .calendarDayItems .calendarChipReminder {
+    background: var(--warn);
+  }
+
+  .calendarDayItems .calendarChipEvent {
+    background: var(--accent);
+  }
+
+  .calendarDayItems .calendarChip > *,
+  .calendarDayItems .calendarChipTime {
+    display: none;
+  }
+
+  .calendarMore {
+    font-size: 9px;
+    line-height: 1;
+    padding: 0;
   }
 
   .calendarAgendaDay {
     grid-template-columns: 1fr;
+  }
+
+  .calendarInspector {
+    min-height: 0;
+    width: 100%;
+  }
+
+  .calendarInspector > header {
+    gap: 2px;
+    padding: 10px;
+  }
+
+  .calendarInspector > header span {
+    font-size: 10px;
+  }
+
+  .calendarInspector > header strong {
+    font-size: 14px;
+  }
+
+  .calendarTimeline {
+    gap: 8px;
+    max-height: 46vh;
+    overflow-y: auto;
+    padding: 10px;
+  }
+
+  .calendarTimelineItem {
+    gap: 7px;
+    grid-template-columns: 12px minmax(0, 1fr);
+  }
+
+  .calendarTimelineRail span {
+    border-width: 2px;
+    height: 9px;
+    margin-top: 7px;
+    width: 9px;
+  }
+
+  .calendarTimelineRail::after {
+    top: 16px;
+  }
+
+  .calendarTimelineCard {
+    gap: 5px;
+    padding: 8px;
+  }
+
+  .calendarTimelineCard strong {
+    font-size: 13px;
+  }
+
+  .calendarTimelineCard p {
+    font-size: 11px;
+    line-height: 1.35;
+  }
+
+  .calendarTimelineActions a,
+  .calendarTimelineActions button {
+    font-size: 11px;
+    min-height: 26px;
+    padding: 4px 7px;
+  }
+
+  @media (max-width: 480px) {
+    .calendarSplit,
+    .calendarSplit .calendarGridMonth,
+    .calendarInspector {
+      inline-size: min(100%, 360px);
+      max-inline-size: calc(100vw - 24px);
+    }
   }
 
   .toolbar {
@@ -1532,6 +2430,10 @@ input {
 
   .settingsPanel.wide {
     grid-column: span 1;
+  }
+
+  .traceChat {
+    max-height: 420px;
   }
 
   .settingsFieldGrid,

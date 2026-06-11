@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import { createCrmService, MemoryCrmRepository } from "./index";
 
 describe("createCrmService", () => {
+  const currentYear = new Date().getFullYear();
+
   it("upserts a client and records an audit log", async () => {
     const repository = new MemoryCrmRepository();
     const crm = createCrmService(repository);
@@ -13,6 +15,7 @@ describe("createCrmService", () => {
     });
 
     expect(client.id).toMatch(/^client_/);
+    expect(client.code).toBe(`C-${currentYear}-001`);
     expect(client.status).toBe("active");
     expect(client.email).toBe("ada@example.com");
 
@@ -23,6 +26,35 @@ describe("createCrmService", () => {
       entity: "client",
       entityId: client.id
     });
+  });
+
+  it("assigns yearly business codes to new clients and leads", async () => {
+    const repository = new MemoryCrmRepository();
+    const crm = createCrmService(repository);
+
+    const firstClient = await crm.upsertClient({ workspaceId: "workspace-1", name: "First Client" });
+    const secondClient = await crm.upsertClient({ workspaceId: "workspace-1", name: "Second Client" });
+    const firstLead = await crm.upsertLead({ workspaceId: "workspace-1", name: "First Lead" });
+
+    expect(firstClient.code).toBe(`C-${currentYear}-001`);
+    expect(secondClient.code).toBe(`C-${currentYear}-002`);
+    expect(firstLead.code).toBe(`L-${currentYear}-001`);
+  });
+
+  it("keeps a lead business code when updating the record", async () => {
+    const repository = new MemoryCrmRepository();
+    const crm = createCrmService(repository);
+    const lead = await crm.upsertLead({ workspaceId: "workspace-1", name: "Lead One" });
+
+    const updated = await crm.upsertLead({
+      id: lead.id,
+      workspaceId: "workspace-1",
+      name: "Lead One Updated",
+      status: "qualified"
+    });
+
+    expect(updated.code).toBe(lead.code);
+    expect(updated.name).toBe("Lead One Updated");
   });
 
   it("updates an existing lead without losing existing client linkage", async () => {
@@ -164,8 +196,16 @@ describe("createCrmService", () => {
     });
 
     expect(intake.lead.id).toBe(lead.id);
+    expect(intake.summary).toContain("Source: telegram thread 763604722.");
     expect(intake.summary).toContain("Клиент хочет дом 140 м2");
     expect(intake.summary).toContain("2 attachment(s)");
+    expect(intake.summary).toContain("[pdf, voice]");
+    expect(intake.summary).toContain("brief.pdf (pdf; PDF brief with project requirements)");
+    expect(intake.leadSummary).toMatchObject({
+      leadId: lead.id,
+      source: "telegram"
+    });
+    expect(intake.leadSummary.shortSummary).toContain("Source: telegram thread 763604722.");
     expect(intake.documents).toHaveLength(2);
     expect(intake.documents[0]).toMatchObject({
       leadId: lead.id,
@@ -181,9 +221,17 @@ describe("createCrmService", () => {
     expect(updatedLead?.notes).toContain("Lead intake summary");
     expect(updatedLead?.notes).toContain("Original takes");
     expect(updatedLead?.notes).toContain("brief.pdf");
+    expect(updatedLead?.notes).toContain("pdf #902: brief.pdf - PDF brief with project requirements");
+    const summaries = await crm.listRecords({ workspaceId: "workspace-1", entity: "leadSummary" });
+    expect(summaries).toHaveLength(1);
+    expect(summaries[0]).toMatchObject({
+      id: intake.leadSummary.id,
+      leadId: lead.id,
+      source: "telegram"
+    });
 
     const auditLogs = await repository.listAuditLogs("workspace-1");
-    expect(auditLogs.at(-1)).toMatchObject({
+    expect(auditLogs.find((log) => log.action === "lead.intakeIngest")).toMatchObject({
       action: "lead.intakeIngest",
       entity: "lead",
       entityId: lead.id

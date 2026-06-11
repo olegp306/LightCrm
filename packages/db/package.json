@@ -10,6 +10,7 @@
     "lint": "tsc -p tsconfig.json --noEmit",
     "prisma": "prisma",
     "import:leads": "tsx src/import-leads-csv.ts",
+    "import:prod-export": "tsx src/import-prod-export.ts",
     "seed": "tsx src/seed.ts",
     "test": "vitest run && tsc -p tsconfig.json --noEmit",
     "typecheck": "tsc -p tsconfig.json --noEmit"
