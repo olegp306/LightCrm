@@ -2,6 +2,16 @@
 
 All notable LightCrm releases are documented here. Starting with `0.2.0`, every version bump must include a changelog entry.
 
+## 0.3.14 - 2026-06-12
+
+### Fixed
+
+- Read tabular lead note fields with uppercase acronyms such as `Budget EUR` without swallowing the following source marker.
+
+### Verification
+
+- `pnpm typecheck`
+
 ## 0.3.13 - 2026-06-12
 
 ### Fixed
