@@ -2,6 +2,17 @@
 
 All notable LightCrm releases are documented here. Starting with `0.2.0`, every version bump must include a changelog entry.
 
+## 0.3.21 - 2026-06-12
+
+### Changed
+
+- Cut a clean deployment baseline after verifying `main`, `origin/main`, open PRs, and unmerged remote branches for `olegp306/LightCrm`.
+
+### Verification
+
+- `pnpm test`
+- `pnpm typecheck`
+
 ## 0.3.20 - 2026-06-12
 
 ### Fixed
