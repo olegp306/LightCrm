@@ -153,9 +153,13 @@ async function transcribeAudio(input: TelegramAttachmentAnalysisInput): Promise<
   }
   const fetchImpl = input.fetchImpl ?? fetch;
   const mimeType = input.attachment.mimeType ?? "application/octet-stream";
+  const fileName =
+    mimeType === "audio/mp4" && input.attachment.fileName.toLowerCase().endsWith(".mp4")
+      ? input.attachment.fileName.replace(/\.mp4$/i, ".m4a")
+      : input.attachment.fileName;
   const form = new FormData();
   form.set("model", input.audioModel ?? "whisper-1");
-  form.set("file", new File([new Blob([Buffer.from(input.bytes)])], input.attachment.fileName, { type: mimeType }));
+  form.set("file", new File([Buffer.from(input.bytes)], fileName, { type: mimeType }));
   const response = await fetchImpl("https://api.openai.com/v1/audio/transcriptions", {
     method: "POST",
     headers: {

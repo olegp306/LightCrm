@@ -2,6 +2,19 @@
 
 All notable LightCrm releases are documented here. Starting with `0.2.0`, every version bump must include a changelog entry.
 
+## 0.3.18 - 2026-06-12
+
+### Fixed
+
+- Normalize Telegram `audio/mp4` clipboard uploads from `.mp4` to `.m4a` before OpenAI transcription so semantic audio summaries do not fall back to generic placeholders.
+
+### Verification
+
+- `pnpm --filter @lightcrm/telegram-bot test`
+- `pnpm --filter @lightcrm/telegram-bot typecheck`
+- `pnpm test`
+- `pnpm typecheck`
+
 ## 0.3.17 - 2026-06-12
 
 ### Added

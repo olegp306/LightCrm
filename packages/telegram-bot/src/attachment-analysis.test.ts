@@ -131,7 +131,7 @@ describe("telegram attachment analysis", () => {
         fileId: "file-audio",
         uniqueId: "unique-audio",
         kind: "audio",
-        fileName: "voice.m4a",
+        fileName: "clipboard.mp4",
         mimeType: "audio/mp4",
         sizeBytes: 4
       },
@@ -155,6 +155,9 @@ describe("telegram attachment analysis", () => {
         body: expect.any(FormData)
       })
     );
+    const transcriptionBody = fetchImpl.mock.calls[0]?.[1]?.body as FormData;
+    const uploadedFile = transcriptionBody.get("file") as File;
+    expect(uploadedFile.name).toBe("clipboard.m4a");
     expect(fetchImpl).toHaveBeenNthCalledWith(
       2,
       "https://api.openai.com/v1/chat/completions",
