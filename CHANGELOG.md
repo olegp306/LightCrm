@@ -2,6 +2,32 @@
 
 All notable LightCrm releases are documented here. Starting with `0.2.0`, every version bump must include a changelog entry.
 
+## 0.3.8 - 2026-06-12
+
+### Project Snapshot
+
+LightCrm now opens lead links by the readable lead number, such as `L-2026-006`, while still resolving the real internal CRM record behind the scenes. Telegram CRM buttons, calendar links, and mobile lead-card focus now use this cleaner handoff without leaving a row selected for deletion.
+
+### Added
+
+- Added readable lead-code CRM URLs for Telegram CRM buttons when a lead has a public code.
+- Added localhost callback support that keeps the internal lead id hidden in callback data while returning a short readable lead URL.
+- Added web resolution for `/leads?leadId=L-...` so the table can focus the matching record by code.
+- Added Today calendar resolution for lead-code query params before filtering or creating lead-linked events.
+- Added a compact mobile lead-card title showing the public lead number.
+- Added a Telegram semantic intake implementation plan covering reply bundles, attachment analysis, and offer error recovery.
+
+### Changed
+
+- Opening a lead from a CRM link now scrolls to and softly highlights the row without selecting it for bulk actions.
+- Calendar inspector lead links now point back to `/leads?leadId=<lead-code>` where a code is available.
+
+### Verification
+
+- `pnpm --filter @lightcrm/telegram-bot test`
+- `pnpm --filter @lightcrm/ui typecheck`
+- `pnpm --filter @lightcrm/web typecheck`
+
 ## 0.3.7 - 2026-06-11
 
 ### Project Snapshot

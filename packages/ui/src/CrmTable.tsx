@@ -378,6 +378,11 @@ function selectedColumnIndexes(selection: GridSelection, columnCount: number): n
   return selection.columns.toArray().filter((index) => index >= 0 && index < columnCount);
 }
 
+function rowPublicRef(row: CrmTableRow): string {
+  const code = row.values.code;
+  return typeof code === "string" && code.trim() ? code.trim() : row.id;
+}
+
 function rowSelection(indexes: number[]): GridSelection {
   const uniqueIndexes = Array.from(new Set(indexes)).sort((left, right) => left - right);
   return {
@@ -1147,6 +1152,7 @@ export function CrmTable({
   const [archivingSummaryIds, setArchivingSummaryIds] = useState<Set<string>>(() => new Set());
   const [summaryArchiveConfirmId, setSummaryArchiveConfirmId] = useState<string | null>(null);
   const [mobileCalendarMonths, setMobileCalendarMonths] = useState<Record<string, string>>({});
+  const mobileRowRefs = useRef(new Map<string, HTMLElement>());
   const isDarkMode = useDarkModeEnabled();
   const tableFontScale = normalizedFontScale(preferences.fontScale);
   const tableColor = preferences.tableColor ?? defaultTableColor;
@@ -1297,9 +1303,11 @@ export function CrmTable({
     if (rowIndex < 0) {
       return;
     }
-    setGridSelection(rowSelection([rowIndex]));
     setFlashRowId(initialFocusRowId);
     gridRef.current?.scrollTo(createTargetColumnIndex, rowIndex);
+    window.requestAnimationFrame(() => {
+      mobileRowRefs.current.get(initialFocusRowId)?.scrollIntoView({ block: "center", behavior: "smooth" });
+    });
     const timeout = window.setTimeout(() => setFlashRowId(null), 2200);
     return () => window.clearTimeout(timeout);
   }, [configuredColumns.length, createTargetColumnIndex, filteredRows, initialFocusRowId]);
@@ -1982,7 +1990,7 @@ export function CrmTable({
           }
           return;
         }
-        window.location.assign(`/today?leadId=${encodeURIComponent(row.id)}`);
+        window.location.assign(`/today?leadId=${encodeURIComponent(rowPublicRef(row))}`);
         return;
       }
       if (column.valueKind === "longText") {
@@ -3039,8 +3047,20 @@ export function CrmTable({
           const summary = mobileLeadSummary(row) ?? { short: "", long: null, updatedAt: null };
           const hasSummary = Boolean(summary.short);
           const description = textCellValue(row.values.description);
+          const publicRowCode = textCellValue(row.values.code);
           return (
-            <article className="mobileTableRow" key={row.id}>
+            <article
+              className={`mobileTableRow${row.id === flashRowId ? " focused" : ""}`}
+              key={row.id}
+              ref={(element) => {
+                if (element) {
+                  mobileRowRefs.current.set(row.id, element);
+                } else {
+                  mobileRowRefs.current.delete(row.id);
+                }
+              }}
+            >
+              {publicRowCode ? <h2 className="mobileRowTitle">{publicRowCode}</h2> : null}
               {mobileColumns.filter((column) => column.valueKind !== "longText").map((column) => {
                 const isEditing = mobileEditTarget?.rowId === row.id && mobileEditTarget.columnId === column.id;
                 const canEdit = isMobileEditableColumn(column) && Boolean(updateRecordEndpoint);
@@ -3173,7 +3193,7 @@ export function CrmTable({
                           <button
                             className="mobileCalendarCreateButton"
                             type="button"
-                            onClick={() => window.location.assign(`/today?leadId=${encodeURIComponent(row.id)}`)}
+                            onClick={() => window.location.assign(`/today?leadId=${encodeURIComponent(rowPublicRef(row))}`)}
                           >
                             Add event
                           </button>
@@ -3185,7 +3205,7 @@ export function CrmTable({
                           <button
                             className="mobileCalendarCreateButton"
                             type="button"
-                            onClick={() => window.location.assign(`/today?leadId=${encodeURIComponent(row.id)}`)}
+                            onClick={() => window.location.assign(`/today?leadId=${encodeURIComponent(rowPublicRef(row))}`)}
                           >
                             Add event
                           </button>

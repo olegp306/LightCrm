@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server";
-import { defaultWorkspaceId, getCrm, handleRouteError } from "../../_shared";
+import { getCrm, handleRouteError, resolveWorkspaceId } from "../../_shared";
 import { generateCommercialOfferForLead } from "../commercial-offers";
 
 export async function POST(request: Request) {
   try {
     const input = (await request.json()) as { workspaceId?: string; leadId?: string };
-    const workspaceId = input.workspaceId ?? defaultWorkspaceId;
+    const workspaceId = resolveWorkspaceId(input.workspaceId);
     if (!input.leadId) {
       return NextResponse.json({ error: "leadId is required" }, { status: 400 });
     }

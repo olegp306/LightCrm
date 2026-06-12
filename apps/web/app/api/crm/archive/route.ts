@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { defaultWorkspaceId, getCrm, handleRouteError, parseJson } from "../_shared";
+import { getCrm, handleRouteError, parseJson, resolveWorkspaceId } from "../_shared";
 
 const schema = z.object({
   workspaceId: z.string().min(1).optional(),
@@ -10,7 +10,7 @@ const schema = z.object({
 export async function POST(request: Request) {
   try {
     const input = await parseJson(request, schema);
-    const workspaceId = input.workspaceId ?? defaultWorkspaceId;
+    const workspaceId = resolveWorkspaceId(input.workspaceId);
     const crm = getCrm();
     const archived = await Promise.all(
       input.ids.map((id) =>

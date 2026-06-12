@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { defaultWorkspaceId, getCrm, handleRouteError, parseJson } from "../../_shared";
+import { getCrm, handleRouteError, parseJson, resolveWorkspaceId } from "../../_shared";
 
 const SearchInput = z.object({
   workspaceId: z.string().min(1).optional(),
@@ -77,7 +77,7 @@ function readNoteField(notes: string | null, label: string): string | null {
 export async function POST(request: Request) {
   try {
     const input = await parseJson(request, SearchInput);
-    const workspaceId = input.workspaceId ?? defaultWorkspaceId;
+    const workspaceId = resolveWorkspaceId(input.workspaceId);
     const limit = input.limit ?? 5;
     const crm = getCrm();
     const [leads, clients, summaries] = await Promise.all([

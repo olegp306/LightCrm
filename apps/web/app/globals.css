@@ -1793,6 +1793,19 @@ input {
   }
 }
 
+@keyframes mobile-row-focus {
+  0% {
+    background: color-mix(in srgb, var(--accent-soft) 72%, var(--panel));
+    border-color: color-mix(in srgb, var(--accent) 42%, var(--line));
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 16%, transparent);
+  }
+  100% {
+    background: var(--panel);
+    border-color: var(--line);
+    box-shadow: 0 0 0 0 transparent;
+  }
+}
+
 .detailsDrawerBackdrop {
   align-items: stretch;
   background: color-mix(in srgb, var(--backdrop) 58%, transparent);
@@ -2218,6 +2231,18 @@ input {
   display: grid;
   gap: 2px;
   padding: 2px 12px;
+}
+
+.mobileTableRow.focused {
+  animation: mobile-row-focus 2.2s ease-out;
+}
+
+.mobileRowTitle {
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.15;
+  margin: 2px 0 1px;
 }
 
 .mobileTableRow .mobileField {

@@ -45,6 +45,21 @@ const activeLeadTtlMs = Number(process.env.TELEGRAM_ACTIVE_LEAD_TTL_MS ?? 30 * 6
 const crmAppBaseUrl = process.env.NEXT_PUBLIC_APP_URL ?? process.env.NEXTAUTH_URL ?? crmApiBase;
 const serverErrorReply = "server error, developer notified";
 
+function updateLogContext(update: TelegramUpdate) {
+  const message = update.message;
+  const callback = update.callback_query;
+  return {
+    updateId: update.update_id,
+    kind: message ? "message" : callback ? "callback_query" : "unknown",
+    chatId: message?.chat.id ?? callback?.message?.chat.id ?? null,
+    messageId: message?.message_id ?? callback?.message?.message_id ?? null,
+    callbackData: callback?.data?.split(":")[0] ?? null,
+    hasText: Boolean(message?.text?.trim() || message?.caption?.trim()),
+    hasAttachments: Boolean(message?.document || message?.voice || message?.audio || message?.photo?.length || message?.groupedAttachments?.length),
+    mediaGroupId: message?.media_group_id ?? null
+  };
+}
+
 function crmApiUrl(path: string): string {
   return `${crmApiBase.replace(/\/$/, "")}${path}`;
 }
@@ -249,6 +264,13 @@ async function runPolling() {
   for (;;) {
     try {
       const updates = await getUpdates(offset);
+      if (updates.length > 0) {
+        console.log("Telegram updates received", {
+          count: updates.length,
+          firstUpdateId: updates[0]?.update_id,
+          lastUpdateId: updates[updates.length - 1]?.update_id
+        });
+      }
       const now = Date.now();
       const nextOffset =
         updates.length > 0 ? Math.max(...updates.map((update) => update.update_id)) + 1 : offset;
@@ -257,6 +279,7 @@ async function runPolling() {
       for (const update of intakeReady) {
         const message = update.message;
         const callbackChatId = update.callback_query?.message?.chat.id;
+        console.log("Telegram update ready", updateLogContext(update));
         const active = message ? activeLeads.get(String(message.chat.id)) : null;
         const activeLead =
           active && now - active.updatedAt <= activeLeadTtlMs ? active.lead : null;
@@ -285,6 +308,10 @@ async function runPolling() {
           if (lead && message) {
             activeLeads.set(String(message.chat.id), { lead, updatedAt: now });
           }
+          console.log("Telegram update handled", {
+            ...updateLogContext(update),
+            leadId: lead?.id ?? null
+          });
         } catch (error) {
           console.error("Telegram update failed", {
             updateId: update.update_id,
