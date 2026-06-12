@@ -2,6 +2,17 @@
 
 All notable LightCrm releases are documented here. Starting with `0.2.0`, every version bump must include a changelog entry.
 
+## 0.3.16 - 2026-06-12
+
+### Fixed
+
+- Ignore placeholder semantic facts such as `not explicitly stated` when naming Telegram attachment-only leads.
+
+### Verification
+
+- `pnpm --filter @lightcrm/telegram-bot test`
+- `pnpm typecheck`
+
 ## 0.3.15 - 2026-06-12
 
 ### Fixed

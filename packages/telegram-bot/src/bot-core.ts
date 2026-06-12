@@ -494,29 +494,50 @@ function semanticAttachmentText(attachments: LeadIntakeAttachmentInput[]): strin
   return lines.length > 0 ? `Semantic attachment analysis:\n${lines.join("\n")}` : null;
 }
 
+function usableFactText(value: string | null | undefined): string | null {
+  const trimmed = value?.replace(/\s+/g, " ").trim();
+  if (!trimmed) {
+    return null;
+  }
+  const normalized = trimmed.toLowerCase();
+  if (
+    normalized === "not explicitly stated" ||
+    normalized === "not stated" ||
+    normalized === "unknown" ||
+    normalized === "n/a"
+  ) {
+    return null;
+  }
+  return trimmed;
+}
+
 function leadPatchFromFacts(result: CrmOrchestrationResult, text: string): TelegramLeadUpdateInput["patch"] {
   const patch: TelegramLeadUpdateInput["patch"] = {};
-  if (result.facts.contactName) {
-    patch.name = result.facts.contactName;
+  const contactName = usableFactText(result.facts.contactName);
+  const projectName = usableFactText(result.facts.projectName);
+  const projectType = usableFactText(result.facts.projectType);
+  const location = usableFactText(result.facts.location);
+  if (contactName) {
+    patch.name = contactName;
   }
   if (result.facts.phone) {
     patch.phone = result.facts.phone;
   }
-  if (result.facts.projectName) {
+  if (projectName) {
     if (!patch.name) {
-      patch.name = result.facts.projectName;
+      patch.name = projectName;
     }
-    patch.company = result.facts.projectName;
-    patch.projectName = result.facts.projectName;
+    patch.company = projectName;
+    patch.projectName = projectName;
   }
-  if (result.facts.projectType) {
+  if (projectType) {
     if (!patch.name) {
-      patch.name = result.facts.projectType;
+      patch.name = projectType;
     }
-    patch.project = result.facts.projectType;
+    patch.project = projectType;
   }
-  if (result.facts.location) {
-    patch.address = result.facts.location;
+  if (location) {
+    patch.address = location;
   }
   if (result.facts.areaM2 !== null && result.facts.areaM2 !== undefined) {
     patch.area = String(result.facts.areaM2);
