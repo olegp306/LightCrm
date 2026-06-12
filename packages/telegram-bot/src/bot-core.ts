@@ -643,12 +643,26 @@ function attachmentUpdateOrchestrationResult(
   };
 }
 
-function crmLeadUrl(deps: TelegramBotDeps, lead: Pick<Lead, "id" | "name">): string | null {
+function leadPublicRef(lead: Pick<Lead, "id" | "name"> & Partial<Pick<Lead, "code">>): string {
+  return lead.code?.trim() || lead.id;
+}
+
+function crmLeadUrl(deps: TelegramBotDeps, lead: Pick<Lead, "id" | "name"> & Partial<Pick<Lead, "code">>): string | null {
   if (!deps.crmAppBaseUrl) {
     return null;
   }
   const baseUrl = deps.crmAppBaseUrl.replace(/\/$/, "");
-  return `${baseUrl}/leads?leadId=${encodeURIComponent(lead.id)}`;
+  return `${baseUrl}/leads?leadId=${encodeURIComponent(leadPublicRef(lead))}`;
+}
+
+function crmLeadCallbackData(lead: Pick<Lead, "id" | "name"> & Partial<Pick<Lead, "code">>): string {
+  const publicRef = leadPublicRef(lead);
+  return publicRef === lead.id ? `crm_lead:${lead.id}` : `crm_lead:${lead.id}:${publicRef}`;
+}
+
+function parseCrmLeadCallbackData(value: string): { id: string; publicRef: string } {
+  const [, id = "", publicRef = ""] = value.split(":");
+  return { id, publicRef: publicRef || id };
 }
 
 function isLocalCrmUrl(value: string): boolean {
@@ -669,6 +683,7 @@ function isTelegramWebAppUrl(value: string): boolean {
 }
 
 type TelegramLeadReplyCard = Pick<Lead, "id" | "name"> & {
+  code?: string | null;
   summaryLong?: string | null;
 };
 
@@ -693,7 +708,7 @@ function crmLeadReplyMarkup(
       replyMarkup: {
         inline_keyboard: [
           [
-            { text: "CRM", callback_data: `crm_lead:${lead.id}` },
+            { text: "CRM", callback_data: crmLeadCallbackData(lead) },
             { text: "offer", callback_data: `offer_lead:${lead.id}` }
           ],
           ...undoRow,
@@ -725,7 +740,7 @@ function extractLeadIdFromReply(reply: TelegramReplyMessage | undefined): string
       )
     );
   if (callbackData?.startsWith("crm_lead:")) {
-    return callbackData.slice("crm_lead:".length);
+    return parseCrmLeadCallbackData(callbackData).id;
   }
   if (callbackData?.startsWith("offer_lead:")) {
     return callbackData.slice("offer_lead:".length);
@@ -741,7 +756,10 @@ function extractLeadIdFromReply(reply: TelegramReplyMessage | undefined): string
   return match?.[1] ?? null;
 }
 
-function leadCardReplyMarkup(deps: TelegramBotDeps, lead: Pick<Lead, "id" | "name">): TelegramSendMessageOptions | undefined {
+function leadCardReplyMarkup(
+  deps: TelegramBotDeps,
+  lead: Pick<Lead, "id" | "name"> & Partial<Pick<Lead, "code">>
+): TelegramSendMessageOptions | undefined {
   return crmLeadReplyMarkup(deps, lead);
 }
 
@@ -935,12 +953,12 @@ export async function handleTelegramCallback(update: TelegramUpdate, deps: Teleg
     await deps.sendMessage(chatId, "This chat is not allowed to use this LightCrm bot.");
     return true;
   }
-  const leadId = callback.data?.startsWith("crm_lead:") ? callback.data.slice("crm_lead:".length) : null;
-  if (leadId) {
+  const crmLeadRef = callback.data?.startsWith("crm_lead:") ? parseCrmLeadCallbackData(callback.data) : null;
+  if (crmLeadRef?.id) {
     if (!deps.crmAppBaseUrl) {
       return false;
     }
-    const url = `${deps.crmAppBaseUrl.replace(/\/$/, "")}/leads?leadId=${encodeURIComponent(leadId)}`;
+    const url = `${deps.crmAppBaseUrl.replace(/\/$/, "")}/leads?leadId=${encodeURIComponent(crmLeadRef.publicRef)}`;
     await deps.sendMessage(chatId, url);
     return true;
   }

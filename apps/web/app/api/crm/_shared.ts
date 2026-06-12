@@ -47,10 +47,15 @@ export function handleRouteError(error: unknown) {
   return jsonError("Unexpected request error", 500);
 }
 
-export const workspaceId = z.string().min(1);
 export const optionalText = z.string().trim().min(1).nullable().optional();
 
 export const defaultWorkspaceId = process.env.LIGHTCRM_WORKSPACE_ID ?? "default";
+
+export function resolveWorkspaceId(value: string | null | undefined) {
+  return !value || value === "default" ? defaultWorkspaceId : value;
+}
+
+export const workspaceId = z.string().min(1).transform(resolveWorkspaceId);
 
 export function tableRowsResponse(entity: CrmCollection) {
   return async function GET(request: Request) {

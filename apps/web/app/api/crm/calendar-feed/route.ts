@@ -63,7 +63,7 @@ function entityMatches(
   return true;
 }
 
-function relatedHref(entity: RelatedEntity, id: string | null) {
+function relatedHref(entity: RelatedEntity, id: string | null, publicRef?: string | null) {
   if (!entity || !id) {
     return null;
   }
@@ -71,9 +71,17 @@ function relatedHref(entity: RelatedEntity, id: string | null) {
     return `/clients?record=${encodeURIComponent(id)}`;
   }
   if (entity === "lead") {
-    return `/leads?record=${encodeURIComponent(id)}`;
+    return `/leads?leadId=${encodeURIComponent(publicRef || id)}`;
   }
   return `/cold-targets?record=${encodeURIComponent(id)}`;
+}
+
+function resolveLeadFilter(value: string | null, leads: Lead[]): string | null {
+  if (!value) {
+    return null;
+  }
+  const normalized = value.trim().toLowerCase();
+  return leads.find((lead) => lead.id.toLowerCase() === normalized || (lead.code?.toLowerCase() ?? "") === normalized)?.id ?? value;
 }
 
 function resolveRelated(
@@ -85,8 +93,9 @@ function resolveRelated(
   }
 ): CalendarFeedItem["related"] {
   if (record.leadId) {
-    const label = lookup.leads.get(record.leadId)?.name ?? "Lead";
-    return { entity: "lead", id: record.leadId, label, href: relatedHref("lead", record.leadId) };
+    const lead = lookup.leads.get(record.leadId);
+    const label = lead?.name ?? "Lead";
+    return { entity: "lead", id: record.leadId, label, href: relatedHref("lead", record.leadId, lead?.code) };
   }
   if (record.clientId) {
     const label = lookup.clients.get(record.clientId)?.name ?? "Client";
@@ -106,7 +115,7 @@ export async function GET(request: Request) {
     const workspaceId = url.searchParams.get("workspaceId") ?? defaultWorkspaceId;
     const from = parseDateParam(url.searchParams.get("from")) ?? fallbackRange.from;
     const to = parseDateParam(url.searchParams.get("to")) ?? fallbackRange.to;
-    const filters = {
+    const requestedFilters = {
       leadId: url.searchParams.get("leadId"),
       clientId: url.searchParams.get("clientId"),
       coldTargetId: url.searchParams.get("coldTargetId")
@@ -124,6 +133,10 @@ export async function GET(request: Request) {
       leads: new Map(leads.map((lead) => [lead.id, lead])),
       clients: new Map(clients.map((client) => [client.id, client])),
       coldTargets: new Map(coldTargets.map((target) => [target.id, target]))
+    };
+    const filters = {
+      ...requestedFilters,
+      leadId: resolveLeadFilter(requestedFilters.leadId, leads)
     };
     const reminderItems: CalendarFeedItem[] = reminders
       .filter((reminder) => reminder.status !== "archived")

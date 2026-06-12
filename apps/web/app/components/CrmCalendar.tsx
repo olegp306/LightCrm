@@ -159,6 +159,14 @@ function leadOptionValue(lead: LeadOption): string {
   return leadOptionLabel(lead);
 }
 
+function leadMatchesRef(lead: LeadOption, value: string | undefined): boolean {
+  if (!value) {
+    return false;
+  }
+  const normalized = value.trim().toLowerCase();
+  return lead.id.toLowerCase() === normalized || (lead.code?.toLowerCase() ?? "") === normalized;
+}
+
 function leadIdFromInput(value: string): string {
   return value.split("|")[0]?.trim() ?? value.trim();
 }
@@ -264,6 +272,8 @@ export function CrmCalendar({
   });
   const [createStatus, setCreateStatus] = useState<"idle" | "saving" | "error">("idle");
   const range = useMemo(() => viewRange(mode, anchorDate), [anchorDate, mode]);
+  const resolvedLead = useMemo(() => leadOptions.find((lead) => leadMatchesRef(lead, leadId)) ?? null, [leadId, leadOptions]);
+  const resolvedLeadId = resolvedLead?.id ?? leadId;
   const visibleDays = useMemo(() => {
     const totalDays = mode === "month" ? 42 : mode === "week" ? 7 : mode === "day" ? 1 : 31;
     return Array.from({ length: totalDays }, (_, index) => addDays(range.from, index));
@@ -292,10 +302,9 @@ export function CrmCalendar({
     if (!leadId) {
       return null;
     }
-    const matchingLead = leadOptions.find((lead) => lead.id === leadId);
-    const matchingItem = items.find((item) => item.related.entity === "lead" && item.related.id === leadId && item.related.label);
-    return matchingLead ? leadOptionLabel(matchingLead) : matchingItem?.related.label ?? leadId;
-  }, [items, leadId, leadOptions]);
+    const matchingItem = items.find((item) => item.related.entity === "lead" && item.related.id === resolvedLeadId && item.related.label);
+    return resolvedLead ? leadOptionLabel(resolvedLead) : matchingItem?.related.label ?? leadId;
+  }, [items, leadId, resolvedLead, resolvedLeadId]);
   const contextDescription = selectedLeadLabel ? `${description} Lead: ${selectedLeadLabel}.` : description;
   const yearOptions = useMemo(() => {
     const anchorYear = anchorDate.getFullYear();
@@ -308,7 +317,7 @@ export function CrmCalendar({
       from: range.from.toISOString(),
       to: range.to.toISOString()
     });
-    addQuery(params, "leadId", leadId);
+    addQuery(params, "leadId", resolvedLeadId);
     addQuery(params, "clientId", clientId);
     addQuery(params, "coldTargetId", coldTargetId);
     setIsLoading(true);
@@ -330,7 +339,7 @@ export function CrmCalendar({
       })
       .finally(() => setIsLoading(false));
     return () => controller.abort();
-  }, [clientId, coldTargetId, endpoint, leadId, range.from, range.to]);
+  }, [clientId, coldTargetId, endpoint, range.from, range.to, resolvedLeadId]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -349,7 +358,7 @@ export function CrmCalendar({
     if (!leadId) {
       return;
     }
-    const matchingLead = leadOptions.find((lead) => lead.id === leadId);
+    const matchingLead = leadOptions.find((lead) => leadMatchesRef(lead, leadId));
     setCreateDraft((current) => ({ ...current, leadId: matchingLead ? leadOptionValue(matchingLead) : leadId }));
   }, [leadId, leadOptions]);
 
@@ -391,7 +400,7 @@ export function CrmCalendar({
       const startsAt = new Date(createDraft.startsAt);
       const endsAt = new Date(startsAt.getTime() + 60 * 60 * 1000);
       const matchingLead = leadOptions.find((lead) => leadOptionValue(lead) === createDraft.leadId.trim());
-      const targetLeadId = leadId ?? matchingLead?.id ?? leadIdFromInput(createDraft.leadId);
+      const targetLeadId = resolvedLeadId ?? matchingLead?.id ?? leadIdFromInput(createDraft.leadId);
       const response = await fetch("/api/crm/calendar-events/upsert", {
         method: "POST",
         headers: { "Content-Type": "application/json" },

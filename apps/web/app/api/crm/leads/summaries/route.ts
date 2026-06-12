@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { defaultWorkspaceId, getCrm, handleRouteError, parseJson } from "../../_shared";
+import { defaultWorkspaceId, getCrm, handleRouteError, parseJson, resolveWorkspaceId } from "../../_shared";
 
 const CreateLeadSummaryInput = z.object({
   workspaceId: z.string().min(1).optional(),
@@ -36,7 +36,7 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     const input = await parseJson(request, CreateLeadSummaryInput);
-    const workspaceId = input.workspaceId ?? defaultWorkspaceId;
+    const workspaceId = resolveWorkspaceId(input.workspaceId);
     const summary = await getCrm().createLeadSummary({
       workspaceId,
       leadId: input.leadId,

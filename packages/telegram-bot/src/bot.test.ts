@@ -630,7 +630,7 @@ describe("telegram bot core", () => {
       },
       actions: [{ type: "create_lead", risk: "auto", reason: "Low-risk CRM action.", payload: {} }]
     });
-    const createLead = vi.fn().mockResolvedValue({ id: "lead-301", name: "Maria" });
+    const createLead = vi.fn().mockResolvedValue({ id: "lead-301", code: "L-2026-301", name: "Maria" });
 
     await handleTelegramUpdate(
       {
@@ -659,7 +659,7 @@ describe("telegram bot core", () => {
         replyMarkup: {
           inline_keyboard: [
             [
-              { text: "CRM", web_app: { url: "https://crm.example.com/leads?leadId=lead-301" } },
+              { text: "CRM", web_app: { url: "https://crm.example.com/leads?leadId=L-2026-301" } },
               { text: "offer", callback_data: "offer_lead:lead-301" }
             ],
             [{ text: "undo", callback_data: "undo_lead:lead-301" }]
@@ -694,7 +694,7 @@ describe("telegram bot core", () => {
       },
       actions: [{ type: "create_lead", risk: "auto", reason: "Low-risk CRM action.", payload: {} }]
     });
-    const createLead = vi.fn().mockResolvedValue({ id: "lead-303", name: "Maria" });
+    const createLead = vi.fn().mockResolvedValue({ id: "lead-303", code: "L-2026-303", name: "Maria" });
 
     await handleTelegramUpdate(
       {
@@ -723,7 +723,7 @@ describe("telegram bot core", () => {
         replyMarkup: {
           inline_keyboard: [
             [
-              { text: "CRM", callback_data: "crm_lead:lead-303" },
+              { text: "CRM", callback_data: "crm_lead:lead-303:L-2026-303" },
               { text: "offer", callback_data: "offer_lead:lead-303" }
             ],
             [{ text: "undo", callback_data: "undo_lead:lead-303" }]
@@ -756,7 +756,7 @@ describe("telegram bot core", () => {
       },
       actions: [{ type: "create_lead", risk: "auto", reason: "Low-risk CRM action.", payload: {} }]
     });
-    const createLead = vi.fn().mockResolvedValue({ id: "lead-304", name: "Maria" });
+    const createLead = vi.fn().mockResolvedValue({ id: "lead-304", code: "L-2026-304", name: "Maria" });
 
     await handleTelegramUpdate(
       {
@@ -785,7 +785,7 @@ describe("telegram bot core", () => {
         replyMarkup: {
           inline_keyboard: [
             [
-              { text: "CRM", url: "http://204.168.163.99:3004/leads?leadId=lead-304" },
+              { text: "CRM", url: "http://204.168.163.99:3004/leads?leadId=L-2026-304" },
               { text: "offer", callback_data: "offer_lead:lead-304" }
             ],
             [{ text: "undo", callback_data: "undo_lead:lead-304" }]
@@ -795,7 +795,7 @@ describe("telegram bot core", () => {
     );
     expect(sendMessage).not.toHaveBeenCalledWith(
       111111,
-      "http://204.168.163.99:3004/leads?leadId=lead-304"
+      "http://204.168.163.99:3004/leads?leadId=L-2026-304"
     );
   });
 
@@ -807,7 +807,7 @@ describe("telegram bot core", () => {
         update_id: 10,
         callback_query: {
           id: "callback-1",
-          data: "crm_lead:lead-303",
+          data: "crm_lead:lead-303:L-2026-303",
           message: { chat: { id: 111111 }, message_id: 900 }
         }
       },
@@ -821,7 +821,7 @@ describe("telegram bot core", () => {
 
     expect(sendMessage).toHaveBeenCalledWith(
       111111,
-      "http://localhost:4900/leads?leadId=lead-303"
+      "http://localhost:4900/leads?leadId=L-2026-303"
     );
   });
 
@@ -902,7 +902,7 @@ describe("telegram bot core", () => {
         replyMarkup: {
           inline_keyboard: [
             [
-              { text: "CRM", callback_data: "crm_lead:lead-404" },
+              { text: "CRM", callback_data: "crm_lead:lead-404:L-2026-404" },
               { text: "offer", callback_data: "offer_lead:lead-404" }
             ]
           ]
@@ -1098,7 +1098,7 @@ describe("telegram bot core", () => {
         replyMarkup: {
           inline_keyboard: [
             [
-              { text: "CRM", callback_data: "crm_lead:lead-404" },
+              { text: "CRM", callback_data: "crm_lead:lead-404:L-2026-404" },
               { text: "offer", callback_data: "offer_lead:lead-404" }
             ],
             [{ text: "Full summary", callback_data: "summary_lead:lead-404" }]

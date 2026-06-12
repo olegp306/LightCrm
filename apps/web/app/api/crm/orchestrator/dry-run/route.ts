@@ -1,7 +1,7 @@
 import { runCrmOrchestration } from "@lightcrm/orchestrator";
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { defaultWorkspaceId, getCrm, handleRouteError, parseJson } from "../../_shared";
+import { getCrm, handleRouteError, parseJson, resolveWorkspaceId } from "../../_shared";
 import { RuntimeSettingsInput } from "../settings-schema";
 import { getLangGraphSettings } from "../settings-store";
 
@@ -17,7 +17,7 @@ const DryRunInput = z.object({
 export async function POST(request: Request) {
   try {
     const input = await parseJson(request, DryRunInput);
-    const workspaceId = input.workspaceId ?? defaultWorkspaceId;
+    const workspaceId = resolveWorkspaceId(input.workspaceId);
     const settings = input.settings ?? (await getLangGraphSettings());
     const recentLeads = (await getCrm().listRecords({ entity: "lead", workspaceId, includeArchived: false }))
       .sort((left, right) => right.updatedAt.getTime() - left.updatedAt.getTime())

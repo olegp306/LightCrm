@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { defaultWorkspaceId, getCrm, handleRouteError, parseJson } from "../../_shared";
+import { getCrm, handleRouteError, parseJson, resolveWorkspaceId } from "../../_shared";
 import { leadNoteFields, readNoteField } from "../note-fields";
 
 const RegenerateLeadSummaryInput = z.object({
@@ -37,7 +37,7 @@ function formatArea(value: string | null): string | null {
 export async function POST(request: Request) {
   try {
     const input = await parseJson(request, RegenerateLeadSummaryInput);
-    const workspaceId = input.workspaceId ?? defaultWorkspaceId;
+    const workspaceId = resolveWorkspaceId(input.workspaceId);
     const crm = getCrm();
     const [leads, clients, documents, summaries] = await Promise.all([
       crm.listRecords({ entity: "lead", workspaceId, includeArchived: true }),

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { defaultWorkspaceId, getCrm, handleRouteError, optionalText, parseJson } from "../../_shared";
+import { getCrm, handleRouteError, optionalText, parseJson, resolveWorkspaceId } from "../../_shared";
 import { maybeAutoGenerateCommercialOfferForLead } from "../commercial-offers";
 import { notesWithTabularPatch } from "../note-fields";
 
@@ -65,7 +65,7 @@ function appendSourceNote(notes: string | null | undefined, source?: { channel?:
 export async function POST(request: Request) {
   try {
     const input = await parseJson(request, UpdateInput);
-    const workspaceId = input.workspaceId ?? defaultWorkspaceId;
+    const workspaceId = resolveWorkspaceId(input.workspaceId);
     const crm = getCrm();
     const leads = await crm.listRecords({ entity: "lead", workspaceId, includeArchived: true });
     const existing = leads.find((lead) => lead.id === input.leadId);

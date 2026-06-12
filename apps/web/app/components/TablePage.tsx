@@ -50,10 +50,10 @@ function rowsWithCalendarItems(rows: CrmTableRow[], feed: CalendarFeedItem[]): C
 export function TablePage({ endpoint, rows, columns, calendarFeedEndpoint, ...props }: LiveTablePageProps) {
   const [liveRows, setLiveRows] = useState<CrmTableRow[] | null>(null);
   const [failed, setFailed] = useState(false);
-  const [initialFocusRowId, setInitialFocusRowId] = useState<string | null>(null);
+  const [initialFocusRef, setInitialFocusRef] = useState<string | null>(null);
 
   useEffect(() => {
-    setInitialFocusRowId(new URLSearchParams(window.location.search).get("leadId"));
+    setInitialFocusRef(new URLSearchParams(window.location.search).get("leadId"));
   }, []);
 
   useEffect(() => {
@@ -89,6 +89,19 @@ export function TablePage({ endpoint, rows, columns, calendarFeedEndpoint, ...pr
     return () => controller.abort();
   }, [calendarFeedEndpoint, columns, endpoint, rows]);
 
+  const activeRows = liveRows ?? rows;
+  const initialFocusRowId = useMemo(() => {
+    if (!initialFocusRef) {
+      return null;
+    }
+    const normalized = initialFocusRef.trim().toLowerCase();
+    const match = activeRows.find((row) => {
+      const code = row.values.code;
+      return row.id.toLowerCase() === normalized || (typeof code === "string" && code.toLowerCase() === normalized);
+    });
+    return match?.id ?? initialFocusRef;
+  }, [activeRows, initialFocusRef]);
+
   const description = useMemo(() => (failed ? `${props.description} Live API unavailable.` : props.description), [
     failed,
     props.description
@@ -99,7 +112,7 @@ export function TablePage({ endpoint, rows, columns, calendarFeedEndpoint, ...pr
       {...props}
       description={description}
       columns={columns}
-      rows={liveRows ?? rows}
+      rows={activeRows}
       initialFocusRowId={initialFocusRowId}
     />
   );
