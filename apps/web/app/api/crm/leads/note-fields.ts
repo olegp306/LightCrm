@@ -34,14 +34,14 @@ export function readNoteField(notes: string | null, label: string): string | nul
     return null;
   }
   const escaped = escapeRegex(label);
-  const match = notes.match(new RegExp(`(?:^|\\n+)${escaped}: ([\\s\\S]*?)(?=\\n+[A-Z][A-Za-z0-9 ]+: |$)`));
+  const match = notes.match(new RegExp(`(?:^|\\n+)${escaped}: ([\\s\\S]*?)(?=\\n+(?:[A-Z][A-Za-z0-9 ]+: |Updated from )|$)`));
   return match?.[1]?.trim() || null;
 }
 
 export function replaceNoteField(notes: string | null | undefined, label: string, value: string | null | undefined): string | null {
   const currentNotes = notes ?? "";
   const escaped = escapeRegex(label);
-  const fieldPattern = new RegExp(`(^|\\n\\n+)${escaped}: [\\s\\S]*?(?=\\n\\n+[A-Z][A-Za-z0-9 ]+: |$)`);
+  const fieldPattern = new RegExp(`(^|\\n\\n+)${escaped}: [\\s\\S]*?(?=\\n\\n+(?:[A-Z][A-Za-z0-9 ]+: |Updated from )|$)`);
   const normalizedValue = typeof value === "string" ? value.trim() : value;
   const nextBlock = normalizedValue ? `${label}: ${normalizedValue}` : "";
   const nextNotes = fieldPattern.test(currentNotes)

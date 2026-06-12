@@ -2,6 +2,18 @@
 
 All notable LightCrm releases are documented here. Starting with `0.2.0`, every version bump must include a changelog entry.
 
+## 0.3.15 - 2026-06-12
+
+### Fixed
+
+- Treat Telegram source markers as note-field boundaries so `Budget EUR` reads back as the numeric budget only.
+- Rename attachment-only draft leads from extracted project type when the semantic graph does not provide a separate project name.
+
+### Verification
+
+- `pnpm --filter @lightcrm/telegram-bot test`
+- `pnpm typecheck`
+
 ## 0.3.14 - 2026-06-12
 
 ### Fixed

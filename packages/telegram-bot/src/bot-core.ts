@@ -510,6 +510,9 @@ function leadPatchFromFacts(result: CrmOrchestrationResult, text: string): Teleg
     patch.projectName = result.facts.projectName;
   }
   if (result.facts.projectType) {
+    if (!patch.name) {
+      patch.name = result.facts.projectType;
+    }
     patch.project = result.facts.projectType;
   }
   if (result.facts.location) {
