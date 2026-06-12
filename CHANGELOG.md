@@ -2,6 +2,21 @@
 
 All notable LightCrm releases are documented here. Starting with `0.2.0`, every version bump must include a changelog entry.
 
+## 0.3.17 - 2026-06-12
+
+### Added
+
+- Added semantic PDF analysis for Telegram attachments by extracting PDF text and summarizing it through the OpenAI JSON analyzer.
+- Added semantic audio/voice analysis for Telegram attachments by transcribing audio through OpenAI and summarizing the transcript.
+- Added support for semantic summaries of text-like document attachments.
+
+### Verification
+
+- `pnpm --filter @lightcrm/telegram-bot test`
+- `pnpm --filter @lightcrm/telegram-bot typecheck`
+- `pnpm test`
+- `pnpm typecheck`
+
 ## 0.3.16 - 2026-06-12
 
 ### Fixed

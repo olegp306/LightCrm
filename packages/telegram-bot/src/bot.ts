@@ -48,6 +48,7 @@ const chatIntakeFlushMs = Number(process.env.TELEGRAM_INTAKE_FLUSH_MS ?? 3500);
 const activeLeadTtlMs = Number(process.env.TELEGRAM_ACTIVE_LEAD_TTL_MS ?? 30 * 60 * 1000);
 const crmAppBaseUrl = process.env.NEXT_PUBLIC_APP_URL ?? process.env.NEXTAUTH_URL ?? crmApiBase;
 const attachmentAnalysisModelFallback = process.env.OPENAI_MODEL ?? "gpt-4.1-mini";
+const attachmentAudioModel = process.env.OPENAI_AUDIO_MODEL ?? "whisper-1";
 const serverErrorReply = "server error, developer notified";
 
 type LangGraphSettingsResponse = {
@@ -322,6 +323,7 @@ async function prepareAttachment(input: PrepareTelegramAttachmentInput): Promise
           author: input.author ?? null,
           apiKey: process.env.OPENAI_API_KEY,
           model: analysisSettings.model,
+          audioModel: attachmentAudioModel,
           fetchImpl: fetch
         }).catch((error) => {
           console.warn("TG attachment semantic analysis failed", {
