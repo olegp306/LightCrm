@@ -10,7 +10,7 @@ describe("mapLeadCsvRow", () => {
           Project: "Architecture project",
           Email: "max@example.com",
           Phone: "+49123",
-          Messenger: "Telegram",
+          Messenger: "TG",
           Source: "telegram",
           "Lead ID": "L-1",
           "Lead name": "Swiss lead",
@@ -28,7 +28,7 @@ describe("mapLeadCsvRow", () => {
         workspaceId: "workspace-1",
         name: "Max",
         email: "max@example.com",
-        whatsapp: "Telegram"
+        whatsapp: "TG"
       },
       lead: {
         id: "L-1",

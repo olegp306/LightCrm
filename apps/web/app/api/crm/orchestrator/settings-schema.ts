@@ -63,6 +63,13 @@ export const RuntimeSettingsInput = z.object({
     allowAutoCreateLead: z.boolean(),
     allowAutoCreateReminder: z.boolean()
   }),
+  projectPeople: z.array(
+    z.object({
+      name: z.string().trim().min(1),
+      role: z.string().trim().min(1),
+      description: z.string().trim()
+    })
+  ),
   extraNewLeadPhrases: z.array(z.string()),
   mailAnalysisPhrases: z.array(z.string()),
   reminderPhrases: z.array(z.string()),

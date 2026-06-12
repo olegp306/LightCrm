@@ -40,7 +40,7 @@ describe("summarizeLeadIntake", () => {
 
     expect(summary.shortSummary).toContain("140 m2 private house");
     expect(summary.shortSummary).toContain("2 file(s)");
-    expect(summary.longSummary).toContain("Source: telegram thread 763604722.");
+    expect(summary.longSummary).toContain("Source: TG thread 763604722.");
     expect(summary.longSummary).toContain("[pdf, voice]");
     expect(summary.attachments[0]).toMatchObject({
       sourceMessageId: "52",

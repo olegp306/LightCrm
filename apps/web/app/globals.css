@@ -480,10 +480,10 @@ input {
   border-radius: 6px;
   color: var(--ink);
   font: inherit;
-  font-size: 12px;
-  min-height: 32px;
+  font-size: 14px;
+  min-height: 38px;
   min-width: 0;
-  padding: 6px 8px;
+  padding: 8px 10px;
 }
 
 .calendarCreateForm input:disabled {
@@ -498,10 +498,10 @@ input {
   color: white;
   cursor: pointer;
   font: inherit;
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 700;
-  min-height: 32px;
-  padding: 6px 10px;
+  min-height: 38px;
+  padding: 8px 12px;
 }
 
 .calendarCreateForm button:disabled {
@@ -511,7 +511,7 @@ input {
 
 .calendarCreateForm span {
   color: var(--danger);
-  font-size: 12px;
+  font-size: 13px;
 }
 
 .calendarGrid {
@@ -1046,6 +1046,7 @@ input {
   align-items: center;
   display: flex;
   gap: 8px;
+  position: relative;
 }
 
 .toolbar button {
@@ -1473,9 +1474,9 @@ input {
   padding: 8px;
   position: absolute;
   right: 0;
-  top: 50px;
+  top: calc(100% + 8px);
   width: min(320px, 100%);
-  z-index: 5;
+  z-index: 12;
 }
 
 .columnDropdownHeader {
@@ -1627,12 +1628,26 @@ input {
 }
 
 .documentModal header button {
+  align-items: center;
   background: var(--control);
   border: 1px solid var(--line);
   border-radius: 6px;
+  color: var(--ink-soft);
   cursor: pointer;
+  display: inline-flex;
   height: 32px;
+  justify-content: center;
+  transition:
+    background 150ms ease,
+    border-color 150ms ease,
+    color 150ms ease;
   width: 32px;
+}
+
+.documentModal header button:hover {
+  background: var(--control-hover);
+  border-color: color-mix(in srgb, var(--accent) 34%, var(--line));
+  color: var(--accent);
 }
 
 .documentModal p {
@@ -1644,18 +1659,18 @@ input {
 
 .detailsFloatingButton {
   animation: detailsButtonIn 160ms ease-out;
-  background: color-mix(in srgb, var(--panel-raised) 82%, #98a2b3 18%);
-  border: 1px solid color-mix(in srgb, var(--line) 78%, #98a2b3 22%);
-  border-radius: 999px;
-  box-shadow: 0 8px 18px color-mix(in srgb, var(--shadow) 55%, transparent);
-  color: color-mix(in srgb, var(--ink-soft) 78%, var(--muted) 22%);
+  background: color-mix(in srgb, var(--control) 86%, transparent);
+  border: 1px solid color-mix(in srgb, var(--line) 78%, transparent);
+  border-radius: 6px;
+  box-shadow: 0 6px 14px color-mix(in srgb, var(--shadow) 36%, transparent);
+  color: var(--muted);
   cursor: pointer;
   font: inherit;
   font-size: 12px;
   font-weight: 800;
-  min-height: 30px;
-  opacity: 0.68;
-  padding: 6px 12px;
+  min-height: 28px;
+  opacity: 0.72;
+  padding: 5px 10px;
   position: absolute;
   right: 12px;
   top: 12px;
@@ -1677,9 +1692,9 @@ input {
 }
 
 .detailsFloatingButton:hover {
-  background: var(--panel-raised);
-  border-color: color-mix(in srgb, var(--accent) 52%, var(--line));
-  box-shadow: 0 12px 26px var(--shadow);
+  background: var(--accent-soft);
+  border-color: color-mix(in srgb, var(--accent) 42%, var(--line));
+  box-shadow: 0 8px 18px color-mix(in srgb, var(--shadow) 48%, transparent);
   color: var(--accent);
   opacity: 1;
   transform: translateY(-1px) scale(1);
@@ -2123,31 +2138,57 @@ input {
   justify-content: flex-end;
 }
 
+.documentPreviewActions {
+  align-items: center;
+  justify-content: space-between;
+}
+
+.documentPreviewActionGroup {
+  align-items: center;
+  display: inline-flex;
+  gap: 8px;
+}
+
 .documentModal footer a,
 .documentModal footer button {
   align-items: center;
-  background: var(--accent);
-  border: 1px solid var(--accent);
+  background: var(--control);
+  border: 1px solid var(--line);
   border-radius: 6px;
-  color: #ffffff;
+  color: var(--ink-soft);
   cursor: pointer;
   display: inline-flex;
   font-size: 13px;
-  height: 34px;
+  font-weight: 700;
+  height: 32px;
+  justify-content: center;
+  min-width: 78px;
   padding: 0 12px;
+  text-decoration: none;
+  transition:
+    background 150ms ease,
+    border-color 150ms ease,
+    color 150ms ease;
 }
 
-.documentModal footer button[type="button"] {
-  background: var(--control);
-  color: var(--ink-soft);
-  border-color: var(--line);
+.documentModal footer a:hover,
+.documentModal footer button:hover {
+  background: var(--control-hover);
+  border-color: color-mix(in srgb, var(--accent) 34%, var(--line));
+  color: var(--accent);
 }
 
 .documentModal footer button.danger {
+  background: color-mix(in srgb, var(--danger-soft) 72%, var(--control));
+  border-color: color-mix(in srgb, var(--danger-line) 70%, var(--line));
+  color: var(--danger);
+  font-weight: 700;
+}
+
+.documentModal footer button.danger:hover {
   background: var(--danger-soft);
   border-color: var(--danger-line);
   color: var(--danger);
-  font-weight: 700;
 }
 
 .documentUploadForm label,
@@ -2892,6 +2933,41 @@ input {
   margin: 0;
 }
 
+.settingsPanelHeader {
+  align-items: flex-start;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.settingsPanelHeader p {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.35;
+  margin: 4px 0 0;
+}
+
+.settingsPanelHeader button,
+.quietDangerButton {
+  align-items: center;
+  background: var(--control);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--ink-soft);
+  cursor: pointer;
+  display: inline-flex;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  min-height: 30px;
+  padding: 6px 10px;
+}
+
+.settingsPanelHeader button:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
 .settingsPanel label {
   display: grid;
   gap: 6px;
@@ -2933,6 +3009,35 @@ input {
 
 .requiredFieldsGrid {
   grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.projectPeopleList {
+  display: grid;
+  gap: 10px;
+}
+
+.projectPersonCard {
+  background: var(--control);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: minmax(140px, 0.7fr) minmax(120px, 0.5fr) minmax(0, 1.5fr) auto;
+  padding: 10px;
+}
+
+.projectPersonCard label.wide {
+  min-width: 0;
+}
+
+.projectPersonCard .quietDangerButton {
+  align-self: end;
+  color: var(--danger);
+}
+
+.projectPersonCard .quietDangerButton:hover {
+  background: var(--danger-soft);
+  border-color: var(--danger-line);
 }
 
 .switchRow {
@@ -3588,7 +3693,8 @@ input {
   }
 
   .settingsFieldGrid,
-  .requiredFieldsGrid {
+  .requiredFieldsGrid,
+  .projectPersonCard {
     grid-template-columns: 1fr;
   }
 

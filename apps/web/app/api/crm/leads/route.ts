@@ -37,6 +37,10 @@ function projectNameFrom(project: string | null, leadName: string): string {
   return compactSummary(source, 54);
 }
 
+function displaySourceChannel(value: string | null): string | null {
+  return value?.toLocaleLowerCase() === "telegram" ? "TG" : value;
+}
+
 function nextActionFrom(input: {
   todo: string | null;
   offerStatus: string;
@@ -131,6 +135,7 @@ export async function GET(request: Request) {
         const nextAction = nextActionFrom({ todo, offerStatus: offerReadiness.status, status: lead.status });
         return {
           ...lead,
+          sourceChannel: displaySourceChannel(lead.sourceChannel),
           client,
           documents: documentsByLeadId.get(lead.id) ?? [],
           projectName: projectNameFrom(project, lead.name),

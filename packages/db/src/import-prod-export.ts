@@ -108,7 +108,7 @@ function extractLeadSummary(rawInput: string | null): string | null {
   if (!rawInput) {
     return null;
   }
-  const match = rawInput.match(/Lead summary:\s*([\s\S]*?)(?=\nSource material summaries:|\nSuggested reply:|\nTelegram lead card:|$)/);
+  const match = rawInput.match(/Lead summary:\s*([\s\S]*?)(?=\nSource material summaries:|\nSuggested reply:|\n(?:Telegram|TG) lead card:|$)/);
   return match?.[1]?.trim() || null;
 }
 
@@ -172,7 +172,7 @@ function leadNumberFromText(value: string | null): string | null {
 function messageNumberFromAttachment(row: CsvRow): string | null {
   const storageKey = text(row.storageKey);
   const fileName = text(row.fileName);
-  return storageKey?.match(/\/(\d+)-/)?.[1] ?? fileName?.match(/(?:photo-|telegram-|-)(\d{4})(?:\.|-)/)?.[1] ?? null;
+  return storageKey?.match(/\/(\d+)-/)?.[1] ?? fileName?.match(/(?:photo-|telegram-|TG-|-)(\d{4})(?:\.|-)/)?.[1] ?? null;
 }
 
 function documentKind(fileName: string | null, mimeType: string | null): string {

@@ -136,6 +136,7 @@ export type TelegramBotDeps = {
   createReminder?: (input: TelegramReminderInput) => Promise<TelegramReminderResult>;
   ingestLeadIntake?: (input: IngestLeadIntakeInput) => Promise<{ documents?: unknown[]; summary?: string }>;
   prepareAttachment?: (input: PrepareTelegramAttachmentInput) => Promise<LeadIntakeAttachmentInput>;
+  listLeadDocuments?: (input: TelegramLeadDocumentsInput) => Promise<TelegramLeadDocumentsResult>;
   archiveLead?: (input: TelegramArchiveLeadInput) => Promise<unknown>;
 };
 
@@ -163,6 +164,27 @@ export type TelegramLeadSearchResult = {
       summaryUpdatedAt?: string | null;
     }
   >;
+};
+
+export type TelegramLeadDocument = {
+  id: string;
+  fileName: string;
+  shortSummary: string;
+  longSummary?: string | null;
+  downloadUrl?: string | null;
+  mimeType?: string | null;
+  createdAt?: string | Date | null;
+};
+
+export type TelegramLeadDocumentsInput = {
+  workspaceId: string;
+  leadId: string;
+  limit?: number;
+};
+
+export type TelegramLeadDocumentsResult = {
+  leadId: string;
+  documents: TelegramLeadDocument[];
 };
 
 export type TelegramLeadUpdateInput = {
@@ -236,6 +258,26 @@ function shortValue(value: unknown): string {
   return String(value);
 }
 
+function semanticReplyHeader(result: CrmOrchestrationResult, status: "preview" | "executed"): string {
+  const actionTypes = result.actions.map((action) => action.type);
+  if (status === "executed") {
+    return "[+] done";
+  }
+  if (actionTypes.length === 0 || result.intent === "no_action") {
+    return "[?] not sure";
+  }
+  if (actionTypes.includes("request_review") || result.risk === "review") {
+    return "[!] needs review";
+  }
+  if (actionTypes.includes("create_lead")) {
+    return "[+] lead ready";
+  }
+  if (actionTypes.includes("update_lead")) {
+    return "[~] lead update";
+  }
+  return "[>] plan";
+}
+
 export function formatOrchestrationReply(
   result: CrmOrchestrationResult,
   options: { status?: "preview" | "executed" } = {}
@@ -246,19 +288,20 @@ export function formatOrchestrationReply(
   const targetId = payload && "targetId" in payload ? payload.targetId : null;
   const status = options.status ?? "preview";
   const lines = [
-    status === "executed" ? "LightCrm result" : "LightCrm plan",
-    `Status: ${status}`,
-    `Intent: ${result.intent}`,
-    `Risk: ${result.risk}`,
-    `Action: ${actionLabel}`,
+    semanticReplyHeader(result, status),
+    `intent: ${result.intent}`,
+    `action: ${actionLabel}`,
+    `risk: ${result.risk}`,
     targetId ? `Target: ${String(targetId)}` : null,
-    `Contact: ${shortValue(result.facts.contactName)}`,
-    `Project type: ${shortValue(result.facts.projectType)}`,
-    `Location: ${shortValue(result.facts.location)}`,
-    `Due: ${shortValue(result.facts.dueAt)}`,
-    `Evidence: ${shortValue(result.facts.evidence.sourceMessageId)}`,
-    action?.reason ? `Reason: ${action.reason}` : null,
-    result.explanations[0] ? `Note: ${result.explanations[0]}` : null
+    result.facts.contactName ? `contact: ${shortValue(result.facts.contactName)}` : null,
+    result.facts.projectName || result.facts.projectType
+      ? `project: ${shortValue(result.facts.projectName ?? result.facts.projectType)}`
+      : null,
+    result.facts.location ? `location: ${shortValue(result.facts.location)}` : null,
+    result.facts.dueAt ? `due: ${shortValue(result.facts.dueAt)}` : null,
+    action?.reason ? `reason: ${action.reason}` : null,
+    result.explanations[0] ? `note: ${result.explanations[0]}` : null,
+    `evidence: ${shortValue(result.facts.evidence.sourceMessageId)}`
   ];
   return lines.filter((line): line is string => Boolean(line)).join("\n").slice(0, 3900);
 }
@@ -315,7 +358,7 @@ export function extractTelegramAttachments(message: TelegramMessage): TelegramAt
       fileId: message.document.file_id,
       uniqueId: message.document.file_unique_id ?? null,
       kind: message.document.mime_type === "application/pdf" ? "pdf" : "document",
-      fileName: message.document.file_name ?? `telegram-document-${message.message_id}`,
+      fileName: message.document.file_name ?? `TG-document-${message.message_id}`,
       mimeType: message.document.mime_type ?? null,
       sizeBytes: message.document.file_size ?? null
     });
@@ -325,7 +368,7 @@ export function extractTelegramAttachments(message: TelegramMessage): TelegramAt
       fileId: message.voice.file_id,
       uniqueId: message.voice.file_unique_id ?? null,
       kind: "voice",
-      fileName: message.voice.file_name ?? `telegram-voice-${message.message_id}.ogg`,
+      fileName: message.voice.file_name ?? `TG-voice-${message.message_id}.ogg`,
       mimeType: message.voice.mime_type ?? "audio/ogg",
       sizeBytes: message.voice.file_size ?? null
     });
@@ -335,7 +378,7 @@ export function extractTelegramAttachments(message: TelegramMessage): TelegramAt
       fileId: message.audio.file_id,
       uniqueId: message.audio.file_unique_id ?? null,
       kind: "audio",
-      fileName: message.audio.file_name ?? `telegram-audio-${message.message_id}`,
+      fileName: message.audio.file_name ?? `TG-audio-${message.message_id}`,
       mimeType: message.audio.mime_type ?? null,
       sizeBytes: message.audio.file_size ?? null
     });
@@ -346,7 +389,7 @@ export function extractTelegramAttachments(message: TelegramMessage): TelegramAt
       fileId: photo.file_id,
       uniqueId: photo.file_unique_id ?? null,
       kind: "image",
-      fileName: `telegram-photo-${message.message_id}.jpg`,
+      fileName: `TG-photo-${message.message_id}.jpg`,
       mimeType: "image/jpeg",
       sizeBytes: photo.file_size ?? null
     });
@@ -384,15 +427,15 @@ function leadNameFromFacts(result: CrmOrchestrationResult, fallbackText: string)
   if (projectParts.length > 0) {
     return projectParts.join(" - ").slice(0, 120);
   }
-  return fallbackText.slice(0, 80) || "Telegram lead";
+  return fallbackText.slice(0, 80) || "TG lead";
 }
 
 function draftLeadName(message: TelegramMessage, attachments: TelegramAttachment[]): string {
   if (attachments.length === 0) {
-    return `Draft lead from Telegram #${message.message_id}`;
+    return `Draft lead from TG #${message.message_id}`;
   }
   const kinds = [...new Set(attachments.map((attachment) => attachment.kind))].join(", ");
-  return `Draft lead - ${kinds} from Telegram #${message.message_id}`;
+  return `Draft lead - ${kinds} from TG #${message.message_id}`;
 }
 
 function crmNoteFields(result: CrmOrchestrationResult, rawText: string): string[] {
@@ -433,7 +476,7 @@ export async function uploadTelegramAttachmentToWeb(
   if (input.author) {
     form.set("author", input.author);
   }
-  form.set("summary", `${input.attachment.kind} from Telegram intake`);
+  form.set("summary", `${input.attachment.kind} from TG intake`);
   form.set(
     "file",
     new File([new Blob([Buffer.from(input.bytes)])], input.attachment.fileName, {
@@ -464,7 +507,7 @@ export async function uploadTelegramAttachmentToWeb(
     downloadUrl: document.downloadUrl,
     mimeType: document.mimeType,
     sizeBytes: document.sizeBytes ?? input.attachment.sizeBytes,
-    summary: `${input.attachment.kind} from Telegram intake`
+    summary: `${input.attachment.kind} from TG intake`
   };
 }
 
@@ -495,7 +538,7 @@ async function maybeCreateLead(
           sourceChannel: "telegram",
           externalThreadId: String(message.chat.id),
           externalMessageId: String(message.message_id),
-          notes: [`Telegram author: ${author ?? "unknown"}`, ...crmNoteFields(result, text)].join("\n\n")
+          notes: [`TG author: ${author ?? "unknown"}`, ...crmNoteFields(result, text)].join("\n\n")
         })
       : null;
   return deps.createLead({
@@ -507,7 +550,7 @@ async function maybeCreateLead(
     sourceChannel: "telegram",
     externalThreadId: String(message.chat.id),
     externalMessageId: String(message.message_id),
-    notes: [`Telegram author: ${author ?? "unknown"}`, ...crmNoteFields(result, text)].join("\n\n")
+    notes: [`TG author: ${author ?? "unknown"}`, ...crmNoteFields(result, text)].join("\n\n")
   });
 }
 
@@ -538,7 +581,7 @@ async function maybeUpdateLead(
   if (result.facts.projectName) {
     patch.company = result.facts.projectName;
   }
-  patch.notes = [`Telegram author: ${author ?? "unknown"}`, ...crmNoteFields(result, text)].join("\n\n");
+  patch.notes = [`TG author: ${author ?? "unknown"}`, ...crmNoteFields(result, text)].join("\n\n");
   return deps.updateLead({
     workspaceId: deps.workspaceId,
     leadId: targetId,
@@ -563,10 +606,10 @@ function draftOrchestrationResult(
   const snippet = [text.trim(), attachmentSummary].filter(Boolean).join("\n");
   return {
     workspaceId,
-    normalizedText: snippet || `Telegram attachment intake #${message.message_id}`,
+    normalizedText: snippet || `TG attachment intake #${message.message_id}`,
     intent: "create_lead",
     risk: "auto",
-    explanations: ["Received telegram attachment intake; saved as draft lead for later enrichment."],
+    explanations: ["Received TG attachment intake; saved as draft lead for later enrichment."],
     settings: DEFAULT_LANGGRAPH_SETTINGS,
     facts: {
       contactName: null,
@@ -589,7 +632,7 @@ function draftOrchestrationResult(
       {
         type: "create_lead",
         risk: "auto",
-        reason: "Created draft lead from Telegram intake. Client and project details can be filled later.",
+        reason: "Created draft lead from TG intake. Client and project details can be filled later.",
         payload: { name: draftLeadName(message, attachments) }
       }
     ]
@@ -610,10 +653,10 @@ function attachmentUpdateOrchestrationResult(
   const snippet = [text.trim(), attachmentSummary].filter(Boolean).join("\n");
   return {
     workspaceId,
-    normalizedText: snippet || `Telegram attachment update #${message.message_id}`,
+    normalizedText: snippet || `TG attachment update #${message.message_id}`,
     intent: "attach_document",
     risk: "auto",
-    explanations: ["Received extra Telegram attachment intake; linked it to the active lead."],
+    explanations: ["Received extra TG attachment intake; linked it to the active lead."],
     settings: DEFAULT_LANGGRAPH_SETTINGS,
     facts: {
       contactName: null,
@@ -636,7 +679,7 @@ function attachmentUpdateOrchestrationResult(
       {
         type: "update_lead",
         risk: "auto",
-        reason: "Linked extra Telegram attachment intake to the active lead.",
+        reason: "Linked extra TG attachment intake to the active lead.",
         payload: { targetId: lead.id }
       }
     ]
@@ -695,11 +738,14 @@ function crmLeadReplyMarkup(
   const url = crmLeadUrl(deps, lead);
   const hasFullSummary = "summaryLong" in lead && Boolean(lead.summaryLong);
   const summaryRow = hasFullSummary ? [[{ text: "Full summary", callback_data: `summary_lead:${lead.id}` }]] : [];
+  const downloadsRow = deps.listLeadDocuments
+    ? [[{ text: "Downloads", callback_data: `downloads_lead:${lead.id}` }]]
+    : [];
   const undoRow = options.includeUndo ? [[{ text: "undo", callback_data: `undo_lead:${lead.id}` }]] : [];
   if (!url) {
     return {
       replyMarkup: {
-        inline_keyboard: [[{ text: "offer", callback_data: `offer_lead:${lead.id}` }], ...undoRow, ...summaryRow]
+        inline_keyboard: [[{ text: "offer", callback_data: `offer_lead:${lead.id}` }], ...undoRow, ...summaryRow, ...downloadsRow]
       }
     };
   }
@@ -712,7 +758,8 @@ function crmLeadReplyMarkup(
             { text: "offer", callback_data: `offer_lead:${lead.id}` }
           ],
           ...undoRow,
-          ...summaryRow
+          ...summaryRow,
+          ...downloadsRow
         ]
       }
     };
@@ -722,7 +769,7 @@ function crmLeadReplyMarkup(
     : { text: "CRM", url };
   return {
     replyMarkup: {
-      inline_keyboard: [[crmButton, { text: "offer", callback_data: `offer_lead:${lead.id}` }], ...undoRow, ...summaryRow]
+      inline_keyboard: [[crmButton, { text: "offer", callback_data: `offer_lead:${lead.id}` }], ...undoRow, ...summaryRow, ...downloadsRow]
     }
   };
 }
@@ -734,9 +781,10 @@ function extractLeadIdFromReply(reply: TelegramReplyMessage | undefined): string
     .find((value): value is string =>
       Boolean(
         value?.startsWith("crm_lead:") ||
-          value?.startsWith("offer_lead:") ||
-          value?.startsWith("summary_lead:") ||
-          value?.startsWith("undo_lead:")
+        value?.startsWith("offer_lead:") ||
+        value?.startsWith("summary_lead:") ||
+        value?.startsWith("downloads_lead:") ||
+        value?.startsWith("undo_lead:")
       )
     );
   if (callbackData?.startsWith("crm_lead:")) {
@@ -747,6 +795,9 @@ function extractLeadIdFromReply(reply: TelegramReplyMessage | undefined): string
   }
   if (callbackData?.startsWith("summary_lead:")) {
     return callbackData.slice("summary_lead:".length);
+  }
+  if (callbackData?.startsWith("downloads_lead:")) {
+    return callbackData.slice("downloads_lead:".length);
   }
   if (callbackData?.startsWith("undo_lead:")) {
     return callbackData.slice("undo_lead:".length);
@@ -803,6 +854,23 @@ function cardField(label: string, value: string | number | null | undefined, max
   return `${label}: ${compactLine(String(value), maxLength)}`;
 }
 
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+function leadDisplayRef(lead: TelegramLeadCard): string {
+  return lead.code?.trim() || lead.id;
+}
+
+function htmlCardField(label: string, value: string | number | null | undefined, maxLength = 120): string | null {
+  const line = cardField(label, value, maxLength);
+  return line ? escapeHtml(line) : null;
+}
+
 function telegramLeadCardText(lead: TelegramLeadCard): string {
   return [
     lead.code ? `${lead.code} · ${lead.name}` : lead.name,
@@ -836,6 +904,91 @@ function telegramLeadFullSummaryText(lead: TelegramLeadCard): string {
     .filter((line): line is string => Boolean(line))
     .join("\n")
     .slice(0, 3900);
+}
+
+function telegramLeadCardTextCompact(lead: TelegramLeadCard): string {
+  const summary = lead.summaryShort ? compactLine(lead.summaryShort, 120) : null;
+  return [
+    "[+] lead saved",
+    `<b>${escapeHtml(leadDisplayRef(lead))}</b> - ${escapeHtml(lead.name)}`,
+    htmlCardField("client", lead.clientName, 90),
+    htmlCardField("project", lead.project, 110),
+    htmlCardField("area", lead.area, 50),
+    htmlCardField("todo", lead.todo, 80),
+    htmlCardField("address", lead.address, 80),
+    htmlCardField("messenger", lead.messenger, 70),
+    lead.status ? `status: ${escapeHtml(lead.status)}` : null,
+    summary ? `[summary] ${escapeHtml(summary)}` : null
+  ]
+    .filter((line): line is string => Boolean(line))
+    .join("\n")
+    .slice(0, 950);
+}
+
+function telegramLeadFullSummaryTextCompact(lead: TelegramLeadCard): string {
+  const summary = lead.summaryLong ?? lead.summaryShort;
+  return [
+    "[summary] full",
+    `<b>${escapeHtml(leadDisplayRef(lead))}</b> - ${escapeHtml(lead.name)}`,
+    summary ? escapeHtml(compactLine(summary, 1200)) : "No full summary is available yet.",
+    lead.summaryUpdatedAt ? `summary date: ${escapeHtml(lead.summaryUpdatedAt)}` : null
+  ]
+    .filter((line): line is string => Boolean(line))
+    .join("\n")
+    .slice(0, 3900);
+}
+
+function compactDocumentButtonLabel(fileName: string, index: number): string {
+  const compacted = compactLine(fileName.replace(/\.[^.]+$/, ""), 24);
+  return `${index + 1}. ${compacted}`;
+}
+
+function compactDocumentDate(value: string | Date | null | undefined): string | null {
+  if (!value) {
+    return null;
+  }
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date.toISOString().slice(0, 10);
+}
+
+function telegramLeadDownloadsText(documents: TelegramLeadDocument[]): string {
+  if (documents.length === 0) {
+    return ["<b>Downloads</b>", "No documents are attached to this lead yet."].join("\n");
+  }
+  return [
+    "<b>Downloads</b>",
+    ...documents.flatMap((document, index) => {
+      const summary = document.shortSummary || document.longSummary || "No description yet.";
+      const createdAt = compactDocumentDate(document.createdAt);
+      return [
+        "",
+        `${index + 1}. <b>${escapeHtml(compactLine(document.fileName, 70))}</b>`,
+        `description: ${escapeHtml(compactLine(summary, 180))}`,
+        createdAt ? `added: ${escapeHtml(createdAt)}` : null
+      ].filter((line): line is string => Boolean(line));
+    })
+  ]
+    .join("\n")
+    .slice(0, 3900);
+}
+
+function telegramLeadDownloadsReplyMarkup(documents: TelegramLeadDocument[]): TelegramSendMessageOptions | undefined {
+  const rows = documents
+    .filter((document) => Boolean(document.downloadUrl))
+    .slice(0, 8)
+    .map((document, index) => [{ text: compactDocumentButtonLabel(document.fileName, index), url: document.downloadUrl! }]);
+  if (rows.length === 0) {
+    return undefined;
+  }
+  return {
+    replyMarkup: {
+      inline_keyboard: rows
+    }
+  };
+}
+
+function leadCardMessageOptions(options: TelegramSendMessageOptions | undefined): TelegramSendMessageOptions {
+  return options ?? {};
 }
 
 function leadCardFieldsFromFacts(result: CrmOrchestrationResult): Partial<TelegramLeadCard> {
@@ -879,8 +1032,8 @@ async function maybeSearchLeads(
   for (const match of search.matches) {
     await deps.sendMessage(
       message.chat.id,
-      telegramLeadCardText(match),
-      leadCardReplyMarkup(deps, match)
+      telegramLeadCardTextCompact(match),
+      leadCardMessageOptions(leadCardReplyMarkup(deps, match))
     );
   }
   return true;
@@ -892,7 +1045,7 @@ function reminderTitle(text: string, result: CrmOrchestrationResult): string {
     result.facts.contactName ??
     result.facts.projectType ??
     text.replace(/\s+/g, " ").trim().slice(0, 80) ??
-    "Telegram reminder"
+    "TG reminder"
   );
 }
 
@@ -918,7 +1071,7 @@ async function maybeCreateReminder(
     title: reminderTitle(text, result),
     description: [
       result.explanations[0] ?? null,
-      `Telegram message: ${message.message_id}`,
+      `TG message: ${message.message_id}`,
       text.trim() ? `Context: ${text.trim().slice(0, 500)}` : null
     ]
       .filter((line): line is string => Boolean(line))
@@ -984,7 +1137,27 @@ export async function handleTelegramCallback(update: TelegramUpdate, deps: Teleg
       await deps.sendMessage(chatId, "full summary is not available yet");
       return true;
     }
-    await deps.sendMessage(chatId, telegramLeadFullSummaryText(lead), crmLeadReplyMarkup(deps, { ...lead, summaryLong: null }));
+    await deps.sendMessage(
+      chatId,
+      telegramLeadFullSummaryTextCompact(lead),
+      leadCardMessageOptions(crmLeadReplyMarkup(deps, { ...lead, summaryLong: null }))
+    );
+    return true;
+  }
+  const downloadsLeadId = callback.data?.startsWith("downloads_lead:")
+    ? callback.data.slice("downloads_lead:".length)
+    : null;
+  if (downloadsLeadId) {
+    if (!deps.listLeadDocuments) {
+      await deps.sendMessage(chatId, "downloads are not connected yet");
+      return true;
+    }
+    const result = await deps.listLeadDocuments({ workspaceId: deps.workspaceId, leadId: downloadsLeadId, limit: 8 });
+    await deps.sendMessage(
+      chatId,
+      telegramLeadDownloadsText(result.documents),
+      leadCardMessageOptions(telegramLeadDownloadsReplyMarkup(result.documents))
+    );
     return true;
   }
   const offerLeadId = callback.data?.startsWith("offer_lead:") ? callback.data.slice("offer_lead:".length) : null;
@@ -1110,8 +1283,7 @@ export async function handleTelegramUpdate(
     await deps.sendMessage(
       chatId,
       [
-        "LightCrm result",
-        telegramLeadCardText({
+        telegramLeadCardTextCompact({
           ...lead,
           ...leadCardFieldsFromFacts(result),
           code: optionalStringProperty(lead, "code"),
@@ -1127,7 +1299,7 @@ export async function handleTelegramUpdate(
         .filter((line): line is string => Boolean(line))
         .join("\n")
         .slice(0, 3900),
-      crmLeadReplyMarkup(deps, lead, { includeUndo: Boolean(createdLead) })
+      leadCardMessageOptions(crmLeadReplyMarkup(deps, lead, { includeUndo: Boolean(createdLead) }))
     );
     return lead;
   }

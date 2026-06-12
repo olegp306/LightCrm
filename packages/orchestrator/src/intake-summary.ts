@@ -57,6 +57,10 @@ function attachmentKindLabel(kind: LeadIntakeAttachmentInput["kind"]): string {
   return labels[kind];
 }
 
+function displaySourceChannel(value: string | null | undefined): string {
+  return value?.toLocaleLowerCase() === "telegram" ? "TG" : value ?? "intake";
+}
+
 function summarizeAttachment(
   attachment: LeadIntakeAttachmentInput,
   sourceChannel: string | null | undefined,
@@ -68,7 +72,7 @@ function summarizeAttachment(
     trimText(analysis?.longSummary) ??
     trimText(attachment.longSummary) ??
     [
-      `${attachmentKindLabel(attachment.kind)} file "${attachment.fileName}" received from ${sourceChannel ?? "intake"}.`,
+      `${attachmentKindLabel(attachment.kind)} file "${attachment.fileName}" received from ${displaySourceChannel(sourceChannel)}.`,
       attachment.mimeType ? `MIME type: ${attachment.mimeType}.` : null,
       attachment.sizeBytes !== null && attachment.sizeBytes !== undefined ? `Size: ${attachment.sizeBytes} bytes.` : null,
       providedSummary ? `Provided summary: ${providedSummary}.` : "No semantic file analysis is available yet."
@@ -135,7 +139,7 @@ export function summarizeLeadIntake(
       : "no files"
   ].join("; ");
   const longSummary = [
-    `Source: ${input.sourceChannel ?? "intake"}${input.sourceThreadId ? ` thread ${input.sourceThreadId}` : ""}.`,
+    `Source: ${displaySourceChannel(input.sourceChannel)}${input.sourceThreadId ? ` thread ${input.sourceThreadId}` : ""}.`,
     text ? `Text: ${compactText(text)}.` : "Text: no text notes yet.",
     attachments.length > 0
       ? `Files: ${attachments.length} attachment(s)${kindList.length > 0 ? ` [${kindList.join(", ")}]` : ""}: ${attachmentSummaries.map((attachment) => `${attachment.fileName} (${attachment.kind}; ${attachment.shortSummary})`).join("; ")}.`

@@ -76,6 +76,10 @@ function relatedHref(entity: RelatedEntity, id: string | null, publicRef?: strin
   return `/cold-targets?record=${encodeURIComponent(id)}`;
 }
 
+function displaySourceChannel(value: string | null): string | null {
+  return value?.toLocaleLowerCase() === "telegram" ? "TG" : value;
+}
+
 function resolveLeadFilter(value: string | null, leads: Lead[]): string | null {
   if (!value) {
     return null;
@@ -150,7 +154,7 @@ export async function GET(request: Request) {
         startsAt: reminder.dueAt.toISOString(),
         endsAt: null,
         status: reminder.status,
-        sourceChannel: reminder.sourceChannel,
+        sourceChannel: displaySourceChannel(reminder.sourceChannel),
         location: null,
         related: resolveRelated(reminder, lookup)
       }));
@@ -167,7 +171,7 @@ export async function GET(request: Request) {
         startsAt: event.startsAt.toISOString(),
         endsAt: event.endsAt.toISOString(),
         status: event.syncStatus,
-        sourceChannel: event.externalProvider ?? "crm",
+        sourceChannel: displaySourceChannel(event.externalProvider ?? "crm"),
         location: event.location,
         related: resolveRelated(event, lookup)
       }));

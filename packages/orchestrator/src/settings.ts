@@ -85,6 +85,23 @@ function createDefaultTaxonomy(): LangGraphRuntimeSettings["taxonomy"] {
   };
 }
 
+function createDefaultProjectPeople(): LangGraphRuntimeSettings["projectPeople"] {
+  return [
+    {
+      name: "Екатерина Рыбцевих",
+      role: "director",
+      description:
+        "Director of the architecture bureau. Treat her as an internal decision-maker or message forwarder, not as the client, unless the message explicitly says she is the client."
+    },
+    {
+      name: "Олег Панюков",
+      role: "developer",
+      description:
+        "Developer and tester for LightCrm. Treat him as internal project staff, not as a client, lead, or offer recipient."
+    }
+  ];
+}
+
 function thresholds(autoExecute: number, askConfirmation = 0.55): LangGraphRuntimeSettings["thresholds"] {
   return {
     autoExecute,
@@ -123,6 +140,7 @@ function cloneSettings(settings: LangGraphRuntimeSettings): LangGraphRuntimeSett
     extraNewLeadPhrases: [...settings.extraNewLeadPhrases],
     mailAnalysisPhrases: [...settings.mailAnalysisPhrases],
     reminderPhrases: [...settings.reminderPhrases],
+    projectPeople: settings.projectPeople.map((person) => ({ ...person })),
     enabledNodes: { ...settings.enabledNodes }
   };
 }
@@ -135,7 +153,7 @@ export const LANGGRAPH_PRESETS: LangGraphRuntimeSettings[] = [
   {
     id: "leadHunter",
     name: "Lead Hunter",
-    description: "Aggressively captures new lead requests from Telegram-style intake messages.",
+    description: "Aggressively captures new lead requests from TG-style intake messages.",
     model: "gpt-4.1-mini",
     temperature: 0.2,
     confidenceThreshold: 0.58,
@@ -148,6 +166,7 @@ export const LANGGRAPH_PRESETS: LangGraphRuntimeSettings[] = [
     taxonomy: createDefaultTaxonomy(),
     thresholds: thresholds(0.58),
     confirmationPolicy: confirmationPolicy(true, true),
+    projectPeople: createDefaultProjectPeople(),
     extraNewLeadPhrases: [],
     mailAnalysisPhrases: [],
     reminderPhrases: [],
@@ -169,6 +188,7 @@ export const LANGGRAPH_PRESETS: LangGraphRuntimeSettings[] = [
     taxonomy: createDefaultTaxonomy(),
     thresholds: thresholds(0.72),
     confirmationPolicy: confirmationPolicy(false, true),
+    projectPeople: createDefaultProjectPeople(),
     extraNewLeadPhrases: [],
     mailAnalysisPhrases: [],
     reminderPhrases: [],
@@ -190,6 +210,7 @@ export const LANGGRAPH_PRESETS: LangGraphRuntimeSettings[] = [
     taxonomy: createDefaultTaxonomy(),
     thresholds: thresholds(0.86, 0.75),
     confirmationPolicy: confirmationPolicy(false, false, true),
+    projectPeople: createDefaultProjectPeople(),
     extraNewLeadPhrases: [],
     mailAnalysisPhrases: [],
     reminderPhrases: [],
@@ -211,6 +232,7 @@ export const LANGGRAPH_PRESETS: LangGraphRuntimeSettings[] = [
     taxonomy: createDefaultTaxonomy(),
     thresholds: thresholds(0.48),
     confirmationPolicy: confirmationPolicy(true, true),
+    projectPeople: createDefaultProjectPeople(),
     extraNewLeadPhrases: [],
     mailAnalysisPhrases: [],
     reminderPhrases: [],
@@ -232,6 +254,7 @@ export const LANGGRAPH_PRESETS: LangGraphRuntimeSettings[] = [
     taxonomy: createDefaultTaxonomy(),
     thresholds: thresholds(0.68),
     confirmationPolicy: confirmationPolicy(true, true),
+    projectPeople: createDefaultProjectPeople(),
     extraNewLeadPhrases: [],
     mailAnalysisPhrases: [],
     reminderPhrases: [],
@@ -282,6 +305,13 @@ export function mergeLangGraphSettings(
       ...base.enabledNodes,
       ...(value?.enabledNodes ?? {})
     },
+    projectPeople: (value?.projectPeople ?? base.projectPeople)
+      .map((person) => ({
+        name: person.name.trim(),
+        role: person.role.trim(),
+        description: person.description.trim()
+      }))
+      .filter((person) => person.name && person.role),
     forceReviewIntents: [...(value?.forceReviewIntents ?? base.forceReviewIntents)],
     extraNewLeadPhrases: [...(value?.extraNewLeadPhrases ?? base.extraNewLeadPhrases)],
     mailAnalysisPhrases: [...(value?.mailAnalysisPhrases ?? base.mailAnalysisPhrases)],

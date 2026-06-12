@@ -39,7 +39,7 @@ async function telegramCall<T>(token: string, method: string): Promise<T> {
   const response = await fetch(`https://api.telegram.org/bot${token}/${method}`);
   const payload = (await response.json()) as TelegramResponse<T>;
   if (!response.ok || !payload.ok) {
-    throw new Error(payload.description ?? `Telegram ${method} failed`);
+    throw new Error(payload.description ?? `TG ${method} failed`);
   }
   return payload.result as T;
 }

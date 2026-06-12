@@ -126,6 +126,10 @@ function compactText(value: string, maxLength = 240): string {
   return `${compacted.slice(0, Math.max(0, maxLength - 1)).trimEnd()}...`;
 }
 
+function displaySourceChannel(value: string | null | undefined): string {
+  return value?.toLocaleLowerCase() === "telegram" ? "TG" : value ?? "intake";
+}
+
 function attachmentSummary(attachment: LeadIntakeAttachmentInput): string {
   const provided = trimText(attachment.summary);
   if (provided) {
@@ -166,7 +170,7 @@ function buildLeadIntakeSummary(input: IngestLeadIntakeInput): { summary: string
     .map((attachment) => `${attachment.fileName} (${attachment.kind}; ${attachmentSummary(attachment)})`)
     .join("; ");
   const parts = [
-    `Source: ${input.sourceChannel ?? "intake"}${input.sourceThreadId ? ` thread ${input.sourceThreadId}` : ""}.`,
+    `Source: ${displaySourceChannel(input.sourceChannel)}${input.sourceThreadId ? ` thread ${input.sourceThreadId}` : ""}.`,
     textSummary ? `Text: ${compactText(textSummary)}.` : "Text: no text notes yet.",
     attachmentCount > 0
       ? `Files: ${attachmentCount} attachment(s)${attachmentKinds.length > 0 ? ` [${attachmentKinds.join(", ")}]` : ""}: ${attachmentDetails}.`

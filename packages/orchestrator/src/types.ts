@@ -55,6 +55,11 @@ export type LangGraphRuntimeSettings = {
     allowAutoCreateLead: boolean;
     allowAutoCreateReminder: boolean;
   };
+  projectPeople: Array<{
+    name: string;
+    role: string;
+    description: string;
+  }>;
   extraNewLeadPhrases: string[];
   mailAnalysisPhrases: string[];
   reminderPhrases: string[];

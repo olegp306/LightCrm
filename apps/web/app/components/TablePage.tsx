@@ -47,7 +47,7 @@ function rowsWithCalendarItems(rows: CrmTableRow[], feed: CalendarFeedItem[]): C
   }));
 }
 
-export function TablePage({ endpoint, rows, columns, calendarFeedEndpoint, ...props }: LiveTablePageProps) {
+export function TablePage({ endpoint, rows: _sampleRows, columns, calendarFeedEndpoint, ...props }: LiveTablePageProps) {
   const [liveRows, setLiveRows] = useState<CrmTableRow[] | null>(null);
   const [failed, setFailed] = useState(false);
   const [initialFocusRef, setInitialFocusRef] = useState<string | null>(null);
@@ -83,13 +83,13 @@ export function TablePage({ endpoint, rows, columns, calendarFeedEndpoint, ...pr
           return;
         }
         setFailed(true);
-        setLiveRows(rows);
+        setLiveRows([]);
       });
 
     return () => controller.abort();
-  }, [calendarFeedEndpoint, columns, endpoint, rows]);
+  }, [calendarFeedEndpoint, columns, endpoint]);
 
-  const activeRows = liveRows ?? rows;
+  const activeRows = liveRows ?? [];
   const initialFocusRowId = useMemo(() => {
     if (!initialFocusRef) {
       return null;

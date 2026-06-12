@@ -55,6 +55,20 @@ export function resolveWorkspaceId(value: string | null | undefined) {
   return !value || value === "default" ? defaultWorkspaceId : value;
 }
 
+function displaySourceChannel(value: unknown): unknown {
+  return typeof value === "string" && value.toLocaleLowerCase() === "telegram" ? "TG" : value;
+}
+
+function displayRecordSourceChannel<TRecord>(record: TRecord): TRecord {
+  if (!record || typeof record !== "object" || !("sourceChannel" in record)) {
+    return record;
+  }
+  return {
+    ...record,
+    sourceChannel: displaySourceChannel((record as { sourceChannel?: unknown }).sourceChannel)
+  };
+}
+
 export const workspaceId = z.string().min(1).transform(resolveWorkspaceId);
 
 export function tableRowsResponse(entity: CrmCollection) {
@@ -64,7 +78,7 @@ export function tableRowsResponse(entity: CrmCollection) {
       const workspaceId = url.searchParams.get("workspaceId") ?? defaultWorkspaceId;
       const includeArchived = url.searchParams.get("includeArchived") === "true";
       const rows = await getCrm().listRecords({ entity, workspaceId, includeArchived });
-      return NextResponse.json(rows);
+      return NextResponse.json(rows.map(displayRecordSourceChannel));
     } catch (error) {
       return handleRouteError(error);
     }

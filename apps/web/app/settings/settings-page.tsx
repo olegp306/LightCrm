@@ -112,6 +112,8 @@ function traceDetailsText(details: Record<string, string | number | boolean | nu
   return values.length > 0 ? values.join(" · ") : null;
 }
 
+type ProjectPerson = LangGraphRuntimeSettings["projectPeople"][number];
+
 export function LangGraphSettingsPage() {
   const [activeTab, setActiveTab] = useState<"crm" | "langgraph">("crm");
   const [settings, setSettings] = useState<LangGraphRuntimeSettings | null>(null);
@@ -303,6 +305,42 @@ export function LangGraphSettingsPage() {
         ...settings.confirmationPolicy,
         ...value
       }
+    });
+  }
+
+  function patchProjectPerson(index: number, value: Partial<ProjectPerson>) {
+    if (!settings) {
+      return;
+    }
+    patchSettings({
+      projectPeople: settings.projectPeople.map((person, personIndex) =>
+        personIndex === index ? { ...person, ...value } : person
+      )
+    });
+  }
+
+  function addProjectPerson() {
+    if (!settings) {
+      return;
+    }
+    patchSettings({
+      projectPeople: [
+        ...settings.projectPeople,
+        {
+          name: "",
+          role: "operator",
+          description: "Internal project person. Do not treat as a client unless explicitly stated."
+        }
+      ]
+    });
+  }
+
+  function removeProjectPerson(index: number) {
+    if (!settings) {
+      return;
+    }
+    patchSettings({
+      projectPeople: settings.projectPeople.filter((_, personIndex) => personIndex !== index)
     });
   }
 
@@ -522,7 +560,7 @@ export function LangGraphSettingsPage() {
                 </div>
                 <div>
                   <strong>V0.3 next</strong>
-                  <span>Telegram command/button to download the generated commercial offer.</span>
+                  <span>TG command/button to download the generated commercial offer.</span>
                 </div>
                 <div>
                   <strong>V1.0 later</strong>
@@ -754,6 +792,43 @@ export function LangGraphSettingsPage() {
                 />
                 <span>{intent}</span>
               </label>
+            ))}
+          </div>
+        </section>
+
+        <section className="settingsPanel wide">
+          <div className="settingsPanelHeader">
+            <div>
+              <h2>Project People</h2>
+              <p>Internal people whose names should not become clients, leads, or offer recipients unless explicitly stated.</p>
+            </div>
+            <button type="button" onClick={addProjectPerson}>
+              Add person
+            </button>
+          </div>
+          <div className="projectPeopleList">
+            {settings.projectPeople.map((person, index) => (
+              <div className="projectPersonCard" key={`${person.name}-${index}`}>
+                <label>
+                  <span>Name</span>
+                  <input value={person.name} onChange={(event) => patchProjectPerson(index, { name: event.target.value })} />
+                </label>
+                <label>
+                  <span>Role</span>
+                  <input value={person.role} onChange={(event) => patchProjectPerson(index, { role: event.target.value })} />
+                </label>
+                <label className="wide">
+                  <span>Description</span>
+                  <textarea
+                    rows={3}
+                    value={person.description}
+                    onChange={(event) => patchProjectPerson(index, { description: event.target.value })}
+                  />
+                </label>
+                <button type="button" className="quietDangerButton" onClick={() => removeProjectPerson(index)}>
+                  Remove
+                </button>
+              </div>
             ))}
           </div>
         </section>

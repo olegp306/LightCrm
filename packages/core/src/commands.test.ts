@@ -308,7 +308,7 @@ describe("createCrmService", () => {
     });
 
     expect(intake.lead.id).toBe(lead.id);
-    expect(intake.summary).toContain("Source: telegram thread 763604722.");
+    expect(intake.summary).toContain("Source: TG thread 763604722.");
     expect(intake.summary).toContain("Клиент хочет дом 140 м2");
     expect(intake.summary).toContain("2 attachment(s)");
     expect(intake.summary).toContain("[pdf, voice]");
@@ -317,7 +317,7 @@ describe("createCrmService", () => {
       leadId: lead.id,
       source: "telegram"
     });
-    expect(intake.leadSummary.shortSummary).toContain("Source: telegram thread 763604722.");
+    expect(intake.leadSummary.shortSummary).toContain("Source: TG thread 763604722.");
     expect(intake.documents).toHaveLength(2);
     expect(intake.documents[0]).toMatchObject({
       leadId: lead.id,

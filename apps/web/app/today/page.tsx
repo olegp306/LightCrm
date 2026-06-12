@@ -23,7 +23,7 @@ export default function TodayPage({ searchParams }: TodayPageProps) {
       description={
         isFiltered
           ? "Schedule and manual events for the selected CRM record."
-          : "Unified CRM calendar for reminders, scheduled events, Telegram intake, and LangGraph agent work."
+          : "Unified CRM calendar for reminders, scheduled events, TG intake, and LangGraph agent work."
       }
       leadId={searchParams?.leadId}
       clientId={searchParams?.clientId}

@@ -244,7 +244,7 @@ function EmptyCalendarState() {
   return (
     <div className="calendarEmpty">
       <strong>No scheduled CRM work</strong>
-      <span>Reminders and events from Telegram, LangGraph, manual entries, and calendar sync will appear here.</span>
+      <span>Reminders and events from TG, LangGraph, manual entries, and calendar sync will appear here.</span>
     </div>
   );
 }

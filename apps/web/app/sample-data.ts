@@ -129,9 +129,9 @@ export const tables: Record<string, TableDefinition> = {
             }
           ],
           area: "140 m2",
-          summaryShort: "Source: telegram thread. Text: planning request. Files: initial brief and budget table.",
+          summaryShort: "Source: TG thread. Text: planning request. Files: initial brief and budget table.",
           summaryLong:
-            "Source: telegram thread. Text: planning request. Files: initial brief and budget table. Original intake describes a private house request with early budget material attached.",
+            "Source: TG thread. Text: planning request. Files: initial brief and budget table. Original intake describes a private house request with early budget material attached.",
           summaryUpdatedAt: "2026-06-09T09:00:00.000Z",
           description: "Planning request",
           interest: "hot",
@@ -140,7 +140,7 @@ export const tables: Record<string, TableDefinition> = {
           address: "Birkenfeld",
           "client.phone": "+33 600 000 001",
           "client.email": "ada@example.com",
-          messenger: "Telegram",
+          messenger: "TG",
           sourceChannel: "telegram",
           clientProjects: 1,
           budgetEur: 0,

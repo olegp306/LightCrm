@@ -2,6 +2,36 @@
 
 All notable LightCrm releases are documented here. Starting with `0.2.0`, every version bump must include a changelog entry.
 
+## 0.3.9 - 2026-06-12
+
+### Project Snapshot
+
+LightCrm now has cleaner TG-facing language across intake, lead summaries, document names, logs, and CRM surfaces. The release also preserves the latest operator workflow improvements: compact lead cards with document drawers, Project People settings for LangGraph context, tighter Today event creation, safer document preview actions, and no sample-data flicker while live data loads.
+
+### Added
+
+- Added Project People settings so LangGraph can treat known operators, directors, developers, and testers as internal context instead of external clients.
+- Added compact TG lead-card document access with a `Downloads` drawer and per-document links.
+- Added display helpers that show `TG` in table/calendar/source UI while keeping the internal `telegram` integration value intact.
+
+### Changed
+
+- Replaced user-facing `Telegram` wording with `TG` in new summaries, notes, bot replies/logs, calendar text, settings labels, and default attachment file names such as `TG-photo-...`.
+- Tightened document preview and toolbar button styling so actions fit better in desktop table workflows.
+- Reduced live-data flicker by avoiding temporary sample rows while CRM tables are loading.
+- Made Today event creation fields more visible and easier to scan.
+
+### Verification
+
+- `pnpm --filter @lightcrm/telegram-bot test`
+- `pnpm --filter @lightcrm/telegram-bot typecheck`
+- `pnpm --filter @lightcrm/orchestrator test`
+- `pnpm --filter @lightcrm/orchestrator typecheck`
+- `pnpm --filter @lightcrm/core test`
+- `pnpm --filter @lightcrm/db test`
+- `pnpm --filter @lightcrm/ui typecheck`
+- `pnpm --filter @lightcrm/web typecheck`
+
 ## 0.3.8 - 2026-06-12
 
 ### Project Snapshot

@@ -162,6 +162,31 @@ describe("semantic runtime settings", () => {
     expect(settings.confirmationPolicy.allowAutoCreateLead).toBe(true);
   });
 
+  it("keeps internal project people in runtime settings", () => {
+    const settings = mergeLangGraphSettings({
+      projectPeople: [
+        {
+          name: " Екатерина Рыбцевих ",
+          role: " director ",
+          description: "Director, internal sender."
+        },
+        {
+          name: "   ",
+          role: "operator",
+          description: "Ignored because name is empty."
+        }
+      ]
+    });
+
+    expect(settings.projectPeople).toEqual([
+      {
+        name: "Екатерина Рыбцевих",
+        role: "director",
+        description: "Director, internal sender."
+      }
+    ]);
+  });
+
   it("allows project-only lead creation while keeping offer readiness strict", () => {
     const settings = mergeLangGraphSettings({ id: "leadHunter" });
 
@@ -191,6 +216,7 @@ describe("semantic runtime settings", () => {
     expect(mailAnalyst.taxonomy.requiredFieldsByAction.create_lead).toEqual([]);
     expect(mailAnalyst.enabledNodes.riskCheck).toBe(true);
     expect(mailAnalyst.extraNewLeadPhrases).toEqual([]);
+    expect(mailAnalyst.projectPeople[0]).not.toBe(leadHunter.projectPeople[0]);
 
     expect(LANGGRAPH_PRESETS.find((preset) => preset.id === "leadHunter")?.prompts.intentClassifier).not.toBe(
       "Changed"
@@ -520,6 +546,83 @@ describe("semantic crm orchestration", () => {
       }
     };
   }
+
+  it("includes internal project people in semantic prompts", async () => {
+    const systems: string[] = [];
+    await runSemanticCrmOrchestration(
+      {
+        workspaceId: "default",
+        messageId: "m-internal-1",
+        author: "Олег Панюков",
+        text: "Екатерина переслала запрос клиента на дом в Мюнхене.",
+        sourceChannel: "telegram"
+      },
+      {
+        llmProvider: {
+          async callJson(input: { system: string }) {
+            systems.push(input.system);
+            if (input.system.includes("Classify")) {
+              return {
+                primaryIntent: "create_lead",
+                secondaryIntents: [],
+                confidence: 0.91,
+                reason: "Client request.",
+                evidence: ["запрос клиента"]
+              };
+            }
+            if (input.system.includes("Resolve")) {
+              return {
+                targetType: "none",
+                targetId: null,
+                confidence: 0.86,
+                candidates: [],
+                needsClarification: false,
+                clarificationQuestion: null
+              };
+            }
+            if (input.system.includes("Extract")) {
+              return {
+                fields: {
+                  requestType: {
+                    value: "дом в Мюнхене",
+                    confidence: 0.88,
+                    evidence: "дом в Мюнхене",
+                    sourceMessageIds: ["m-internal-1"]
+                  }
+                },
+                missingData: [],
+                notes: []
+              };
+            }
+            return {
+              approved: true,
+              riskLevel: "low",
+              reason: "Validated.",
+              needsHumanConfirmation: false
+            };
+          }
+        }
+      },
+      {
+        projectPeople: [
+          {
+            name: "Екатерина Рыбцевих",
+            role: "director",
+            description: "Director of the architecture bureau."
+          },
+          {
+            name: "Олег Панюков",
+            role: "developer",
+            description: "Developer testing LightCrm."
+          }
+        ]
+      }
+    );
+
+    expect(systems.some((system) => system.includes("Internal project people:"))).toBe(true);
+    expect(systems.join("\n")).toContain("Екатерина Рыбцевих (director)");
+    expect(systems.join("\n")).toContain("Do not extract them as clientName");
+  });
 
   it("plans lead intake and reminder from the same semantic message", async () => {
     const result = await runSemanticCrmOrchestration(

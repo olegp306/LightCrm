@@ -76,6 +76,10 @@ function optionalString(value: unknown): string | null {
   return typeof value === "string" && value.trim() ? value : null;
 }
 
+function displaySourceChannel(value: string | null): string | null {
+  return value?.toLocaleLowerCase() === "telegram" ? "TG" : value;
+}
+
 function optionalNumber(value: unknown): number | null {
   return typeof value === "number" && Number.isFinite(value) ? value : null;
 }
@@ -134,7 +138,7 @@ export function normalizeCalendarCellValue(value: unknown): CalendarCellValue {
         startsAt,
         endsAt: optionalString(item.endsAt),
         status: optionalString(item.status),
-        sourceChannel: optionalString(item.sourceChannel)
+        sourceChannel: displaySourceChannel(optionalString(item.sourceChannel))
       }
     ];
   });

@@ -1096,6 +1096,7 @@ export function CrmTable({
   const [query, setQuery] = useState("");
   const gridRef = useRef<DataEditorRef | null>(null);
   const gridFrameRef = useRef<HTMLDivElement | null>(null);
+  const toolbarRef = useRef<HTMLDivElement | null>(null);
   const storageKey = `lightcrm.table.${tableKey}`;
   const [preferences, setPreferences] = useState<TablePreferences>(() => defaultPreferences(columns));
   const [loadedPreferencesKey, setLoadedPreferencesKey] = useState<string | null>(null);
@@ -1151,6 +1152,21 @@ export function CrmTable({
   const [longTextPreview, setLongTextPreview] = useState<LongTextPreview | null>(null);
   const [archivingSummaryIds, setArchivingSummaryIds] = useState<Set<string>>(() => new Set());
   const [summaryArchiveConfirmId, setSummaryArchiveConfirmId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!showColumnMenu) {
+      return;
+    }
+    function closeColumnMenuOnOutsideClick(event: MouseEvent) {
+      const target = event.target;
+      if (target instanceof Node && toolbarRef.current?.contains(target)) {
+        return;
+      }
+      setShowColumnMenu(false);
+    }
+    document.addEventListener("mousedown", closeColumnMenuOnOutsideClick);
+    return () => document.removeEventListener("mousedown", closeColumnMenuOnOutsideClick);
+  }, [showColumnMenu]);
   const [mobileCalendarMonths, setMobileCalendarMonths] = useState<Record<string, string>>({});
   const mobileRowRefs = useRef(new Map<string, HTMLElement>());
   const isDarkMode = useDarkModeEnabled();
@@ -2734,7 +2750,7 @@ export function CrmTable({
           <h1>{title}</h1>
           <p>{description}</p>
         </div>
-        <div className="toolbar" aria-label={`${title} actions`}>
+        <div className="toolbar" aria-label={`${title} actions`} ref={toolbarRef}>
           {selectedRows.length > 0 ? (
             <div className="bulkActionBar" role="status" aria-live="polite">
               <span>
@@ -2855,34 +2871,34 @@ export function CrmTable({
               </div>
             ) : null}
           </div>
+          {showColumnMenu ? (
+            <div className="columnDropdown" aria-label={`${title} visible columns`}>
+              <div className="columnDropdownHeader">
+                <span>Columns</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPreferences(defaultPreferences(columns));
+                    setSort(null);
+                  }}
+                >
+                  Default
+                </button>
+              </div>
+              {allColumnsByPreference.map((column) => {
+                const isVisible = visibleColumnIds.has(column.id);
+                return (
+                  <label className="columnMenuItem" key={column.id}>
+                    <input checked={isVisible} onChange={() => toggleColumn(column.id)} type="checkbox" />
+                    <span>{column.title}</span>
+                    {isVisible ? <Check size={14} aria-hidden="true" /> : null}
+                  </label>
+                );
+              })}
+            </div>
+          ) : null}
         </div>
       </header>
-      {showColumnMenu ? (
-        <div className="columnDropdown" aria-label={`${title} visible columns`}>
-          <div className="columnDropdownHeader">
-            <span>Columns</span>
-            <button
-              type="button"
-              onClick={() => {
-                setPreferences(defaultPreferences(columns));
-                setSort(null);
-              }}
-            >
-              Default
-            </button>
-          </div>
-          {allColumnsByPreference.map((column) => {
-            const isVisible = visibleColumnIds.has(column.id);
-            return (
-              <label className="columnMenuItem" key={column.id}>
-                <input checked={isVisible} onChange={() => toggleColumn(column.id)} type="checkbox" />
-                <span>{column.title}</span>
-                {isVisible ? <Check size={14} aria-hidden="true" /> : null}
-              </label>
-            );
-          })}
-        </div>
-      ) : null}
       {createError && !isCreateOpen ? <div className="tableNotice error">{createError}</div> : null}
       <div className="gridFrame" ref={gridFrameRef} onMouseLeave={() => {
         setRelatedTooltip(null);
@@ -3602,7 +3618,7 @@ export function CrmTable({
             ) : (
               <div className="documentPreviewEmpty">Preview is unavailable for this file.</div>
             )}
-            <footer>
+            <footer className="documentPreviewActions">
               <button
                 type="button"
                 className="danger"
@@ -3618,11 +3634,16 @@ export function CrmTable({
               >
                 Delete
               </button>
-              {previewDocument.downloadUrl ? (
-                <a href={previewDocument.downloadUrl} download={previewDocument.fileName}>
-                  Download
-                </a>
-              ) : null}
+              <div className="documentPreviewActionGroup">
+                {previewDocument.downloadUrl ? (
+                  <a href={previewDocument.downloadUrl} download={previewDocument.fileName}>
+                    Download
+                  </a>
+                ) : null}
+                <button type="button" onClick={() => setPreviewDocument(null)}>
+                  Close
+                </button>
+              </div>
             </footer>
           </section>
         </div>

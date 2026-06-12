@@ -62,6 +62,10 @@ const SemanticOrchestrationAnnotation = Annotation.Root({
 
 type SemanticOrchestrationState = typeof SemanticOrchestrationAnnotation.State;
 
+function displaySourceChannel(value: string | null | undefined): string {
+  return value?.toLocaleLowerCase() === "telegram" ? "TG" : value ?? "TG";
+}
+
 function traceEvent(
   state: SemanticOrchestrationState,
   node: LangGraphTraceEvent["node"],
@@ -83,17 +87,18 @@ function traceEvent(
 
 function collectInput(state: SemanticOrchestrationState): Partial<SemanticOrchestrationState> {
   const normalizedText = state.input.text.trim().replace(/\s+/g, " ");
+  const sourceLabel = displaySourceChannel(state.input.sourceChannel);
   return {
     workspaceId: state.input.workspaceId,
     normalizedText,
-    explanations: [`Received ${state.input.sourceChannel ?? "telegram"} message.`],
+    explanations: [`Received ${sourceLabel} message.`],
     trace: [
       traceEvent(
         state,
         "collectInput",
         "done",
         "Получил входящее сообщение",
-        `Источник: ${state.input.sourceChannel ?? "telegram"}. Текст приведён к рабочему виду без лишних пробелов.`,
+        `Источник: ${sourceLabel}. Текст приведён к рабочему виду без лишних пробелов.`,
         {
           sourceChannel: state.input.sourceChannel ?? "telegram",
           messageId: state.input.messageId ?? null,
@@ -125,8 +130,22 @@ async function buildContext(state: SemanticOrchestrationState): Promise<Partial<
   };
 }
 
+function projectPeoplePrompt(settings: LangGraphRuntimeSettings): string | null {
+  if (settings.projectPeople.length === 0) {
+    return null;
+  }
+  const people = settings.projectPeople
+    .map((person) => `- ${person.name} (${person.role}): ${person.description || "Internal project person."}`)
+    .join("\n");
+  return [
+    "Internal project people:",
+    people,
+    "If these names appear in intake as authors, forwarders, operators, directors, developers, or testers, treat them as internal context only. Do not extract them as clientName, lead, offer recipient, project owner, or CRM target unless the message explicitly states that this internal person is the external client."
+  ].join("\n");
+}
+
 function semanticSystemPrompt(state: SemanticOrchestrationState, nodeInstruction: string): string {
-  return [state.settings.prompts.systemRole, nodeInstruction].join("\n\n");
+  return [state.settings.prompts.systemRole, projectPeoplePrompt(state.settings), nodeInstruction].filter(Boolean).join("\n\n");
 }
 
 const intentJsonContract = [

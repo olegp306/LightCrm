@@ -61,7 +61,7 @@ describe("telegram bot core", () => {
     expect(flushed).toHaveLength(1);
     expect(flushed[0]?.message?.groupedAttachments).toEqual([
       expect.objectContaining({ kind: "pdf", fileName: "brief.pdf" }),
-      expect.objectContaining({ kind: "image", fileName: "telegram-photo-211.jpg" })
+      expect.objectContaining({ kind: "image", fileName: "TG-photo-211.jpg" })
     ]);
     expect(buffer.size).toBe(0);
   });
@@ -166,12 +166,11 @@ describe("telegram bot core", () => {
       ]
     });
 
-    expect(reply).toContain("LightCrm plan");
-    expect(reply).toContain("Status: preview");
-    expect(reply).toContain("Intent: create_new_lead");
-    expect(reply).toContain("Risk: auto");
-    expect(reply).toContain("Action: create_lead");
-    expect(reply).toContain("Contact: Максим Тютюник");
+    expect(reply).toContain("[+] lead ready");
+    expect(reply).toContain("intent: create_new_lead");
+    expect(reply).toContain("risk: auto");
+    expect(reply).toContain("action: create_lead");
+    expect(reply).toContain("contact: Максим Тютюник");
   });
 
   it("formats executed orchestration replies as results", () => {
@@ -205,9 +204,9 @@ describe("telegram bot core", () => {
       { status: "executed" }
     );
 
-    expect(reply).toContain("LightCrm result");
-    expect(reply).toContain("Status: executed");
-    expect(reply).toContain("Action: create_lead");
+    expect(reply).toContain("[+] done");
+    expect(reply).toContain("intent: create_lead");
+    expect(reply).toContain("action: create_lead");
   });
 
   it("formats multi-action orchestration replies as a chain", () => {
@@ -241,8 +240,8 @@ describe("telegram bot core", () => {
       ]
     });
 
-    expect(reply).toContain("Action: create_lead + create_reminder");
-    expect(reply).toContain("Due: 2026-06-25T09:00:00.000Z");
+    expect(reply).toContain("action: create_lead + create_reminder");
+    expect(reply).toContain("due: 2026-06-25T09:00:00.000Z");
   });
 
   it("formats semantic note orchestration results", () => {
@@ -273,10 +272,44 @@ describe("telegram bot core", () => {
       settings: DEFAULT_LANGGRAPH_SETTINGS
     });
 
-    expect(reply).toContain("Intent: add_lead_note");
-    expect(reply).toContain("Action: request_review");
+    expect(reply).toContain("[!] needs review");
+    expect(reply).toContain("intent: add_lead_note");
+    expect(reply).toContain("action: request_review");
     expect(reply).toContain("Target: lead-1");
     expect(reply).not.toContain("Intent: create_new_lead");
+  });
+
+  it("marks unclear orchestration replies as not sure", () => {
+    const reply = formatOrchestrationReply({
+      workspaceId: "default",
+      normalizedText: "random forwarded note",
+      intent: "no_action",
+      risk: "review",
+      actions: [],
+      explanations: ["No actionable CRM instruction was found."],
+      facts: {
+        contactName: null,
+        projectName: null,
+        projectType: null,
+        location: null,
+        areaM2: null,
+        phone: null,
+        budgetEur: null,
+        dueAt: null,
+        sourceMessageId: "m-empty",
+        evidence: {
+          sourceMessageId: "m-empty",
+          author: "operator",
+          sourceChannel: "telegram",
+          textSnippet: "random forwarded note"
+        }
+      },
+      settings: DEFAULT_LANGGRAPH_SETTINGS
+    });
+
+    expect(reply).toContain("[?] not sure");
+    expect(reply).toContain("intent: no_action");
+    expect(reply).toContain("note: No actionable CRM instruction was found.");
   });
 
   it("rejects messages from chats outside the allowlist", async () => {
@@ -351,7 +384,8 @@ describe("telegram bot core", () => {
       text: "Имя клиента - Максим Тютюник",
       sourceChannel: "telegram"
     });
-    expect(sendMessage).toHaveBeenCalledWith(111111, expect.stringContaining("Risk: review"));
+    expect(sendMessage).toHaveBeenCalledWith(111111, expect.stringContaining("[!] needs review"));
+    expect(sendMessage).toHaveBeenCalledWith(111111, expect.stringContaining("risk: review"));
   });
 
   it("creates a lead intake from captioned attachments", async () => {
@@ -464,7 +498,7 @@ describe("telegram bot core", () => {
   it("creates a draft lead from attachment-only intake without asking for a caption", async () => {
     const sendMessage = vi.fn();
     const orchestrate = vi.fn();
-    const createLead = vi.fn().mockResolvedValue({ id: "lead-draft", name: "Draft lead - pdf from Telegram #210" });
+    const createLead = vi.fn().mockResolvedValue({ id: "lead-draft", name: "Draft lead - pdf from TG #210" });
     const prepareAttachment = vi.fn().mockResolvedValue({
       kind: "pdf",
       fileName: "brief.pdf",
@@ -506,7 +540,7 @@ describe("telegram bot core", () => {
     expect(createLead).toHaveBeenCalledWith(
       expect.objectContaining({
         workspaceId: "default",
-        name: "Draft lead - pdf from Telegram #210",
+        name: "Draft lead - pdf from TG #210",
         clientId: null,
         sourceChannel: "telegram",
         externalMessageId: "210"
@@ -530,7 +564,7 @@ describe("telegram bot core", () => {
 
   it("sends one short processing message for grouped multi-file intake", async () => {
     const sendMessage = vi.fn();
-    const createLead = vi.fn().mockResolvedValue({ id: "lead-draft", name: "Draft lead - pdf, image from Telegram #211" });
+    const createLead = vi.fn().mockResolvedValue({ id: "lead-draft", name: "Draft lead - pdf, image from TG #211" });
     const prepareAttachment = vi
       .fn()
       .mockResolvedValueOnce({
@@ -667,8 +701,9 @@ describe("telegram bot core", () => {
         }
       }
     );
-    expect(sendMessage).toHaveBeenCalledWith(111111, expect.stringContaining("Client: Maria"), expect.anything());
-    expect(sendMessage).toHaveBeenCalledWith(111111, expect.stringContaining("Project: private_house"), expect.anything());
+    expect(sendMessage).toHaveBeenCalledWith(111111, expect.stringContaining("<b>L-2026-301</b>"), expect.anything());
+    expect(sendMessage).toHaveBeenCalledWith(111111, expect.stringContaining("client: Maria"), expect.anything());
+    expect(sendMessage).toHaveBeenCalledWith(111111, expect.stringContaining("project: private_house"), expect.anything());
   });
 
   it("uses a callback CRM button for localhost CRM URLs", async () => {
@@ -695,6 +730,7 @@ describe("telegram bot core", () => {
       actions: [{ type: "create_lead", risk: "auto", reason: "Low-risk CRM action.", payload: {} }]
     });
     const createLead = vi.fn().mockResolvedValue({ id: "lead-303", code: "L-2026-303", name: "Maria" });
+    const listLeadDocuments = vi.fn().mockResolvedValue({ leadId: "lead-303", documents: [] });
 
     await handleTelegramUpdate(
       {
@@ -712,7 +748,8 @@ describe("telegram bot core", () => {
         crmAppBaseUrl: "http://localhost:4900",
         sendMessage,
         orchestrate,
-        createLead
+        createLead,
+        listLeadDocuments
       }
     );
 
@@ -726,7 +763,8 @@ describe("telegram bot core", () => {
               { text: "CRM", callback_data: "crm_lead:lead-303:L-2026-303" },
               { text: "offer", callback_data: "offer_lead:lead-303" }
             ],
-            [{ text: "undo", callback_data: "undo_lead:lead-303" }]
+            [{ text: "undo", callback_data: "undo_lead:lead-303" }],
+            [{ text: "Downloads", callback_data: "downloads_lead:lead-303" }]
           ]
         }
       }
@@ -911,6 +949,68 @@ describe("telegram bot core", () => {
     );
   });
 
+  it("opens a Telegram downloads drawer for lead document files", async () => {
+    const sendMessage = vi.fn();
+    const listLeadDocuments = vi.fn().mockResolvedValue({
+      leadId: "lead-404",
+      documents: [
+        {
+          id: "doc-1",
+          fileName: "northwind-intake-card.pdf",
+          shortSummary: "Client intake card with first project details.",
+          longSummary: "Longer client intake summary.",
+          downloadUrl: "https://crm.example.com/api/crm/storage/local/doc-1",
+          mimeType: "application/pdf",
+          createdAt: "2026-06-12T06:00:00.000Z"
+        },
+        {
+          id: "doc-2",
+          fileName: "site-photo.jpg",
+          shortSummary: "Site photo from TG.",
+          downloadUrl: "https://crm.example.com/api/crm/storage/local/doc-2",
+          mimeType: "image/jpeg",
+          createdAt: "2026-06-12T06:05:00.000Z"
+        }
+      ]
+    });
+
+    await handleTelegramUpdate(
+      {
+        update_id: 102,
+        callback_query: {
+          id: "callback-downloads",
+          data: "downloads_lead:lead-404",
+          message: { chat: { id: 111111 }, message_id: 905 }
+        }
+      },
+      {
+        allowedChatIds: new Set([111111]),
+        workspaceId: "default",
+        sendMessage,
+        listLeadDocuments
+      }
+    );
+
+    expect(listLeadDocuments).toHaveBeenCalledWith({ workspaceId: "default", leadId: "lead-404", limit: 8 });
+    expect(sendMessage).toHaveBeenCalledWith(
+      111111,
+      expect.stringContaining("<b>northwind-intake-card.pdf</b>"),
+      {
+        replyMarkup: {
+          inline_keyboard: [
+            [{ text: "1. northwind-intake-card", url: "https://crm.example.com/api/crm/storage/local/doc-1" }],
+            [{ text: "2. site-photo", url: "https://crm.example.com/api/crm/storage/local/doc-2" }]
+          ]
+        }
+      }
+    );
+    expect(sendMessage).toHaveBeenCalledWith(
+      111111,
+      expect.stringContaining("description: Client intake card with first project details."),
+      expect.anything()
+    );
+  });
+
   it("generates and sends a commercial offer from an offer callback button", async () => {
     const sendMessage = vi.fn();
     const sendDocument = vi.fn();
@@ -1013,7 +1113,7 @@ describe("telegram bot core", () => {
     );
     expect(sendMessage).toHaveBeenCalledWith(
       111111,
-      expect.stringContaining("Lead ID: lead-303"),
+      expect.stringContaining("<b>lead-303</b>"),
       expect.objectContaining({
         replyMarkup: expect.objectContaining({
           inline_keyboard: [[{ text: "CRM", callback_data: "crm_lead:lead-303" }, { text: "offer", callback_data: "offer_lead:lead-303" }]]
@@ -1093,7 +1193,7 @@ describe("telegram bot core", () => {
     expect(sendMessage).toHaveBeenCalledWith(111111, "Found 1 lead(s) for: Thomas");
     expect(sendMessage).toHaveBeenCalledWith(
       111111,
-      expect.stringContaining("Summary: Client wants a compact private house proposal."),
+      expect.stringContaining("[summary] Client wants a compact private house proposal."),
       {
         replyMarkup: {
           inline_keyboard: [
@@ -1106,16 +1206,16 @@ describe("telegram bot core", () => {
         }
       }
     );
-    expect(sendMessage).toHaveBeenCalledWith(111111, expect.stringContaining("Client: Thomas Wachter"), expect.anything());
-    expect(sendMessage).toHaveBeenCalledWith(111111, expect.stringContaining("Project: House for mother in Bayern"), expect.anything());
-    expect(sendMessage).toHaveBeenCalledWith(111111, expect.stringContaining("Area: 142"), expect.anything());
-    expect(sendMessage).toHaveBeenCalledWith(111111, expect.stringContaining("Todo: Prepare offer"), expect.anything());
+    expect(sendMessage).toHaveBeenCalledWith(111111, expect.stringContaining("client: Thomas Wachter"), expect.anything());
+    expect(sendMessage).toHaveBeenCalledWith(111111, expect.stringContaining("project: House for mother in Bayern"), expect.anything());
+    expect(sendMessage).toHaveBeenCalledWith(111111, expect.stringContaining("area: 142"), expect.anything());
+    expect(sendMessage).toHaveBeenCalledWith(111111, expect.stringContaining("todo: Prepare offer"), expect.anything());
     expect(sendMessage).not.toHaveBeenCalledWith(
       111111,
       expect.stringContaining("Full: Client wants a compact private house proposal"),
       expect.anything()
     );
-    expect(sendMessage).toHaveBeenCalledWith(111111, expect.stringContaining("Lead ID: lead-404"), expect.anything());
+    expect(sendMessage).toHaveBeenCalledWith(111111, expect.stringContaining("<b>L-2026-404</b>"), expect.anything());
   });
 
   it("creates a Telegram reminder and links it to a replied lead card", async () => {
@@ -1278,7 +1378,7 @@ describe("telegram bot core", () => {
         }
       })
     );
-    expect(sendMessage).toHaveBeenCalledWith(111111, expect.stringContaining("Project: Country house"), expect.anything());
+    expect(sendMessage).toHaveBeenCalledWith(111111, expect.stringContaining("project: Country house"), expect.anything());
   });
 
   it("attaches later attachment-only intake to the active lead instead of creating a new draft", async () => {
@@ -1327,7 +1427,7 @@ describe("telegram bot core", () => {
     expect(prepareAttachment).toHaveBeenCalledWith(expect.objectContaining({ leadId: "lead-active" }));
     expect(sendMessage).toHaveBeenCalledWith(
       111111,
-      expect.stringContaining("Lead ID: lead-active"),
+      expect.stringContaining("<b>lead-active</b>"),
       {
         replyMarkup: {
           inline_keyboard: [

@@ -9,6 +9,9 @@ import {
   type TelegramArchiveLeadInput,
   type PrepareTelegramAttachmentInput,
   type TelegramGeneratedDocument,
+  type TelegramLeadDocument,
+  type TelegramLeadDocumentsInput,
+  type TelegramLeadDocumentsResult,
   type TelegramLeadSearchInput,
   type TelegramLeadSearchResult,
   type TelegramLeadUpdateInput,
@@ -72,7 +75,7 @@ async function telegramCall<T>(method: string, body: Record<string, unknown>): P
   });
   const payload = (await response.json()) as { ok: boolean; result?: T; description?: string };
   if (!response.ok || !payload.ok) {
-    throw new Error(payload.description ?? `Telegram ${method} failed`);
+    throw new Error(payload.description ?? `TG ${method} failed`);
   }
   return payload.result as T;
 }
@@ -84,7 +87,7 @@ async function telegramFormCall<T>(method: string, form: FormData): Promise<T> {
   });
   const payload = (await response.json()) as { ok: boolean; result?: T; description?: string };
   if (!response.ok || !payload.ok) {
-    throw new Error(payload.description ?? `Telegram ${method} failed`);
+    throw new Error(payload.description ?? `TG ${method} failed`);
   }
   return payload.result as T;
 }
@@ -107,6 +110,7 @@ async function sendMessage(chatId: number, text: string, options?: TelegramSendM
     chat_id: chatId,
     text,
     disable_web_page_preview: true,
+    ...(text.includes("<b>") ? { parse_mode: "HTML" } : {}),
     ...(options?.replyMarkup ? { reply_markup: options.replyMarkup } : {})
   });
 }
@@ -149,7 +153,7 @@ async function getFile(fileId: string): Promise<TelegramFileInfo> {
 async function downloadTelegramFile(filePath: string): Promise<Uint8Array> {
   const response = await fetch(`${telegramFileBase}/${filePath}`);
   if (!response.ok) {
-    throw new Error(`Telegram file download failed: ${response.status}`);
+    throw new Error(`TG file download failed: ${response.status}`);
   }
   return new Uint8Array(await response.arrayBuffer());
 }
@@ -165,6 +169,39 @@ async function updateLead(input: TelegramLeadUpdateInput) {
 
 async function searchLeads(input: TelegramLeadSearchInput): Promise<TelegramLeadSearchResult> {
   return crmCall<TelegramLeadSearchResult>("/api/crm/leads/search", input);
+}
+
+type CrmLeadWithDocuments = {
+  id: string;
+  code?: string | null;
+  documents?: TelegramLeadDocument[];
+};
+
+function publicCrmUrl(value: string): string {
+  if (/^https?:\/\//i.test(value)) {
+    return value;
+  }
+  return `${crmAppBaseUrl.replace(/\/$/, "")}${value.startsWith("/") ? value : `/${value}`}`;
+}
+
+async function listLeadDocuments(input: TelegramLeadDocumentsInput): Promise<TelegramLeadDocumentsResult> {
+  const url = new URL(crmApiUrl("/api/crm/leads"));
+  url.searchParams.set("workspaceId", input.workspaceId);
+  const response = await fetch(url);
+  const payload = (await response.json()) as CrmLeadWithDocuments[] | { error?: string };
+  if (!response.ok || !Array.isArray(payload)) {
+    throw new Error(!Array.isArray(payload) && payload.error ? payload.error : "LightCrm API /api/crm/leads failed");
+  }
+  const lead = payload.find((item) => item.id === input.leadId || item.code === input.leadId);
+  const documents = (lead?.documents ?? [])
+    .slice()
+    .sort((left, right) => new Date(left.createdAt ?? 0).getTime() - new Date(right.createdAt ?? 0).getTime())
+    .slice(0, input.limit ?? 8)
+    .map((document) => ({
+      ...document,
+      downloadUrl: document.downloadUrl ? publicCrmUrl(document.downloadUrl) : null
+    }));
+  return { leadId: lead?.id ?? input.leadId, documents };
 }
 
 async function createReminder(input: TelegramReminderInput): Promise<TelegramReminderResult> {
@@ -251,12 +288,12 @@ async function notifyServerError(chatId: number) {
   try {
     await sendMessage(chatId, serverErrorReply);
   } catch (error) {
-    console.error("Failed to send Telegram server error notice", error);
+    console.error("Failed to send TG server error notice", error);
   }
 }
 
 async function runPolling() {
-  console.log(`LightCrm Telegram bot polling started. Allowed chats: ${allowedChatIds.size || "all"}.`);
+  console.log(`LightCrm TG bot polling started. Allowed chats: ${allowedChatIds.size || "all"}.`);
   let offset: number | undefined;
   const mediaGroups = new Map<string, MediaGroupBuffer>();
   const chatIntakes = new Map<string, ChatIntakeBuffer>();
@@ -265,7 +302,7 @@ async function runPolling() {
     try {
       const updates = await getUpdates(offset);
       if (updates.length > 0) {
-        console.log("Telegram updates received", {
+        console.log("TG updates received", {
           count: updates.length,
           firstUpdateId: updates[0]?.update_id,
           lastUpdateId: updates[updates.length - 1]?.update_id
@@ -279,7 +316,7 @@ async function runPolling() {
       for (const update of intakeReady) {
         const message = update.message;
         const callbackChatId = update.callback_query?.message?.chat.id;
-        console.log("Telegram update ready", updateLogContext(update));
+        console.log("TG update ready", updateLogContext(update));
         const active = message ? activeLeads.get(String(message.chat.id)) : null;
         const activeLead =
           active && now - active.updatedAt <= activeLeadTtlMs ? active.lead : null;
@@ -298,6 +335,7 @@ async function runPolling() {
             createReminder,
             ingestLeadIntake,
             prepareAttachment,
+            listLeadDocuments,
             sendDocument,
             generateOffer,
             archiveLead
@@ -308,12 +346,12 @@ async function runPolling() {
           if (lead && message) {
             activeLeads.set(String(message.chat.id), { lead, updatedAt: now });
           }
-          console.log("Telegram update handled", {
+          console.log("TG update handled", {
             ...updateLogContext(update),
             leadId: lead?.id ?? null
           });
         } catch (error) {
-          console.error("Telegram update failed", {
+          console.error("TG update failed", {
             updateId: update.update_id,
             chatId: message?.chat.id,
             messageId: message?.message_id,
