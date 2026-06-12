@@ -2,6 +2,25 @@
 
 All notable LightCrm releases are documented here. Starting with `0.2.0`, every version bump must include a changelog entry.
 
+## 0.3.12 - 2026-06-12
+
+### Added
+
+- Added Telegram image attachment analysis via OpenAI vision when TG Intake Policy allows attachment analysis.
+- Added a post-upload enrichment pass so attachment-only draft leads are updated with extracted project, area, location, and budget facts.
+- Added regressions for semantic image summaries enriching draft leads and for OpenAI image-analysis payloads.
+
+### Changed
+
+- Preserve existing lead notes on TG lead updates by sending structured tabular fields instead of replacing the notes blob.
+- Persist uploaded attachment `longSummary` values from multipart TG uploads.
+
+### Verification
+
+- `pnpm --filter @lightcrm/telegram-bot test`
+- `pnpm typecheck`
+- `pnpm test`
+
 ## 0.3.11 - 2026-06-12
 
 ### Changed

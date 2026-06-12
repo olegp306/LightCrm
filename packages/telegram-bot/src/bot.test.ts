@@ -647,6 +647,119 @@ describe("telegram bot core", () => {
     );
   });
 
+  it("enriches an attachment-only draft lead from semantic image summaries", async () => {
+    const sendMessage = vi.fn();
+    const createLead = vi.fn().mockResolvedValue({ id: "lead-draft", name: "Draft lead - image from TG #213", code: "L-213" });
+    const updateLead = vi.fn().mockResolvedValue({ id: "lead-draft", name: "Obernsees development property", code: "L-213" });
+    const orchestrate = vi.fn().mockResolvedValue({
+      workspaceId: "default",
+      normalizedText: "Image analysis: Obernsees development property, 92,500 m2, purchase price EUR 9,275,000.",
+      intent: "update_lead",
+      risk: "auto",
+      explanations: [],
+      settings: DEFAULT_LANGGRAPH_SETTINGS,
+      facts: {
+        contactName: null,
+        projectName: "Obernsees development property",
+        projectType: "tourist development / holiday park",
+        location: "Obernsees near Bayreuth",
+        areaM2: 92500,
+        phone: null,
+        budgetEur: 9275000,
+        dueAt: null,
+        sourceMessageId: "213",
+        evidence: {
+          sourceMessageId: "213",
+          author: "Katya",
+          sourceChannel: "telegram",
+          textSnippet: "Obernsees development property"
+        }
+      },
+      actions: [
+        {
+          type: "update_lead",
+          risk: "auto",
+          reason: "Attachment summary identifies the project.",
+          payload: { targetId: "lead-draft" }
+        }
+      ]
+    });
+    const prepareAttachment = vi.fn().mockResolvedValue({
+      kind: "image",
+      fileName: "TG-photo-213.jpg",
+      storageProvider: "local",
+      storageBucket: null,
+      storageKey: "workspaces/default/leads/lead-draft/TG-photo-213.jpg",
+      downloadUrl: null,
+      mimeType: "image/jpeg",
+      sizeBytes: 456,
+      summary: "Obernsees development property, land plot 92,500 m2, purchase price EUR 9,275,000.",
+      longSummary:
+        "The image describes a development property in Obernsees near Bayreuth for a holiday park, hotel, clinic or mixed-use tourist center. It lists 92,500 m2 land and a EUR 9,275,000 purchase price."
+    });
+
+    await handleTelegramUpdate(
+      {
+        update_id: 8,
+        message: {
+          message_id: 213,
+          chat: { id: 111111 },
+          from: { first_name: "Katya" },
+          photo: [
+            {
+              file_id: "large-photo",
+              file_unique_id: "large-unique",
+              width: 1280,
+              height: 720,
+              file_size: 456
+            }
+          ]
+        }
+      },
+      {
+        allowedChatIds: new Set([111111]),
+        workspaceId: "default",
+        sendMessage,
+        createLead,
+        updateLead,
+        orchestrate,
+        prepareAttachment
+      }
+    );
+
+    expect(orchestrate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        workspaceId: "default",
+        messageId: "213",
+        sourceChannel: "telegram",
+        recentLeads: [{ id: "lead-draft", label: "Draft lead - image from TG #213", summary: null, lastTouchedAt: null }],
+        text: expect.stringContaining("Obernsees development property")
+      })
+    );
+    expect(updateLead).toHaveBeenCalledWith(
+      expect.objectContaining({
+        workspaceId: "default",
+        leadId: "lead-draft",
+        patch: expect.objectContaining({
+          name: "Obernsees development property",
+          company: "Obernsees development property",
+          projectName: "Obernsees development property",
+          project: "tourist development / holiday park",
+          area: "92500",
+          address: "Obernsees near Bayreuth",
+          budgetEur: "9275000",
+          rawInput: expect.stringContaining("Obernsees development property")
+        })
+      })
+    );
+    expect(sendMessage).toHaveBeenCalledWith(
+      111111,
+      expect.stringContaining("project: Obernsees development property"),
+      expect.anything()
+    );
+    expect(sendMessage).toHaveBeenCalledWith(111111, expect.stringContaining("area: 92500"), expect.anything());
+  });
+
   it("uses attachment summary for draft lead upload when caption is whitespace-only", async () => {
     const sendMessage = vi.fn();
     const createLead = vi.fn().mockResolvedValue({ id: "lead-whitespace", name: "Draft lead - pdf from TG #212" });
@@ -1921,6 +2034,8 @@ describe("telegram bot core", () => {
         sizeBytes: 3
       },
       bytes: new Uint8Array([1, 2, 3]),
+      summary: "Obernsees development property",
+      longSummary: "The file contains a visible development-property brief.",
       fetchImpl
     });
 
@@ -1932,12 +2047,16 @@ describe("telegram bot core", () => {
     expect(form.get("leadId")).toBe("lead-1");
     expect(form.get("sourceChannel")).toBe("telegram");
     expect(form.get("text")).toBe("Ещё новый лид");
+    expect(form.get("summary")).toBe("Obernsees development property");
+    expect(form.get("longSummary")).toBe("The file contains a visible development-property brief.");
     expect(form.get("file")).toBeInstanceOf(File);
     expect(attachment).toMatchObject({
       kind: "pdf",
       fileName: "brief.pdf",
       storageProvider: "local",
-      storageKey: "workspaces/default/leads/lead-1/brief.pdf"
+      storageKey: "workspaces/default/leads/lead-1/brief.pdf",
+      summary: "Obernsees development property",
+      longSummary: "The file contains a visible development-property brief."
     });
   });
 });

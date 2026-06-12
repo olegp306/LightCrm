@@ -117,6 +117,8 @@ export type UploadTelegramAttachmentToWebInput = {
   author: string | null;
   attachment: TelegramAttachment;
   bytes: Uint8Array;
+  summary?: string | null;
+  longSummary?: string | null;
   fetchImpl?: typeof fetch;
 };
 
@@ -190,7 +192,22 @@ export type TelegramLeadDocumentsResult = {
 export type TelegramLeadUpdateInput = {
   workspaceId: string;
   leadId: string;
-  patch: Partial<Pick<UpsertLeadInput, "name" | "phone" | "company" | "notes">>;
+  patch: Partial<
+    Pick<UpsertLeadInput, "name" | "email" | "phone" | "whatsapp" | "company" | "status" | "notes" | "sourceChannel">
+  > & {
+    projectName?: string | null;
+    project?: string | null;
+    area?: string | null;
+    description?: string | null;
+    interest?: string | null;
+    urgency?: string | null;
+    todo?: string | null;
+    address?: string | null;
+    messenger?: string | null;
+    clientProjects?: string | null;
+    budgetEur?: string | null;
+    rawInput?: string | null;
+  };
   source?: {
     channel?: string | null;
     messageId?: string | null;
@@ -451,6 +468,32 @@ function crmNoteFields(result: CrmOrchestrationResult, rawText: string): string[
     .map(([label, value]) => `${label}: ${value}`);
 }
 
+function isGenericAttachmentSummary(value: string | null | undefined): boolean {
+  const normalized = value?.replace(/\s+/g, " ").trim().toLowerCase();
+  return (
+    !normalized ||
+    /^(image|pdf|audio|voice|document|other) from tg intake$/.test(normalized) ||
+    normalized.includes("no semantic file analysis is available yet") ||
+    normalized.includes("attached to lead intake")
+  );
+}
+
+function semanticAttachmentText(attachments: LeadIntakeAttachmentInput[]): string | null {
+  const lines = attachments.flatMap((attachment, index) => {
+    const pieces = [
+      isGenericAttachmentSummary(attachment.summary) ? null : attachment.summary,
+      isGenericAttachmentSummary(attachment.longSummary) ? null : attachment.longSummary
+    ]
+      .filter((value): value is string => Boolean(value?.trim()))
+      .map((value) => value.trim());
+    if (pieces.length === 0) {
+      return [];
+    }
+    return [`Attachment ${index + 1} (${attachment.kind}, ${attachment.fileName}): ${pieces.join(" ")}`];
+  });
+  return lines.length > 0 ? `Semantic attachment analysis:\n${lines.join("\n")}` : null;
+}
+
 type LeadIntakeUploadResponse = {
   documents?: Array<{
     fileName: string;
@@ -476,7 +519,12 @@ export async function uploadTelegramAttachmentToWeb(
   if (input.author) {
     form.set("author", input.author);
   }
-  form.set("summary", `${input.attachment.kind} from TG intake`);
+  const summary = input.summary?.trim() || `${input.attachment.kind} from TG intake`;
+  const longSummary = input.longSummary?.trim() || null;
+  form.set("summary", summary);
+  if (longSummary) {
+    form.set("longSummary", longSummary);
+  }
   form.set(
     "file",
     new File([new Blob([Buffer.from(input.bytes)])], input.attachment.fileName, {
@@ -507,7 +555,8 @@ export async function uploadTelegramAttachmentToWeb(
     downloadUrl: document.downloadUrl,
     mimeType: document.mimeType,
     sizeBytes: document.sizeBytes ?? input.attachment.sizeBytes,
-    summary: `${input.attachment.kind} from TG intake`
+    summary,
+    longSummary
   };
 }
 
@@ -579,9 +628,25 @@ async function maybeUpdateLead(
     patch.phone = result.facts.phone;
   }
   if (result.facts.projectName) {
+    if (!patch.name) {
+      patch.name = result.facts.projectName;
+    }
     patch.company = result.facts.projectName;
+    patch.projectName = result.facts.projectName;
   }
-  patch.notes = [`TG author: ${author ?? "unknown"}`, ...crmNoteFields(result, text)].join("\n\n");
+  if (result.facts.projectType) {
+    patch.project = result.facts.projectType;
+  }
+  if (result.facts.location) {
+    patch.address = result.facts.location;
+  }
+  if (result.facts.areaM2 !== null && result.facts.areaM2 !== undefined) {
+    patch.area = String(result.facts.areaM2);
+  }
+  if (result.facts.budgetEur !== null && result.facts.budgetEur !== undefined) {
+    patch.budgetEur = String(result.facts.budgetEur);
+  }
+  patch.rawInput = text;
   return deps.updateLead({
     workspaceId: deps.workspaceId,
     leadId: targetId,
@@ -591,6 +656,33 @@ async function maybeUpdateLead(
       messageId: String(message.message_id)
     }
   });
+}
+
+async function maybeEnrichLeadFromAttachments(
+  message: TelegramMessage,
+  author: string | null,
+  lead: Pick<Lead, "id" | "name">,
+  attachments: LeadIntakeAttachmentInput[],
+  deps: TelegramBotDeps
+): Promise<{ lead: Pick<Lead, "id" | "name">; result: CrmOrchestrationResult | null; text: string | null }> {
+  if (!deps.updateLead || attachments.length === 0) {
+    return { lead, result: null, text: null };
+  }
+  const text = semanticAttachmentText(attachments);
+  if (!text) {
+    return { lead, result: null, text: null };
+  }
+  const orchestrate = deps.orchestrate ?? runCrmOrchestration;
+  const result = await orchestrate({
+    workspaceId: deps.workspaceId,
+    messageId: String(message.message_id),
+    author,
+    text,
+    sourceChannel: "telegram",
+    recentLeads: [{ id: lead.id, label: lead.name, summary: null, lastTouchedAt: null }]
+  });
+  const updatedLead = await maybeUpdateLead(message, text, author, result, lead.id, deps);
+  return { lead: updatedLead ?? lead, result, text };
 }
 
 function draftOrchestrationResult(
@@ -1267,7 +1359,7 @@ export async function handleTelegramUpdate(
       deps.prepareAttachment && attachments.length > 0
         ? await Promise.all(
             attachments.map((attachment, index) =>
-              deps.prepareAttachment?.({
+              deps.prepareAttachment!({
                 workspaceId: deps.workspaceId,
                 leadId: lead.id,
                 attachment,
@@ -1278,6 +1370,9 @@ export async function handleTelegramUpdate(
             )
           )
         : [];
+    const enrichment = await maybeEnrichLeadFromAttachments(message, author, lead, preparedAttachments, deps);
+    const replyLead = enrichment.lead;
+    const replyResult = enrichment.result ?? result;
     const intake =
       preparedAttachments.length === 0 && deps.ingestLeadIntake
         ? await deps.ingestLeadIntake({
@@ -1294,34 +1389,34 @@ export async function handleTelegramUpdate(
       chatId,
       [
         telegramLeadCardTextCompact({
-          ...lead,
-          ...leadCardFieldsFromFacts(result),
-          code: optionalStringProperty(lead, "code"),
-          status: (optionalStringProperty(lead, "status") as Lead["status"] | null) ?? undefined,
+          ...replyLead,
+          ...leadCardFieldsFromFacts(replyResult),
+          code: optionalStringProperty(replyLead, "code"),
+          status: (optionalStringProperty(replyLead, "status") as Lead["status"] | null) ?? undefined,
           summaryShort: intake?.summary ?? null
         }),
         reminderOutcome.reminder
           ? `Reminder: ${reminderOutcome.reminder.id} at ${new Date(reminderOutcome.reminder.dueAt).toISOString()}`
           : null,
-        `Intake: saved ${preparedAttachments.length} attachment(s) to ${lead.name}.`,
-        crmLeadReplyMarkup(deps, lead, {
-          includeUndo: Boolean(createdLead || updatedLead),
+        `Intake: saved ${preparedAttachments.length} attachment(s) to ${replyLead.name}.`,
+        crmLeadReplyMarkup(deps, replyLead, {
+          includeUndo: Boolean(createdLead || updatedLead || enrichment.result),
           undoMode: createdLead ? "archive" : "not_connected"
         })
           ? null
-          : crmLeadUrl(deps, lead)
+          : crmLeadUrl(deps, replyLead)
       ]
         .filter((line): line is string => Boolean(line))
         .join("\n")
         .slice(0, 3900),
       leadCardMessageOptions(
-        crmLeadReplyMarkup(deps, lead, {
-          includeUndo: Boolean(createdLead || updatedLead),
+        crmLeadReplyMarkup(deps, replyLead, {
+          includeUndo: Boolean(createdLead || updatedLead || enrichment.result),
           undoMode: createdLead ? "archive" : "not_connected"
         })
       )
     );
-    return lead;
+    return replyLead;
   }
 
   await deps.sendMessage(chatId, formatOrchestrationReply(result));

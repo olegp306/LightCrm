@@ -27,6 +27,7 @@ import {
   type ChatIntakeBuffer,
   type MediaGroupBuffer
 } from "./media-groups";
+import { analyzeTelegramAttachment } from "./attachment-analysis";
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
 config({ path: resolve(repoRoot, ".env") });
@@ -46,7 +47,21 @@ const mediaGroupFlushMs = 1400;
 const chatIntakeFlushMs = Number(process.env.TELEGRAM_INTAKE_FLUSH_MS ?? 3500);
 const activeLeadTtlMs = Number(process.env.TELEGRAM_ACTIVE_LEAD_TTL_MS ?? 30 * 60 * 1000);
 const crmAppBaseUrl = process.env.NEXT_PUBLIC_APP_URL ?? process.env.NEXTAUTH_URL ?? crmApiBase;
+const attachmentAnalysisModelFallback = process.env.OPENAI_MODEL ?? "gpt-4.1-mini";
 const serverErrorReply = "server error, developer notified";
+
+type LangGraphSettingsResponse = {
+  settings?: {
+    model?: string;
+    tgIntakePolicy?: {
+      analyzeAttachmentsBeforeAction?: boolean;
+    };
+  };
+};
+
+let attachmentAnalysisSettingsCache:
+  | { expiresAt: number; value: { enabled: boolean; model: string } }
+  | null = null;
 
 function updateLogContext(update: TelegramUpdate) {
   const message = update.message;
@@ -103,6 +118,34 @@ async function crmCall<T>(path: string, body: unknown): Promise<T> {
     throw new Error(typeof payload?.error === "string" ? payload.error : `LightCrm API ${path} failed`);
   }
   return payload as T;
+}
+
+async function crmGet<T>(path: string): Promise<T> {
+  const response = await fetch(crmApiUrl(path));
+  const payload = await response.json();
+  if (!response.ok) {
+    throw new Error(typeof payload?.error === "string" ? payload.error : `LightCrm API ${path} failed`);
+  }
+  return payload as T;
+}
+
+async function getAttachmentAnalysisSettings(): Promise<{ enabled: boolean; model: string }> {
+  const now = Date.now();
+  if (attachmentAnalysisSettingsCache && attachmentAnalysisSettingsCache.expiresAt > now) {
+    return attachmentAnalysisSettingsCache.value;
+  }
+  try {
+    const payload = await crmGet<LangGraphSettingsResponse>("/api/crm/orchestrator/settings");
+    const value = {
+      enabled: payload.settings?.tgIntakePolicy?.analyzeAttachmentsBeforeAction !== false,
+      model: payload.settings?.model?.trim() || attachmentAnalysisModelFallback
+    };
+    attachmentAnalysisSettingsCache = { expiresAt: now + 60_000, value };
+    return value;
+  } catch (error) {
+    console.warn("Failed to read attachment analysis settings; using safe defaults", error);
+    return { enabled: true, model: attachmentAnalysisModelFallback };
+  }
 }
 
 async function sendMessage(chatId: number, text: string, options?: TelegramSendMessageOptions) {
@@ -269,6 +312,26 @@ async function generateOffer(leadId: string): Promise<TelegramGeneratedDocument>
 async function prepareAttachment(input: PrepareTelegramAttachmentInput): Promise<LeadIntakeAttachmentInput> {
   const fileInfo = await getFile(input.attachment.fileId);
   const bytes = await downloadTelegramFile(fileInfo.file_path);
+  const analysisSettings = await getAttachmentAnalysisSettings();
+  const analysis =
+    analysisSettings.enabled && process.env.OPENAI_API_KEY
+      ? await analyzeTelegramAttachment({
+          attachment: input.attachment,
+          bytes,
+          text: input.text ?? input.message.caption ?? input.message.text ?? "",
+          author: input.author ?? null,
+          apiKey: process.env.OPENAI_API_KEY,
+          model: analysisSettings.model,
+          fetchImpl: fetch
+        }).catch((error) => {
+          console.warn("TG attachment semantic analysis failed", {
+            messageId: input.message.message_id,
+            fileName: input.attachment.fileName,
+            error
+          });
+          return null;
+        })
+      : null;
   return uploadTelegramAttachmentToWeb({
     crmApiBase,
     workspaceId: input.workspaceId,
@@ -280,6 +343,8 @@ async function prepareAttachment(input: PrepareTelegramAttachmentInput): Promise
     author: input.author ?? null,
     attachment: input.attachment,
     bytes,
+    summary: analysis?.summary ?? null,
+    longSummary: analysis?.longSummary ?? null,
     fetchImpl: fetch
   });
 }

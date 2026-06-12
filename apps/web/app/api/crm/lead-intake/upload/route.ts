@@ -51,7 +51,9 @@ export async function POST(request: Request) {
     const workspaceId = textField(form, "workspaceId") ?? defaultWorkspaceId;
     const text = textField(form, "text");
     const fallbackSummary = textField(form, "summary");
+    const fallbackLongSummary = textField(form, "longSummary");
     const summaries = textFields(form, "summaries");
+    const longSummaries = textFields(form, "longSummaries");
     const attachments: LeadIntakeAttachmentInput[] = await Promise.all(
       files.map(async (file, index) => {
         const bytes = new Uint8Array(await file.arrayBuffer());
@@ -72,7 +74,8 @@ export async function POST(request: Request) {
           downloadUrl: stored.downloadUrl,
           mimeType: stored.mimeType,
           sizeBytes: stored.sizeBytes,
-          summary: summaries[index] || fallbackSummary
+          summary: summaries[index] || fallbackSummary,
+          longSummary: longSummaries[index] || fallbackLongSummary
         };
       })
     );
