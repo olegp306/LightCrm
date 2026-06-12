@@ -1222,11 +1222,6 @@ export async function handleTelegramUpdate(
     await deps.sendMessage(chatId, "reviewing the files, back shortly");
   }
   const activeLead = replyLead ?? (deps.activeLead && (attachments.length > 0 || text.trim()) ? deps.activeLead : null);
-  if (!activeLead && !text.trim() && attachments.length > 0) {
-    await deps.sendMessage(message.chat.id, "please add context for these files so I can link them to the right lead");
-    return null;
-  }
-
   const result = activeLead
     ? !text.trim() && attachments.length > 0
       ? attachmentUpdateOrchestrationResult(deps.workspaceId, message, text, author, attachments, activeLead)
@@ -1277,7 +1272,7 @@ export async function handleTelegramUpdate(
                 leadId: lead.id,
                 attachment,
                 message,
-                text: index === 0 ? orchestrationText : "",
+                text: index === 0 ? orchestrationText.trim() || result.normalizedText : "",
                 author
               })
             )

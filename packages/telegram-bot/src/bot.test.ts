@@ -495,10 +495,10 @@ describe("telegram bot core", () => {
     );
   });
 
-  it("asks for context instead of creating a draft lead from attachment-only intake", async () => {
+  it("creates a draft lead and saves attachments from attachment-only intake", async () => {
     const sendMessage = vi.fn();
     const orchestrate = vi.fn();
-    const createLead = vi.fn().mockResolvedValue({ id: "lead-draft", name: "Draft lead - pdf from TG #210" });
+    const createLead = vi.fn().mockResolvedValue({ id: "lead-draft", name: "Draft lead - pdf from TG #210", code: "L-210" });
     const prepareAttachment = vi.fn().mockResolvedValue({
       kind: "pdf",
       fileName: "brief.pdf",
@@ -537,11 +537,161 @@ describe("telegram bot core", () => {
     );
 
     expect(orchestrate).not.toHaveBeenCalled();
-    expect(createLead).not.toHaveBeenCalled();
-    expect(prepareAttachment).not.toHaveBeenCalled();
+    expect(createLead).toHaveBeenCalledWith(
+      expect.objectContaining({
+        workspaceId: "default",
+        name: "Draft lead - pdf from TG #210",
+        sourceChannel: "telegram",
+        externalMessageId: "210"
+      })
+    );
+    expect(prepareAttachment).toHaveBeenCalledWith(
+      expect.objectContaining({
+        workspaceId: "default",
+        leadId: "lead-draft",
+        text: "pdf: brief.pdf"
+      })
+    );
     expect(sendMessage).toHaveBeenCalledWith(
       111111,
-      "please add context for these files so I can link them to the right lead"
+      expect.stringContaining("Intake: saved 1 attachment"),
+      {
+        replyMarkup: {
+          inline_keyboard: [
+            [{ text: "offer", callback_data: "offer_lead:lead-draft" }],
+            [{ text: "undo", callback_data: "undo_lead:lead-draft" }]
+          ]
+        }
+      }
+    );
+  });
+
+  it("creates a draft lead from image-only intake", async () => {
+    const sendMessage = vi.fn();
+    const createLead = vi.fn().mockResolvedValue({ id: "lead-image", name: "Draft lead - image from TG #211" });
+    const prepareAttachment = vi.fn().mockResolvedValue({
+      kind: "image",
+      fileName: "TG-photo-211.jpg",
+      storageProvider: "local",
+      storageBucket: null,
+      storageKey: "workspaces/default/leads/lead-image/TG-photo-211.jpg",
+      downloadUrl: "/api/crm/storage/local/workspaces%2Fdefault%2Fleads%2Flead-image%2FTG-photo-211.jpg",
+      mimeType: "image/jpeg",
+      sizeBytes: 456
+    });
+
+    await handleTelegramUpdate(
+      {
+        update_id: 6,
+        message: {
+          message_id: 211,
+          chat: { id: 111111 },
+          from: { first_name: "Katya" },
+          photo: [
+            {
+              file_id: "small-photo",
+              file_unique_id: "small-unique",
+              width: 90,
+              height: 90,
+              file_size: 111
+            },
+            {
+              file_id: "large-photo",
+              file_unique_id: "large-unique",
+              width: 1280,
+              height: 720,
+              file_size: 456
+            }
+          ]
+        }
+      },
+      {
+        allowedChatIds: new Set([111111]),
+        workspaceId: "default",
+        sendMessage,
+        createLead,
+        prepareAttachment
+      }
+    );
+
+    expect(createLead).toHaveBeenCalledWith(
+      expect.objectContaining({
+        workspaceId: "default",
+        name: "Draft lead - image from TG #211",
+        sourceChannel: "telegram",
+        externalMessageId: "211"
+      })
+    );
+    expect(prepareAttachment).toHaveBeenCalledWith(
+      expect.objectContaining({
+        leadId: "lead-image",
+        attachment: expect.objectContaining({
+          fileId: "large-photo",
+          kind: "image",
+          fileName: "TG-photo-211.jpg"
+        }),
+        text: "image: TG-photo-211.jpg"
+      })
+    );
+    expect(sendMessage).toHaveBeenCalledWith(
+      111111,
+      expect.stringContaining("Intake: saved 1 attachment"),
+      {
+        replyMarkup: {
+          inline_keyboard: [
+            [{ text: "offer", callback_data: "offer_lead:lead-image" }],
+            [{ text: "undo", callback_data: "undo_lead:lead-image" }]
+          ]
+        }
+      }
+    );
+  });
+
+  it("uses attachment summary for draft lead upload when caption is whitespace-only", async () => {
+    const sendMessage = vi.fn();
+    const createLead = vi.fn().mockResolvedValue({ id: "lead-whitespace", name: "Draft lead - pdf from TG #212" });
+    const prepareAttachment = vi.fn().mockResolvedValue({
+      kind: "pdf",
+      fileName: "brief.pdf",
+      storageProvider: "local",
+      storageBucket: null,
+      storageKey: "workspaces/default/leads/lead-whitespace/brief.pdf",
+      downloadUrl: null,
+      mimeType: "application/pdf",
+      sizeBytes: 123
+    });
+
+    await handleTelegramUpdate(
+      {
+        update_id: 7,
+        message: {
+          message_id: 212,
+          caption: "   ",
+          chat: { id: 111111 },
+          from: { first_name: "Katya" },
+          document: {
+            file_id: "file-1",
+            file_unique_id: "unique-1",
+            file_name: "brief.pdf",
+            mime_type: "application/pdf",
+            file_size: 123
+          }
+        }
+      },
+      {
+        allowedChatIds: new Set([111111]),
+        workspaceId: "default",
+        sendMessage,
+        createLead,
+        prepareAttachment
+      }
+    );
+
+    expect(prepareAttachment).toHaveBeenCalledWith(
+      expect.objectContaining({
+        leadId: "lead-whitespace",
+        text: "pdf: brief.pdf"
+      })
     );
   });
 

@@ -2,6 +2,24 @@
 
 All notable LightCrm releases are documented here. Starting with `0.2.0`, every version bump must include a changelog entry.
 
+## 0.3.11 - 2026-06-12
+
+### Changed
+
+- Let attachment-only TG messages create draft leads instead of stopping before the intake pipeline.
+- Pass the generated attachment intake summary into the first uploaded TG attachment so saved files are not recorded with empty context.
+
+### Added
+
+- Added Telegram bot regressions for PDF-only and image-only intake creating draft leads and saving attachments.
+
+### Verification
+
+- `pnpm --filter @lightcrm/telegram-bot test`
+- `pnpm --filter @lightcrm/telegram-bot typecheck`
+- `pnpm test`
+- `pnpm typecheck`
+
 ## 0.3.10 - 2026-06-12
 
 ### Project Snapshot
