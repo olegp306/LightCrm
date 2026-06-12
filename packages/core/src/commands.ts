@@ -146,6 +146,48 @@ function attachmentSummary(attachment: LeadIntakeAttachmentInput): string {
   return `${label[attachment.kind]} attached to lead intake`;
 }
 
+function inferAttachmentKind(document: DocumentFile): LeadIntakeAttachmentInput["kind"] {
+  const mimeType = document.mimeType?.toLocaleLowerCase() ?? "";
+  const fileName = document.fileName.toLocaleLowerCase();
+  if (mimeType.startsWith("image/") || /\.(jpe?g|png|webp|gif)$/i.test(fileName)) {
+    return "image";
+  }
+  if (mimeType === "application/pdf" || fileName.endsWith(".pdf")) {
+    return "pdf";
+  }
+  if (mimeType.startsWith("audio/") || /\.(m4a|mp3|mp4|mpeg|mpga|oga|ogg|wav|webm)$/i.test(fileName)) {
+    return "audio";
+  }
+  if (
+    mimeType.startsWith("text/") ||
+    mimeType.includes("document") ||
+    mimeType.includes("json") ||
+    /\.(txt|csv|json|md|docx?)$/i.test(fileName)
+  ) {
+    return "document";
+  }
+  return "other";
+}
+
+function documentToAttachmentInput(
+  document: DocumentFile,
+  knownAttachment?: LeadIntakeAttachmentInput
+): LeadIntakeAttachmentInput {
+  return {
+    sourceMessageId: knownAttachment?.sourceMessageId,
+    kind: knownAttachment?.kind ?? inferAttachmentKind(document),
+    fileName: document.fileName,
+    storageProvider: document.storageProvider,
+    storageBucket: document.storageBucket,
+    storageKey: document.storageKey,
+    downloadUrl: document.downloadUrl,
+    mimeType: document.mimeType,
+    sizeBytes: document.sizeBytes,
+    summary: document.shortSummary,
+    longSummary: document.longSummary ?? knownAttachment?.longSummary
+  };
+}
+
 function buildLeadIntakeSummary(input: IngestLeadIntakeInput): { summary: string; originalTakes: string[] } {
   const textItems = input.textItems ?? [];
   const attachments = input.attachments ?? [];
@@ -577,7 +619,6 @@ export function createCrmService(repository: CrmRepository) {
       throw new Error("Lead not found");
     }
 
-    const { summary, originalTakes } = buildLeadIntakeSummary(input);
     const documents: DocumentFile[] = [];
     for (const attachment of input.attachments ?? []) {
       documents.push(
@@ -599,6 +640,25 @@ export function createCrmService(repository: CrmRepository) {
         })
       );
     }
+    const activeLeadDocuments = (await repository.list("documentFile", input.workspaceId))
+      .filter((document) => document.leadId === lead.id && !document.archivedAt)
+      .sort((left, right) => left.createdAt.getTime() - right.createdAt.getTime());
+    const currentAttachmentsByStorageKey = new Map(
+      (input.attachments ?? []).map((attachment) => [attachment.storageKey, attachment])
+    );
+    const currentAttachmentsByFileName = new Map(
+      (input.attachments ?? []).map((attachment) => [attachment.fileName, attachment])
+    );
+    const aggregateInput: IngestLeadIntakeInput = {
+      ...input,
+      attachments: activeLeadDocuments.map((document) =>
+        documentToAttachmentInput(
+          document,
+          currentAttachmentsByStorageKey.get(document.storageKey) ?? currentAttachmentsByFileName.get(document.fileName)
+        )
+      )
+    };
+    const { summary, originalTakes } = buildLeadIntakeSummary(aggregateInput);
 
     const updatedLead: Lead = {
       ...lead,

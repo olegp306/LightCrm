@@ -349,4 +349,57 @@ describe("createCrmService", () => {
       entityId: lead.id
     });
   });
+
+  it("summarizes all active lead documents when later intake adds files", async () => {
+    const repository = new MemoryCrmRepository();
+    const crm = createCrmService(repository);
+    const lead = await crm.upsertLead({ workspaceId: "workspace-1", name: "Lead With Multiple Intake Files" });
+
+    await crm.ingestLeadIntake({
+      workspaceId: "workspace-1",
+      leadId: lead.id,
+      sourceChannel: "telegram",
+      sourceThreadId: "763604722",
+      sourceMessageId: "901",
+      attachments: [
+        {
+          sourceMessageId: "901",
+          kind: "image",
+          fileName: "concept.jpg",
+          storageProvider: "local",
+          storageKey: "leads/lead-1/concept.jpg",
+          mimeType: "image/jpeg",
+          sizeBytes: 1200,
+          summary: "Concept image with a compact house."
+        }
+      ]
+    });
+
+    const second = await crm.ingestLeadIntake({
+      workspaceId: "workspace-1",
+      leadId: lead.id,
+      sourceChannel: "telegram",
+      sourceThreadId: "763604722",
+      sourceMessageId: "902",
+      attachments: [
+        {
+          sourceMessageId: "902",
+          kind: "pdf",
+          fileName: "plans.pdf",
+          storageProvider: "local",
+          storageKey: "leads/lead-1/plans.pdf",
+          mimeType: "application/pdf",
+          sizeBytes: 2400,
+          summary: "Planning PDF with room schedule."
+        }
+      ]
+    });
+
+    expect(second.summary).toContain("2 attachment(s)");
+    expect(second.summary).toContain("concept.jpg (image; Concept image with a compact house.)");
+    expect(second.summary).toContain("plans.pdf (pdf; Planning PDF with room schedule.)");
+    expect(second.leadSummary.longSummary).toContain("2 attachment(s)");
+    expect(second.leadSummary.longSummary).toContain("concept.jpg");
+    expect(second.leadSummary.longSummary).toContain("plans.pdf");
+  });
 });

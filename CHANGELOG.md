@@ -2,6 +2,18 @@
 
 All notable LightCrm releases are documented here. Starting with `0.2.0`, every version bump must include a changelog entry.
 
+## 0.3.20 - 2026-06-12
+
+### Fixed
+
+- Rebuild Telegram lead intake summaries from all active lead documents after each additional attachment intake, so multi-message file sets show the full file count and every semantic file summary in the latest lead summary.
+
+### Verification
+
+- `pnpm --filter @lightcrm/core test`
+- `pnpm test`
+- `pnpm typecheck`
+
 ## 0.3.19 - 2026-06-12
 
 ### Changed
