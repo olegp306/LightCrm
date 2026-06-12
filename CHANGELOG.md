@@ -2,6 +2,17 @@
 
 All notable LightCrm releases are documented here. Starting with `0.2.0`, every version bump must include a changelog entry.
 
+## 0.3.19 - 2026-06-12
+
+### Changed
+
+- Cut a clean test-stand release for the full five-set physical Telegram intake verification run.
+
+### Verification
+
+- `pnpm test`
+- `pnpm typecheck`
+
 ## 0.3.18 - 2026-06-12
 
 ### Fixed
