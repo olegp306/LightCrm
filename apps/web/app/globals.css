@@ -2980,6 +2980,7 @@ input {
 }
 
 .settingsPanel input:not([type="checkbox"]),
+.settingsPanel select,
 .settingsPanel textarea {
   background: var(--control);
   border: 1px solid var(--line);
@@ -3038,6 +3039,42 @@ input {
 .projectPersonCard .quietDangerButton:hover {
   background: var(--danger-soft);
   border-color: var(--danger-line);
+}
+
+.settingsChecklist {
+  display: grid;
+  gap: 8px;
+}
+
+.offerFieldList {
+  display: grid;
+  gap: 10px;
+}
+
+.offerFieldCard {
+  background: var(--control);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: grid;
+  gap: 10px;
+  padding: 10px;
+}
+
+.offerFieldHeader {
+  align-items: baseline;
+  display: flex;
+  gap: 8px;
+  justify-content: space-between;
+}
+
+.offerFieldHeader span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.settingsFieldGrid.compact {
+  align-items: center;
+  grid-template-columns: minmax(180px, 1fr) auto auto;
 }
 
 .switchRow {

@@ -55,8 +55,33 @@ export type LangGraphRuntimeSettings = {
     allowAutoCreateLead: boolean;
     allowAutoCreateReminder: boolean;
   };
+  tgIntakePolicy: {
+    actionStrictness: "preview_first" | "strong_evidence" | "auto_create_drafts";
+    alwaysShowUndoForWrites: boolean;
+    analyzeAttachmentsBeforeAction: boolean;
+    neverCreateFromAttachmentOnly: boolean;
+    requireMeaningfulAttachmentContent: boolean;
+    bundleWaitMs: number;
+  };
+  offerReadiness: {
+    analyzeLeadForOfferReadiness: boolean;
+    extractOfferFieldsFromAttachments: boolean;
+    autoUpdateLeadWithConfidentFields: boolean;
+    autoGenerateWhenPriceReady: boolean;
+    requireEvidenceForOfferFields: boolean;
+    fields: Array<{
+      key: string;
+      label: string;
+      required: boolean;
+      aliases: string[];
+      sources: string[];
+      confidenceThreshold: number;
+      autoFill: boolean;
+    }>;
+  };
   projectPeople: Array<{
     name: string;
+    aliases: string[];
     role: string;
     description: string;
   }>;

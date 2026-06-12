@@ -135,7 +135,11 @@ function projectPeoplePrompt(settings: LangGraphRuntimeSettings): string | null 
     return null;
   }
   const people = settings.projectPeople
-    .map((person) => `- ${person.name} (${person.role}): ${person.description || "Internal project person."}`)
+    .map((person) => {
+      const personAliases = person.aliases ?? [];
+      const aliases = personAliases.length > 0 ? ` Aliases: ${personAliases.join(", ")}.` : "";
+      return `- ${person.name} (${person.role}):${aliases} ${person.description || "Internal project person."}`;
+    })
     .join("\n");
   return [
     "Internal project people:",
@@ -144,8 +148,53 @@ function projectPeoplePrompt(settings: LangGraphRuntimeSettings): string | null 
   ].join("\n");
 }
 
+function tgIntakePolicyPrompt(settings: LangGraphRuntimeSettings): string {
+  const policy = settings.tgIntakePolicy;
+  return [
+    "TG intake policy:",
+    `- Action strictness: ${policy.actionStrictness}.`,
+    `- Analyze attachments before action: ${policy.analyzeAttachmentsBeforeAction}.`,
+    `- Never create from attachment-only intake: ${policy.neverCreateFromAttachmentOnly}.`,
+    `- Require meaningful attachment content before write: ${policy.requireMeaningfulAttachmentContent}.`,
+    "If a TG intake contains only files without readable extracted content or a director instruction, prefer ask_clarification/no_action over create_lead.",
+    "Treat file names alone as weak evidence; use extracted document/image/audio summaries as evidence when available."
+  ].join("\n");
+}
+
+function offerReadinessPrompt(settings: LangGraphRuntimeSettings): string | null {
+  if (!settings.offerReadiness.analyzeLeadForOfferReadiness) {
+    return null;
+  }
+  const fields = settings.offerReadiness.fields
+    .map((field) => {
+      const aliases = field.aliases.length > 0 ? ` aliases: ${field.aliases.join(", ")}` : "";
+      const sources = field.sources.length > 0 ? ` sources: ${field.sources.join(", ")}` : "";
+      return `- ${field.key} (${field.label})${field.required ? " required" : " optional"}; confidence >= ${field.confidenceThreshold};${aliases};${sources}`;
+    })
+    .join("\n");
+  return [
+    "Commercial offer readiness:",
+    "Capture these offer fields whenever the intake, documents, or lead context contain evidence for them.",
+    settings.offerReadiness.requireEvidenceForOfferFields
+      ? "Every offer field must include concrete evidence and source message ids; do not infer unsupported offer values."
+      : "Offer fields may use directly implied values when confidence is high.",
+    settings.offerReadiness.extractOfferFieldsFromAttachments
+      ? "Look for offer fields inside attachment summaries and extracted document/image/audio content."
+      : "Do not rely on attachments for offer fields unless the text already states the field.",
+    fields
+  ].join("\n");
+}
+
 function semanticSystemPrompt(state: SemanticOrchestrationState, nodeInstruction: string): string {
-  return [state.settings.prompts.systemRole, projectPeoplePrompt(state.settings), nodeInstruction].filter(Boolean).join("\n\n");
+  return [
+    state.settings.prompts.systemRole,
+    projectPeoplePrompt(state.settings),
+    tgIntakePolicyPrompt(state.settings),
+    offerReadinessPrompt(state.settings),
+    nodeInstruction
+  ]
+    .filter(Boolean)
+    .join("\n\n");
 }
 
 const intentJsonContract = [
@@ -478,11 +527,36 @@ function shouldCreateLeadFromLeadIntake(state: SemanticOrchestrationState): bool
     (candidate) => candidate.score >= state.settings.thresholds.duplicateCandidate
   );
 
+  const requiredOfferFields = state.settings.offerReadiness.fields.filter((field) => field.required).map((field) => field.key);
+  const hasEvidencedLeadOrOfferField = [
+    "clientName",
+    "projectName",
+    "requestType",
+    "projectAddress",
+    "location",
+    "phone",
+    "email",
+    ...requiredOfferFields
+  ].some((field) => hasEvidencedEntityValue(state, field));
+  const hasMeaningfulLeadInstruction =
+    state.intentClassification.evidence.some((evidence) => evidence.trim().length > 0) &&
+    state.intentClassification.confidence >= state.settings.thresholds.autoExecute;
+
+  if (state.settings.tgIntakePolicy.actionStrictness === "preview_first") {
+    return false;
+  }
+
+  if (state.settings.tgIntakePolicy.actionStrictness === "strong_evidence" && !hasEvidencedLeadOrOfferField) {
+    return false;
+  }
+
   return (
     state.intent === "create_lead" &&
     state.target.targetId === null &&
     !hasLikelyDuplicate &&
-    (state.target.targetType === "none" || state.target.targetType === "project" || state.target.targetType === "lead")
+    (state.target.targetType === "none" || state.target.targetType === "project" || state.target.targetType === "lead") &&
+    (hasEvidencedLeadOrOfferField ||
+      (state.settings.tgIntakePolicy.actionStrictness === "auto_create_drafts" && hasMeaningfulLeadInstruction))
   );
 }
 

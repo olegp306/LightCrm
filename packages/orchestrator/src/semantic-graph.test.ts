@@ -167,6 +167,7 @@ describe("semantic runtime settings", () => {
       projectPeople: [
         {
           name: " Екатерина Рыбцевих ",
+          aliases: [" Katya ", "Katya", "Ekaterina"],
           role: " director ",
           description: "Director, internal sender."
         },
@@ -181,6 +182,7 @@ describe("semantic runtime settings", () => {
     expect(settings.projectPeople).toEqual([
       {
         name: "Екатерина Рыбцевих",
+        aliases: ["Katya", "Ekaterina"],
         role: "director",
         description: "Director, internal sender."
       }
@@ -607,11 +609,13 @@ describe("semantic crm orchestration", () => {
         projectPeople: [
           {
             name: "Екатерина Рыбцевих",
+            aliases: ["Katya Korsak", "Katia Korsak"],
             role: "director",
             description: "Director of the architecture bureau."
           },
           {
             name: "Олег Панюков",
+            aliases: ["Oleg"],
             role: "developer",
             description: "Developer testing LightCrm."
           }
@@ -621,6 +625,7 @@ describe("semantic crm orchestration", () => {
 
     expect(systems.some((system) => system.includes("Internal project people:"))).toBe(true);
     expect(systems.join("\n")).toContain("Екатерина Рыбцевих (director)");
+    expect(systems.join("\n")).toContain("Aliases: Katya Korsak, Katia Korsak.");
     expect(systems.join("\n")).toContain("Do not extract them as clientName");
   });
 

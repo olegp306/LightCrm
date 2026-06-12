@@ -27,6 +27,16 @@ const SemanticIntent = z.enum([
   "no_action"
 ]);
 
+const OfferReadinessField = z.object({
+  key: z.string().trim().min(1),
+  label: z.string().trim().min(1),
+  required: z.boolean(),
+  aliases: z.array(z.string().trim()),
+  sources: z.array(z.string().trim()),
+  confidenceThreshold: z.number().min(0).max(1),
+  autoFill: z.boolean()
+});
+
 export const RuntimeSettingsInput = z.object({
   id: z.enum(["leadHunter", "mailAnalyst", "riskAuditor", "fastOperator", "relationshipKeeper", "custom"]),
   name: z.string().min(1),
@@ -63,9 +73,26 @@ export const RuntimeSettingsInput = z.object({
     allowAutoCreateLead: z.boolean(),
     allowAutoCreateReminder: z.boolean()
   }),
+  tgIntakePolicy: z.object({
+    actionStrictness: z.enum(["preview_first", "strong_evidence", "auto_create_drafts"]),
+    alwaysShowUndoForWrites: z.boolean(),
+    analyzeAttachmentsBeforeAction: z.boolean(),
+    neverCreateFromAttachmentOnly: z.boolean(),
+    requireMeaningfulAttachmentContent: z.boolean(),
+    bundleWaitMs: z.number().min(0).max(60000)
+  }),
+  offerReadiness: z.object({
+    analyzeLeadForOfferReadiness: z.boolean(),
+    extractOfferFieldsFromAttachments: z.boolean(),
+    autoUpdateLeadWithConfidentFields: z.boolean(),
+    autoGenerateWhenPriceReady: z.boolean(),
+    requireEvidenceForOfferFields: z.boolean(),
+    fields: z.array(OfferReadinessField)
+  }),
   projectPeople: z.array(
     z.object({
       name: z.string().trim().min(1),
+      aliases: z.array(z.string().trim()).optional().default([]),
       role: z.string().trim().min(1),
       description: z.string().trim()
     })

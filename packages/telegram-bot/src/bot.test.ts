@@ -495,7 +495,7 @@ describe("telegram bot core", () => {
     );
   });
 
-  it("creates a draft lead from attachment-only intake without asking for a caption", async () => {
+  it("asks for context instead of creating a draft lead from attachment-only intake", async () => {
     const sendMessage = vi.fn();
     const orchestrate = vi.fn();
     const createLead = vi.fn().mockResolvedValue({ id: "lead-draft", name: "Draft lead - pdf from TG #210" });
@@ -537,34 +537,17 @@ describe("telegram bot core", () => {
     );
 
     expect(orchestrate).not.toHaveBeenCalled();
-    expect(createLead).toHaveBeenCalledWith(
-      expect.objectContaining({
-        workspaceId: "default",
-        name: "Draft lead - pdf from TG #210",
-        clientId: null,
-        sourceChannel: "telegram",
-        externalMessageId: "210"
-      })
-    );
-    expect(prepareAttachment).toHaveBeenCalledWith(expect.objectContaining({ leadId: "lead-draft" }));
-    expect(sendMessage).not.toHaveBeenCalledWith(111111, expect.stringContaining("Please add a caption"));
+    expect(createLead).not.toHaveBeenCalled();
+    expect(prepareAttachment).not.toHaveBeenCalled();
     expect(sendMessage).toHaveBeenCalledWith(
       111111,
-      expect.stringContaining("Intake: saved 1 attachment"),
-      {
-        replyMarkup: {
-          inline_keyboard: [
-            [{ text: "offer", callback_data: "offer_lead:lead-draft" }],
-            [{ text: "undo", callback_data: "undo_lead:lead-draft" }]
-          ]
-        }
-      }
+      "please add context for these files so I can link them to the right lead"
     );
   });
 
   it("sends one short processing message for grouped multi-file intake", async () => {
     const sendMessage = vi.fn();
-    const createLead = vi.fn().mockResolvedValue({ id: "lead-draft", name: "Draft lead - pdf, image from TG #211" });
+    const createLead = vi.fn();
     const prepareAttachment = vi
       .fn()
       .mockResolvedValueOnce({
@@ -572,7 +555,7 @@ describe("telegram bot core", () => {
         fileName: "brief.pdf",
         storageProvider: "local",
         storageBucket: null,
-        storageKey: "workspaces/default/leads/lead-draft/brief.pdf",
+        storageKey: "workspaces/default/leads/lead-active/brief.pdf",
         downloadUrl: null,
         mimeType: "application/pdf",
         sizeBytes: 123
@@ -582,7 +565,7 @@ describe("telegram bot core", () => {
         fileName: "site.jpg",
         storageProvider: "local",
         storageBucket: null,
-        storageKey: "workspaces/default/leads/lead-draft/site.jpg",
+        storageKey: "workspaces/default/leads/lead-active/site.jpg",
         downloadUrl: null,
         mimeType: "image/jpeg",
         sizeBytes: 456
@@ -618,6 +601,7 @@ describe("telegram bot core", () => {
       {
         allowedChatIds: new Set([111111]),
         workspaceId: "default",
+        activeLead: { id: "lead-active", name: "Active lead" },
         sendMessage,
         createLead,
         prepareAttachment
@@ -626,15 +610,16 @@ describe("telegram bot core", () => {
 
     expect(sendMessage).toHaveBeenNthCalledWith(1, 111111, "reviewing the files, back shortly");
     expect(sendMessage).toHaveBeenCalledTimes(2);
+    expect(createLead).not.toHaveBeenCalled();
     expect(prepareAttachment).toHaveBeenCalledTimes(2);
+    expect(prepareAttachment).toHaveBeenCalledWith(expect.objectContaining({ leadId: "lead-active" }));
     expect(sendMessage).toHaveBeenLastCalledWith(
       111111,
       expect.stringContaining("Intake: saved 2 attachment"),
       {
         replyMarkup: {
           inline_keyboard: [
-            [{ text: "offer", callback_data: "offer_lead:lead-draft" }],
-            [{ text: "undo", callback_data: "undo_lead:lead-draft" }]
+            [{ text: "offer", callback_data: "offer_lead:lead-active" }]
           ]
         }
       }
@@ -1116,7 +1101,10 @@ describe("telegram bot core", () => {
       expect.stringContaining("<b>lead-303</b>"),
       expect.objectContaining({
         replyMarkup: expect.objectContaining({
-          inline_keyboard: [[{ text: "CRM", callback_data: "crm_lead:lead-303" }, { text: "offer", callback_data: "offer_lead:lead-303" }]]
+          inline_keyboard: [
+            [{ text: "CRM", callback_data: "crm_lead:lead-303" }, { text: "offer", callback_data: "offer_lead:lead-303" }],
+            [{ text: "undo", callback_data: "undo_write:lead-303" }]
+          ]
         })
       })
     );

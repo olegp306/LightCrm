@@ -733,7 +733,7 @@ type TelegramLeadReplyCard = Pick<Lead, "id" | "name"> & {
 function crmLeadReplyMarkup(
   deps: TelegramBotDeps,
   lead: TelegramLeadReplyCard,
-  options: { includeUndo?: boolean } = {}
+  options: { includeUndo?: boolean; undoMode?: "archive" | "not_connected" } = {}
 ): TelegramSendMessageOptions | undefined {
   const url = crmLeadUrl(deps, lead);
   const hasFullSummary = "summaryLong" in lead && Boolean(lead.summaryLong);
@@ -741,7 +741,8 @@ function crmLeadReplyMarkup(
   const downloadsRow = deps.listLeadDocuments
     ? [[{ text: "Downloads", callback_data: `downloads_lead:${lead.id}` }]]
     : [];
-  const undoRow = options.includeUndo ? [[{ text: "undo", callback_data: `undo_lead:${lead.id}` }]] : [];
+  const undoCallback = options.undoMode === "not_connected" ? `undo_write:${lead.id}` : `undo_lead:${lead.id}`;
+  const undoRow = options.includeUndo ? [[{ text: "undo", callback_data: undoCallback }]] : [];
   if (!url) {
     return {
       replyMarkup: {
@@ -784,7 +785,8 @@ function extractLeadIdFromReply(reply: TelegramReplyMessage | undefined): string
         value?.startsWith("offer_lead:") ||
         value?.startsWith("summary_lead:") ||
         value?.startsWith("downloads_lead:") ||
-        value?.startsWith("undo_lead:")
+        value?.startsWith("undo_lead:") ||
+        value?.startsWith("undo_write:")
       )
     );
   if (callbackData?.startsWith("crm_lead:")) {
@@ -801,6 +803,9 @@ function extractLeadIdFromReply(reply: TelegramReplyMessage | undefined): string
   }
   if (callbackData?.startsWith("undo_lead:")) {
     return callbackData.slice("undo_lead:".length);
+  }
+  if (callbackData?.startsWith("undo_write:")) {
+    return callbackData.slice("undo_write:".length);
   }
   const text = [reply?.text, reply?.caption].filter(Boolean).join("\n");
   const match = text.match(/Lead ID:\s*([^\s]+)/i);
@@ -1125,6 +1130,11 @@ export async function handleTelegramCallback(update: TelegramUpdate, deps: Teleg
     await deps.sendMessage(chatId, `undone: ${undoLeadId}`);
     return true;
   }
+  const undoWriteId = callback.data?.startsWith("undo_write:") ? callback.data.slice("undo_write:".length) : null;
+  if (undoWriteId) {
+    await deps.sendMessage(chatId, "undo for this update is not connected yet");
+    return true;
+  }
   const summaryLeadId = callback.data?.startsWith("summary_lead:") ? callback.data.slice("summary_lead:".length) : null;
   if (summaryLeadId) {
     if (!deps.searchLeads) {
@@ -1212,6 +1222,11 @@ export async function handleTelegramUpdate(
     await deps.sendMessage(chatId, "reviewing the files, back shortly");
   }
   const activeLead = replyLead ?? (deps.activeLead && (attachments.length > 0 || text.trim()) ? deps.activeLead : null);
+  if (!activeLead && !text.trim() && attachments.length > 0) {
+    await deps.sendMessage(message.chat.id, "please add context for these files so I can link them to the right lead");
+    return null;
+  }
+
   const result = activeLead
     ? !text.trim() && attachments.length > 0
       ? attachmentUpdateOrchestrationResult(deps.workspaceId, message, text, author, attachments, activeLead)
@@ -1294,12 +1309,22 @@ export async function handleTelegramUpdate(
           ? `Reminder: ${reminderOutcome.reminder.id} at ${new Date(reminderOutcome.reminder.dueAt).toISOString()}`
           : null,
         `Intake: saved ${preparedAttachments.length} attachment(s) to ${lead.name}.`,
-        crmLeadReplyMarkup(deps, lead, { includeUndo: Boolean(createdLead) }) ? null : crmLeadUrl(deps, lead)
+        crmLeadReplyMarkup(deps, lead, {
+          includeUndo: Boolean(createdLead || updatedLead),
+          undoMode: createdLead ? "archive" : "not_connected"
+        })
+          ? null
+          : crmLeadUrl(deps, lead)
       ]
         .filter((line): line is string => Boolean(line))
         .join("\n")
         .slice(0, 3900),
-      leadCardMessageOptions(crmLeadReplyMarkup(deps, lead, { includeUndo: Boolean(createdLead) }))
+      leadCardMessageOptions(
+        crmLeadReplyMarkup(deps, lead, {
+          includeUndo: Boolean(createdLead || updatedLead),
+          undoMode: createdLead ? "archive" : "not_connected"
+        })
+      )
     );
     return lead;
   }

@@ -2,6 +2,34 @@
 
 All notable LightCrm releases are documented here. Starting with `0.2.0`, every version bump must include a changelog entry.
 
+## 0.3.10 - 2026-06-12
+
+### Project Snapshot
+
+LightCrm now has a configurable LangGraph intake layer for safer TG lead creation and commercial-offer readiness. Operators can tune how strict TG intake should be, define which offer fields matter, and teach the system internal project people with aliases so directors, operators, and testers are not mistaken for clients.
+
+### Added
+
+- Added TG Intake Policy settings for action strictness, attachment analysis, attachment-only protection, meaningful-content requirements, bundling delay, and undo visibility for write actions.
+- Added Offer Readiness settings with editable field map, aliases, source hints, confidence thresholds, required flags, and auto-fill flags for commercial offer preparation.
+- Added Project People aliases in settings so one internal person can have several names across TG, WhatsApp, Russian, English, and testing contexts.
+- Added LangGraph prompt wiring for TG intake policy, project people aliases, and offer-readiness field extraction.
+
+### Changed
+
+- Made LangGraph lead creation more conservative for file-only TG messages while still allowing explicit draft lead intake when the message meaning is clear.
+- Blocked attachment-only TG intake without active lead context and asks for context instead of creating stray draft leads.
+- Added safe undo buttons to TG write-result cards; create undo still archives the new lead, while update undo is guarded until full rollback is connected.
+- Fixed Project People editing so text fields no longer lose focus after each typed character.
+
+### Verification
+
+- `pnpm --filter @lightcrm/telegram-bot test`
+- `pnpm --filter @lightcrm/telegram-bot typecheck`
+- `pnpm --filter @lightcrm/orchestrator test`
+- `pnpm --filter @lightcrm/orchestrator typecheck`
+- `pnpm --filter @lightcrm/web typecheck`
+
 ## 0.3.9 - 2026-06-12
 
 ### Project Snapshot

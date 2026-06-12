@@ -113,6 +113,7 @@ function traceDetailsText(details: Record<string, string | number | boolean | nu
 }
 
 type ProjectPerson = LangGraphRuntimeSettings["projectPeople"][number];
+type OfferReadinessField = LangGraphRuntimeSettings["offerReadiness"]["fields"][number];
 
 export function LangGraphSettingsPage() {
   const [activeTab, setActiveTab] = useState<"crm" | "langgraph">("crm");
@@ -308,6 +309,44 @@ export function LangGraphSettingsPage() {
     });
   }
 
+  function patchTgIntakePolicy(value: Partial<LangGraphRuntimeSettings["tgIntakePolicy"]>) {
+    if (!settings) {
+      return;
+    }
+    patchSettings({
+      tgIntakePolicy: {
+        ...settings.tgIntakePolicy,
+        ...value
+      }
+    });
+  }
+
+  function patchOfferReadiness(value: Partial<Omit<LangGraphRuntimeSettings["offerReadiness"], "fields">>) {
+    if (!settings) {
+      return;
+    }
+    patchSettings({
+      offerReadiness: {
+        ...settings.offerReadiness,
+        ...value
+      }
+    });
+  }
+
+  function patchOfferField(index: number, value: Partial<OfferReadinessField>) {
+    if (!settings) {
+      return;
+    }
+    patchSettings({
+      offerReadiness: {
+        ...settings.offerReadiness,
+        fields: settings.offerReadiness.fields.map((field, fieldIndex) =>
+          fieldIndex === index ? { ...field, ...value } : field
+        )
+      }
+    });
+  }
+
   function patchProjectPerson(index: number, value: Partial<ProjectPerson>) {
     if (!settings) {
       return;
@@ -328,6 +367,7 @@ export function LangGraphSettingsPage() {
         ...settings.projectPeople,
         {
           name: "",
+          aliases: [],
           role: "operator",
           description: "Internal project person. Do not treat as a client unless explicitly stated."
         }
@@ -799,6 +839,184 @@ export function LangGraphSettingsPage() {
         <section className="settingsPanel wide">
           <div className="settingsPanelHeader">
             <div>
+              <h2>TG Intake Policy</h2>
+              <p>Controls how TG bundles, files, and ambiguous messages become CRM writes.</p>
+            </div>
+          </div>
+          <div className="settingsFieldGrid">
+            <label>
+              <span>Action strictness</span>
+              <select
+                value={settings.tgIntakePolicy.actionStrictness}
+                onChange={(event) =>
+                  patchTgIntakePolicy({
+                    actionStrictness: event.target.value as LangGraphRuntimeSettings["tgIntakePolicy"]["actionStrictness"]
+                  })
+                }
+              >
+                <option value="preview_first">Preview first</option>
+                <option value="strong_evidence">Auto create only with strong evidence</option>
+                <option value="auto_create_drafts">Auto create needs-data drafts</option>
+              </select>
+            </label>
+            <label>
+              <span>Bundle wait, ms</span>
+              <input
+                min="0"
+                step="100"
+                type="number"
+                value={settings.tgIntakePolicy.bundleWaitMs}
+                onChange={(event) => patchTgIntakePolicy({ bundleWaitMs: Math.max(0, Number(event.target.value) || 0) })}
+              />
+            </label>
+          </div>
+          <div className="settingsChecklist">
+            <label className="switchRow">
+              <input
+                checked={settings.tgIntakePolicy.alwaysShowUndoForWrites}
+                type="checkbox"
+                onChange={(event) => patchTgIntakePolicy({ alwaysShowUndoForWrites: event.target.checked })}
+              />
+              <span>Always show undo for write results</span>
+            </label>
+            <label className="switchRow">
+              <input
+                checked={settings.tgIntakePolicy.analyzeAttachmentsBeforeAction}
+                type="checkbox"
+                onChange={(event) => patchTgIntakePolicy({ analyzeAttachmentsBeforeAction: event.target.checked })}
+              />
+              <span>Analyze attachments before action</span>
+            </label>
+            <label className="switchRow">
+              <input
+                checked={settings.tgIntakePolicy.neverCreateFromAttachmentOnly}
+                type="checkbox"
+                onChange={(event) => patchTgIntakePolicy({ neverCreateFromAttachmentOnly: event.target.checked })}
+              />
+              <span>Never create from attachment-only intake</span>
+            </label>
+            <label className="switchRow">
+              <input
+                checked={settings.tgIntakePolicy.requireMeaningfulAttachmentContent}
+                type="checkbox"
+                onChange={(event) => patchTgIntakePolicy({ requireMeaningfulAttachmentContent: event.target.checked })}
+              />
+              <span>Require meaningful file content before write</span>
+            </label>
+          </div>
+        </section>
+
+        <section className="settingsPanel wide">
+          <div className="settingsPanelHeader">
+            <div>
+              <h2>Offer Readiness</h2>
+              <p>Fields LangGraph should look for before commercial offer numbers and documents are considered ready.</p>
+            </div>
+          </div>
+          <div className="settingsChecklist">
+            <label className="switchRow">
+              <input
+                checked={settings.offerReadiness.analyzeLeadForOfferReadiness}
+                type="checkbox"
+                onChange={(event) => patchOfferReadiness({ analyzeLeadForOfferReadiness: event.target.checked })}
+              />
+              <span>Analyze lead for offer readiness</span>
+            </label>
+            <label className="switchRow">
+              <input
+                checked={settings.offerReadiness.extractOfferFieldsFromAttachments}
+                type="checkbox"
+                onChange={(event) => patchOfferReadiness({ extractOfferFieldsFromAttachments: event.target.checked })}
+              />
+              <span>Extract offer fields from attachments</span>
+            </label>
+            <label className="switchRow">
+              <input
+                checked={settings.offerReadiness.autoUpdateLeadWithConfidentFields}
+                type="checkbox"
+                onChange={(event) => patchOfferReadiness({ autoUpdateLeadWithConfidentFields: event.target.checked })}
+              />
+              <span>Auto-update lead with confident offer fields</span>
+            </label>
+            <label className="switchRow">
+              <input
+                checked={settings.offerReadiness.autoGenerateWhenPriceReady}
+                type="checkbox"
+                onChange={(event) => patchOfferReadiness({ autoGenerateWhenPriceReady: event.target.checked })}
+              />
+              <span>Auto-generate offer when price is ready</span>
+            </label>
+            <label className="switchRow">
+              <input
+                checked={settings.offerReadiness.requireEvidenceForOfferFields}
+                type="checkbox"
+                onChange={(event) => patchOfferReadiness({ requireEvidenceForOfferFields: event.target.checked })}
+              />
+              <span>Require evidence for offer fields</span>
+            </label>
+          </div>
+          <div className="offerFieldList">
+            {settings.offerReadiness.fields.map((field, index) => (
+              <div className="offerFieldCard" key={field.key}>
+                <div className="offerFieldHeader">
+                  <strong>{field.label}</strong>
+                  <span>{field.key}</span>
+                </div>
+                <div className="settingsFieldGrid">
+                  <label>
+                    <span>Aliases</span>
+                    <textarea
+                      rows={3}
+                      value={listText(field.aliases)}
+                      onChange={(event) => patchOfferField(index, { aliases: parseLines(event.target.value) })}
+                    />
+                  </label>
+                  <label>
+                    <span>Sources</span>
+                    <textarea
+                      rows={3}
+                      value={listText(field.sources)}
+                      onChange={(event) => patchOfferField(index, { sources: parseLines(event.target.value) })}
+                    />
+                  </label>
+                </div>
+                <div className="settingsFieldGrid compact">
+                  <label>
+                    <span>Confidence {percent(field.confidenceThreshold)}</span>
+                    <input
+                      max="1"
+                      min="0"
+                      step="0.01"
+                      type="range"
+                      value={field.confidenceThreshold}
+                      onChange={(event) => patchOfferField(index, { confidenceThreshold: Number(event.target.value) })}
+                    />
+                  </label>
+                  <label className="switchRow">
+                    <input
+                      checked={field.required}
+                      type="checkbox"
+                      onChange={(event) => patchOfferField(index, { required: event.target.checked })}
+                    />
+                    <span>Required</span>
+                  </label>
+                  <label className="switchRow">
+                    <input
+                      checked={field.autoFill}
+                      type="checkbox"
+                      onChange={(event) => patchOfferField(index, { autoFill: event.target.checked })}
+                    />
+                    <span>Auto-fill</span>
+                  </label>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <section className="settingsPanel wide">
+          <div className="settingsPanelHeader">
+            <div>
               <h2>Project People</h2>
               <p>Internal people whose names should not become clients, leads, or offer recipients unless explicitly stated.</p>
             </div>
@@ -808,7 +1026,7 @@ export function LangGraphSettingsPage() {
           </div>
           <div className="projectPeopleList">
             {settings.projectPeople.map((person, index) => (
-              <div className="projectPersonCard" key={`${person.name}-${index}`}>
+              <div className="projectPersonCard" key={`project-person-${index}`}>
                 <label>
                   <span>Name</span>
                   <input value={person.name} onChange={(event) => patchProjectPerson(index, { name: event.target.value })} />
@@ -816,6 +1034,15 @@ export function LangGraphSettingsPage() {
                 <label>
                   <span>Role</span>
                   <input value={person.role} onChange={(event) => patchProjectPerson(index, { role: event.target.value })} />
+                </label>
+                <label className="wide">
+                  <span>Alternative names</span>
+                  <textarea
+                    rows={2}
+                    value={listText(person.aliases ?? [])}
+                    placeholder={"One name per line: Katya\nKatia Korsak\nWhatsApp display name"}
+                    onChange={(event) => patchProjectPerson(index, { aliases: parseLines(event.target.value) })}
+                  />
                 </label>
                 <label className="wide">
                   <span>Description</span>
