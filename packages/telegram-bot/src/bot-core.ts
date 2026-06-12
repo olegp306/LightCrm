@@ -494,6 +494,43 @@ function semanticAttachmentText(attachments: LeadIntakeAttachmentInput[]): strin
   return lines.length > 0 ? `Semantic attachment analysis:\n${lines.join("\n")}` : null;
 }
 
+function leadPatchFromFacts(result: CrmOrchestrationResult, text: string): TelegramLeadUpdateInput["patch"] {
+  const patch: TelegramLeadUpdateInput["patch"] = {};
+  if (result.facts.contactName) {
+    patch.name = result.facts.contactName;
+  }
+  if (result.facts.phone) {
+    patch.phone = result.facts.phone;
+  }
+  if (result.facts.projectName) {
+    if (!patch.name) {
+      patch.name = result.facts.projectName;
+    }
+    patch.company = result.facts.projectName;
+    patch.projectName = result.facts.projectName;
+  }
+  if (result.facts.projectType) {
+    patch.project = result.facts.projectType;
+  }
+  if (result.facts.location) {
+    patch.address = result.facts.location;
+  }
+  if (result.facts.areaM2 !== null && result.facts.areaM2 !== undefined) {
+    patch.area = String(result.facts.areaM2);
+  }
+  if (result.facts.budgetEur !== null && result.facts.budgetEur !== undefined) {
+    patch.budgetEur = String(result.facts.budgetEur);
+  }
+  if (text.trim()) {
+    patch.rawInput = text;
+  }
+  return patch;
+}
+
+function hasLeadPatchFields(patch: TelegramLeadUpdateInput["patch"]): boolean {
+  return Object.keys(patch).length > 0;
+}
+
 type LeadIntakeUploadResponse = {
   documents?: Array<{
     fileName: string;
@@ -620,33 +657,10 @@ async function maybeUpdateLead(
   if (!targetId) {
     return null;
   }
-  const patch: TelegramLeadUpdateInput["patch"] = {};
-  if (result.facts.contactName) {
-    patch.name = result.facts.contactName;
+  const patch = leadPatchFromFacts(result, text);
+  if (!hasLeadPatchFields(patch)) {
+    return null;
   }
-  if (result.facts.phone) {
-    patch.phone = result.facts.phone;
-  }
-  if (result.facts.projectName) {
-    if (!patch.name) {
-      patch.name = result.facts.projectName;
-    }
-    patch.company = result.facts.projectName;
-    patch.projectName = result.facts.projectName;
-  }
-  if (result.facts.projectType) {
-    patch.project = result.facts.projectType;
-  }
-  if (result.facts.location) {
-    patch.address = result.facts.location;
-  }
-  if (result.facts.areaM2 !== null && result.facts.areaM2 !== undefined) {
-    patch.area = String(result.facts.areaM2);
-  }
-  if (result.facts.budgetEur !== null && result.facts.budgetEur !== undefined) {
-    patch.budgetEur = String(result.facts.budgetEur);
-  }
-  patch.rawInput = text;
   return deps.updateLead({
     workspaceId: deps.workspaceId,
     leadId: targetId,
@@ -681,7 +695,19 @@ async function maybeEnrichLeadFromAttachments(
     sourceChannel: "telegram",
     recentLeads: [{ id: lead.id, label: lead.name, summary: null, lastTouchedAt: null }]
   });
-  const updatedLead = await maybeUpdateLead(message, text, author, result, lead.id, deps);
+  const updatedLead =
+    (await maybeUpdateLead(message, text, author, result, lead.id, deps)) ??
+    (hasLeadPatchFields(leadPatchFromFacts(result, text))
+      ? await deps.updateLead({
+          workspaceId: deps.workspaceId,
+          leadId: lead.id,
+          patch: leadPatchFromFacts(result, text),
+          source: {
+            channel: "telegram",
+            messageId: String(message.message_id)
+          }
+        })
+      : null);
   return { lead: updatedLead ?? lead, result, text };
 }
 
@@ -1344,7 +1370,8 @@ export async function handleTelegramUpdate(
   if (standaloneReminder.handled) {
     return replyLeadId ? { id: replyLeadId, name: "replied lead" } : null;
   }
-  const updatedLead = await maybeUpdateLead(message, orchestrationText, author, result, replyLeadId, deps);
+  const updatedLead =
+    result.intent === "attach_document" ? null : await maybeUpdateLead(message, orchestrationText, author, result, replyLeadId, deps);
   const action = result.actions[0];
   const shouldAttachToActiveLead =
     Boolean(activeLead && (attachments.length > 0 || text.trim()) && action?.type !== "create_lead");

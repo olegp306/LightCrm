@@ -2,6 +2,18 @@
 
 All notable LightCrm releases are documented here. Starting with `0.2.0`, every version bump must include a changelog entry.
 
+## 0.3.13 - 2026-06-12
+
+### Fixed
+
+- Apply semantic attachment facts to the current draft lead even when the semantic graph asks for review instead of returning an explicit `update_lead` action.
+- Avoid a pre-upload empty lead update for attachment-only messages sent to an active Telegram lead.
+
+### Verification
+
+- `pnpm --filter @lightcrm/telegram-bot test`
+- `pnpm --filter @lightcrm/telegram-bot typecheck`
+
 ## 0.3.12 - 2026-06-12
 
 ### Added

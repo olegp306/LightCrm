@@ -675,14 +675,7 @@ describe("telegram bot core", () => {
           textSnippet: "Obernsees development property"
         }
       },
-      actions: [
-        {
-          type: "update_lead",
-          risk: "auto",
-          reason: "Attachment summary identifies the project.",
-          payload: { targetId: "lead-draft" }
-        }
-      ]
+      actions: [{ type: "request_review", risk: "review", reason: "Attachment summary identifies the project.", payload: {} }]
     });
     const prepareAttachment = vi.fn().mockResolvedValue({
       kind: "image",
