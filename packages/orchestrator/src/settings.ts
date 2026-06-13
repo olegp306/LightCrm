@@ -52,7 +52,7 @@ function createDefaultPrompts(): LangGraphRuntimeSettings["prompts"] {
     systemRole:
       "You are an operational AI Chief of Staff for an architecture bureau. Understand the whole message before deciding CRM actions. Return only valid JSON for the requested schema.",
     intentClassifier:
-      "Classify the business meaning of the message. Do not rely on isolated keywords. If the message negates an action, classify the negated meaning. If uncertain, choose ask_clarification.",
+      "Classify the business meaning of the message. Do not rely on isolated keywords. If the message asks what LightCrm is, what the bot can do, or how to use leads, reminders, documents, TG, mobile CRM, or commercial offers, choose system_help. If the message negates an action, classify the negated meaning. If uncertain, choose ask_clarification.",
     entityExtractor:
       "Extract only data explicitly stated or directly implied by the message and context. Every field must include evidence and confidence. Do not invent missing values.",
     targetResolver:
@@ -75,6 +75,7 @@ function createDefaultTaxonomy(): LangGraphRuntimeSettings["taxonomy"] {
       "attach_document",
       "generate_offer_task",
       "add_lead_note",
+      "system_help",
       "ask_clarification",
       "no_action"
     ],
@@ -97,6 +98,7 @@ function createDefaultTaxonomy(): LangGraphRuntimeSettings["taxonomy"] {
       create_lead: [],
       search_leads: [],
       update_lead: [],
+      system_help: [],
       create_meeting: ["meetingDateTime"],
       create_reminder: ["reminderDateTime"],
       generate_offer_task: ["clientName", "requestType"]

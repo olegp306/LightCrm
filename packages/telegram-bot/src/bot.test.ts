@@ -1,6 +1,12 @@
 import { describe, expect, it, vi } from "vitest";
 import { DEFAULT_LANGGRAPH_SETTINGS } from "@lightcrm/orchestrator";
-import { formatOrchestrationReply, handleTelegramUpdate, parseAllowedChatIds, uploadTelegramAttachmentToWeb } from "./bot-core";
+import {
+  formatOrchestrationReply,
+  handleTelegramUpdate,
+  parseAllowedChatIds,
+  type PendingClarification,
+  uploadTelegramAttachmentToWeb
+} from "./bot-core";
 import {
   collectReadyChatIntakeUpdates,
   collectReadyMediaGroupUpdates,
@@ -129,6 +135,103 @@ describe("telegram bot core", () => {
       expect.objectContaining({ kind: "pdf", fileName: "offer.pdf" }),
       expect.objectContaining({ kind: "audio", fileName: "voice.mp3" })
     ]);
+  });
+
+  it("answers simple greeting and capability questions through graph help intent", async () => {
+    const sendMessage = vi.fn();
+    const orchestrate = vi.fn().mockResolvedValue({
+      workspaceId: "default",
+      normalizedText: "Привет! Кто ты? Что ты умеешь?",
+      intent: "system_help",
+      risk: "auto",
+      explanations: ["The user asks what the system does."],
+      settings: DEFAULT_LANGGRAPH_SETTINGS,
+      facts: {
+        contactName: null,
+        projectName: null,
+        projectType: null,
+        location: null,
+        areaM2: null,
+        phone: null,
+        budgetEur: null,
+        dueAt: null,
+        sourceMessageId: "301",
+        evidence: { sourceMessageId: "301", author: "Katya", sourceChannel: "telegram", textSnippet: "Привет! Кто ты?" }
+      },
+      actions: []
+    });
+
+    await handleTelegramUpdate(
+      {
+        update_id: 30,
+        message: {
+          message_id: 301,
+          text: "Привет! Кто ты? Что ты умеешь?",
+          chat: { id: 111111 },
+          from: { first_name: "Katya" }
+        }
+      },
+      {
+        allowedChatIds: new Set([111111]),
+        workspaceId: "default",
+        sendMessage,
+        orchestrate
+      }
+    );
+
+    expect(orchestrate).toHaveBeenCalledWith(expect.objectContaining({ text: "Привет! Кто ты? Что ты умеешь?" }));
+    expect(sendMessage).toHaveBeenCalledWith(111111, expect.stringContaining("LightCrm help"));
+    expect(sendMessage).toHaveBeenCalledWith(111111, expect.stringContaining("New lead"));
+  });
+
+  it("answers lead tutorial questions through graph help intent without creating a lead", async () => {
+    const sendMessage = vi.fn();
+    const orchestrate = vi.fn().mockResolvedValue({
+      workspaceId: "default",
+      normalizedText: "Как завести лида?",
+      intent: "system_help",
+      risk: "auto",
+      explanations: ["The user asks how to use leads."],
+      settings: DEFAULT_LANGGRAPH_SETTINGS,
+      facts: {
+        contactName: null,
+        projectName: null,
+        projectType: null,
+        location: null,
+        areaM2: null,
+        phone: null,
+        budgetEur: null,
+        dueAt: null,
+        sourceMessageId: "302",
+        evidence: { sourceMessageId: "302", author: "Katya", sourceChannel: "telegram", textSnippet: "Как завести лида?" }
+      },
+      actions: []
+    });
+    const createLead = vi.fn();
+
+    await handleTelegramUpdate(
+      {
+        update_id: 31,
+        message: {
+          message_id: 302,
+          text: "Как завести лида?",
+          chat: { id: 111111 },
+          from: { first_name: "Katya" }
+        }
+      },
+      {
+        allowedChatIds: new Set([111111]),
+        workspaceId: "default",
+        sendMessage,
+        orchestrate,
+        createLead
+      }
+    );
+
+    expect(orchestrate).toHaveBeenCalledWith(expect.objectContaining({ text: "Как завести лида?" }));
+    expect(createLead).not.toHaveBeenCalled();
+    expect(sendMessage).toHaveBeenCalledWith(111111, expect.stringContaining("LightCrm help"));
+    expect(sendMessage).toHaveBeenCalledWith(111111, expect.stringContaining("create a draft lead"));
   });
 
   it("formats a concise orchestration reply", () => {
@@ -954,6 +1057,62 @@ describe("telegram bot core", () => {
     expect(sendMessage).toHaveBeenCalledWith(111111, expect.stringContaining("<blockquote expandable><b>Missing for offer</b>"), expect.anything());
   });
 
+  it("keeps newly created lead names untruncated", async () => {
+    const sendMessage = vi.fn();
+    const longProjectType =
+      "Architecture planning for a family house with garage, terrace, landscape concept, LP 3-4 commercial offer preparation, and later project supervision";
+    const location = "Munich Obermenzing, Bavaria, with full client context from forwarded intake";
+    const expectedName = `${longProjectType} - ${location}`;
+    const orchestrate = vi.fn().mockResolvedValue({
+      workspaceId: "default",
+      normalizedText: "Create the lead from this forwarded request.",
+      intent: "create_lead",
+      risk: "auto",
+      explanations: [],
+      settings: DEFAULT_LANGGRAPH_SETTINGS,
+      facts: {
+        contactName: null,
+        projectName: null,
+        projectType: longProjectType,
+        location,
+        areaM2: null,
+        phone: null,
+        budgetEur: null,
+        dueAt: null,
+        sourceMessageId: "331",
+        evidence: {
+          sourceMessageId: "331",
+          author: "Katya",
+          sourceChannel: "telegram",
+          textSnippet: "Create the lead from this forwarded request."
+        }
+      },
+      actions: [{ type: "create_lead", risk: "auto", reason: "Low-risk CRM action.", payload: {} }]
+    });
+    const createLead = vi.fn().mockResolvedValue({ id: "lead-331", code: "L-2026-331", name: expectedName });
+
+    await handleTelegramUpdate(
+      {
+        update_id: 71,
+        message: {
+          message_id: 331,
+          text: "Create the lead from this forwarded request.",
+          chat: { id: 111111 },
+          from: { first_name: "Katya" }
+        }
+      },
+      {
+        allowedChatIds: new Set([111111]),
+        workspaceId: "default",
+        sendMessage,
+        orchestrate,
+        createLead
+      }
+    );
+
+    expect(createLead).toHaveBeenCalledWith(expect.objectContaining({ name: expectedName }));
+  });
+
   it("uses a callback CRM button for localhost CRM URLs", async () => {
     const sendMessage = vi.fn();
     const orchestrate = vi.fn().mockResolvedValue({
@@ -1224,7 +1383,7 @@ describe("telegram bot core", () => {
         createdAt: "2026-06-13T08:00:00.000Z"
       }
     ]);
-    expect(oneDownload).toHaveBeenCalledWith(111111, expect.stringContaining("<b>Downloads</b>: 1. brief.pdf - Permit package and project facts."), expect.anything());
+    expect(oneDownload).toHaveBeenCalledWith(111111, expect.stringContaining("<b>Downloads</b>: PDF - Permit package and project facts."), expect.anything());
     expect(oneDownload).not.toHaveBeenCalledWith(111111, expect.stringContaining("<blockquote expandable><b>Downloads"), expect.anything());
 
     const twoDownloads = await runWithDocuments([
@@ -1232,6 +1391,26 @@ describe("telegram bot core", () => {
       { id: "doc-2", fileName: "plan.pdf", shortSummary: "Floor plans.", downloadUrl: null, mimeType: "application/pdf" }
     ]);
     expect(twoDownloads).toHaveBeenCalledWith(111111, expect.stringContaining("<blockquote expandable><b>Downloads: 2 items</b>"), expect.anything());
+    expect(twoDownloads).toHaveBeenCalledWith(111111, expect.stringContaining("PDF 1 - Permit package.; PDF 2 - Floor plans."), expect.anything());
+
+    const offerDownloads = await runWithDocuments([
+      {
+        id: "offer-2",
+        fileName: "L-2026-003-commercial-offer-v2.docx",
+        shortSummary: "Commercial offer v2 59.500 EUR gross",
+        downloadUrl: "https://crm.example.com/offer-v2.docx",
+        mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+      },
+      {
+        id: "offer-1",
+        fileName: "L-2026-003-commercial-offer-v1.docx",
+        shortSummary: "Commercial offer v1 58.000 EUR gross",
+        downloadUrl: "https://crm.example.com/offer-v1.docx",
+        mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+      }
+    ]);
+    expect(offerDownloads).toHaveBeenCalledWith(111111, expect.stringContaining('<a href="https://crm.example.com/offer-v2.docx">V2</a>'), expect.anything());
+    expect(offerDownloads).toHaveBeenCalledWith(111111, expect.stringContaining('<a href="https://crm.example.com/offer-v1.docx">V1</a>'), expect.anything());
   });
 
   it("archives a created lead from the undo callback button", async () => {
@@ -1326,13 +1505,13 @@ describe("telegram bot core", () => {
       leadId: "lead-404",
       documents: [
         {
-          id: "doc-1",
-          fileName: "northwind-intake-card.pdf",
-          shortSummary: "Client intake card with first project details.",
-          longSummary: "Longer client intake summary.",
-          downloadUrl: "https://crm.example.com/api/crm/storage/local/doc-1",
-          mimeType: "application/pdf",
-          createdAt: "2026-06-12T06:00:00.000Z"
+          id: "doc-3",
+          fileName: "L-2026-404-commercial-offer-v2.docx",
+          shortSummary: "Commercial offer v2 59.500 EUR gross",
+          longSummary: "Generated commercial offer v2.",
+          downloadUrl: "https://crm.example.com/api/crm/storage/local/doc-3",
+          mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+          createdAt: "2026-06-12T06:10:00.000Z"
         },
         {
           id: "doc-2",
@@ -1341,6 +1520,15 @@ describe("telegram bot core", () => {
           downloadUrl: "https://crm.example.com/api/crm/storage/local/doc-2",
           mimeType: "image/jpeg",
           createdAt: "2026-06-12T06:05:00.000Z"
+        },
+        {
+          id: "doc-1",
+          fileName: "northwind-intake-card.pdf",
+          shortSummary: "Client intake card with first project details.",
+          longSummary: "Longer client intake summary.",
+          downloadUrl: "https://crm.example.com/api/crm/storage/local/doc-1",
+          mimeType: "application/pdf",
+          createdAt: "2026-06-12T06:00:00.000Z"
         }
       ]
     });
@@ -1365,12 +1553,13 @@ describe("telegram bot core", () => {
     expect(listLeadDocuments).toHaveBeenCalledWith({ workspaceId: "default", leadId: "lead-404", limit: 8 });
     expect(sendMessage).toHaveBeenCalledWith(
       111111,
-      expect.stringContaining("<b>northwind-intake-card.pdf</b>"),
+      expect.stringContaining('<b><a href="https://crm.example.com/api/crm/storage/local/doc-3">V2</a></b>'),
       {
         replyMarkup: {
           inline_keyboard: [
-            [{ text: "1. northwind-intake-card", url: "https://crm.example.com/api/crm/storage/local/doc-1" }],
-            [{ text: "2. site-photo", url: "https://crm.example.com/api/crm/storage/local/doc-2" }]
+            [{ text: "V2", url: "https://crm.example.com/api/crm/storage/local/doc-3" }],
+            [{ text: "picture", url: "https://crm.example.com/api/crm/storage/local/doc-2" }],
+            [{ text: "PDF", url: "https://crm.example.com/api/crm/storage/local/doc-1" }],
           ]
         }
       }
@@ -1912,6 +2101,180 @@ describe("telegram bot core", () => {
     expect(sendMessage).toHaveBeenCalledWith(111111, expect.stringContaining("Calendar event created"));
   });
 
+  it("resumes a pending meeting clarification when the next message names the lead", async () => {
+    const sendMessage = vi.fn().mockResolvedValue({ message_id: 585 });
+    const createCalendarEvent = vi.fn().mockResolvedValue({
+      id: "event-584",
+      title: "Thomas Wachter",
+      startsAt: "2026-06-19T12:00:00.000Z",
+      endsAt: "2026-06-19T13:00:00.000Z"
+    });
+    const searchLeads = vi.fn().mockResolvedValue({
+      matches: [{ id: "lead-wachter", code: "L-2026-008", name: "Thomas Wachter", score: 0.93 }]
+    });
+    const pendingClarifications = new Map<string, PendingClarification>();
+    const createPendingClarification = vi.fn((input) => {
+      pendingClarifications.set("111111", input);
+      return "pending-meeting";
+    });
+    const takePendingClarification = vi.fn(() => pendingClarifications.get("111111") ?? null);
+    const orchestrate = vi.fn().mockResolvedValueOnce({
+      workspaceId: "default",
+      normalizedText: "We can meet around 2pm on friday.",
+      intent: "create_meeting",
+      risk: "review",
+      explanations: ["For which client or lead should I schedule the meeting mentioned in the message?"],
+      settings: DEFAULT_LANGGRAPH_SETTINGS,
+      facts: {
+        contactName: null,
+        projectName: null,
+        projectType: null,
+        location: null,
+        areaM2: null,
+        phone: null,
+        budgetEur: null,
+        dueAt: "Friday 14:00",
+        sourceMessageId: "584",
+        evidence: { sourceMessageId: "584", author: "Oleg", sourceChannel: "telegram", textSnippet: "We can meet" }
+      },
+      actions: [
+        {
+          type: "request_review",
+          risk: "review",
+          reason: "For which client or lead should I schedule the meeting mentioned in the message?",
+          payload: {}
+        }
+      ]
+    });
+
+    await handleTelegramUpdate(
+      {
+        update_id: 584,
+        message: {
+          message_id: 584,
+          date: 1781344560,
+          text: "We can meet around 2pm on friday. Write me in Telegram, share there the details",
+          chat: { id: 111111 },
+          from: { first_name: "Oleg" }
+        }
+      },
+      {
+        allowedChatIds: new Set([111111]),
+        workspaceId: "default",
+        sendMessage,
+        orchestrate,
+        searchLeads,
+        createCalendarEvent,
+        createPendingClarification,
+        takePendingClarification
+      }
+    );
+
+    const lead = await handleTelegramUpdate(
+      {
+        update_id: 586,
+        message: {
+          message_id: 586,
+          date: 1781344620,
+          text: "This is for Thomas watcher",
+          chat: { id: 111111 },
+          from: { first_name: "Oleg" }
+        }
+      },
+      {
+        allowedChatIds: new Set([111111]),
+        workspaceId: "default",
+        sendMessage,
+        orchestrate,
+        searchLeads,
+        createCalendarEvent,
+        createPendingClarification,
+        takePendingClarification
+      }
+    );
+
+    expect(lead).toEqual({ id: "lead-wachter", name: "Thomas Wachter" });
+    expect(orchestrate).toHaveBeenCalledTimes(1);
+    expect(searchLeads).toHaveBeenCalledWith({ workspaceId: "default", query: "Thomas watcher", limit: 5 });
+    expect(createCalendarEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        workspaceId: "default",
+        leadId: "lead-wachter",
+        title: "Thomas Wachter",
+        startsAt: "2026-06-19T12:00:00.000Z",
+        endsAt: "2026-06-19T13:00:00.000Z"
+      })
+    );
+  });
+
+  it("uses a reply to the original WhatsApp message as meeting context when the reply names the lead", async () => {
+    const sendMessage = vi.fn();
+    const createCalendarEvent = vi.fn().mockResolvedValue({
+      id: "event-reply",
+      title: "Thomas Wachter",
+      startsAt: "2026-06-19T12:00:00.000Z",
+      endsAt: "2026-06-19T13:00:00.000Z"
+    });
+    const searchLeads = vi.fn().mockResolvedValue({
+      matches: [{ id: "lead-wachter", code: "L-2026-008", name: "Thomas Wachter", score: 0.93 }]
+    });
+    const orchestrate = vi.fn().mockResolvedValue({
+      workspaceId: "default",
+      normalizedText: "This is for Thomas watcher\n\nReplied message: We can meet around 2pm on friday.",
+      intent: "create_meeting",
+      risk: "auto",
+      explanations: ["The reply supplies the lead target for the meeting request."],
+      settings: DEFAULT_LANGGRAPH_SETTINGS,
+      facts: {
+        contactName: "Thomas Wachter",
+        projectName: null,
+        projectType: null,
+        location: null,
+        areaM2: null,
+        phone: null,
+        budgetEur: null,
+        dueAt: "Friday 14:00",
+        sourceMessageId: "590",
+        evidence: { sourceMessageId: "590", author: "Oleg", sourceChannel: "telegram", textSnippet: "This is for Thomas watcher" }
+      },
+      actions: [{ type: "create_meeting", risk: "auto", reason: "Meeting can be created.", payload: {} }]
+    });
+
+    const lead = await handleTelegramUpdate(
+      {
+        update_id: 590,
+        message: {
+          message_id: 590,
+          date: 1781344920,
+          text: "This is for Thomas watcher",
+          chat: { id: 111111 },
+          from: { first_name: "Oleg" },
+          reply_to_message: {
+            message_id: 584,
+            text: "We can meet around 2pm on friday. Write me in Telegram, share there the details"
+          }
+        }
+      },
+      {
+        allowedChatIds: new Set([111111]),
+        workspaceId: "default",
+        sendMessage,
+        orchestrate,
+        searchLeads,
+        createCalendarEvent
+      }
+    );
+
+    expect(lead).toEqual({ id: "lead-wachter", name: "Thomas Wachter" });
+    expect(orchestrate).toHaveBeenCalledWith(
+      expect.objectContaining({ text: expect.stringContaining("Replied message: We can meet around 2pm on friday") })
+    );
+    expect(searchLeads).toHaveBeenCalledWith({ workspaceId: "default", query: "Thomas watcher", limit: 5 });
+    expect(createCalendarEvent).toHaveBeenCalledWith(
+      expect.objectContaining({ leadId: "lead-wachter", startsAt: "2026-06-19T12:00:00.000Z" })
+    );
+  });
+
   it("links a secondary calendar event to a newly created lead", async () => {
     const sendMessage = vi.fn();
     const createLead = vi.fn().mockResolvedValue({ id: "lead-501", name: "Thomas Wachter" });
@@ -1980,7 +2343,7 @@ describe("telegram bot core", () => {
         startsAt: "2026-06-18T14:00:00.000Z"
       })
     );
-    expect(sendMessage).toHaveBeenCalledWith(111111, expect.stringContaining("<b>Calendar</b>: Thomas Wachter - 18.06.2026, 16:00"), expect.anything());
+    expect(sendMessage).toHaveBeenCalledWith(111111, expect.stringContaining("<i>Calendar</i>: Thomas Wachter - <b>18.06.2026, 16:00</b>"), expect.anything());
   });
 
   it("asks before attaching attachment-only intake to the active lead", async () => {

@@ -22,6 +22,7 @@ export type TelegramUser = {
 
 export type TelegramMessage = {
   message_id: number;
+  date?: number;
   text?: string;
   caption?: string;
   media_group_id?: string;
@@ -144,11 +145,27 @@ export type TelegramBotDeps = {
   archiveLead?: (input: TelegramArchiveLeadInput) => Promise<unknown>;
   createPendingAttachmentDecision?: (input: PendingAttachmentDecision) => string;
   takePendingAttachmentDecision?: (id: string) => PendingAttachmentDecision | null;
+  createPendingClarification?: (input: PendingClarification) => string;
+  takePendingClarification?: (input: TakePendingClarificationInput) => PendingClarification | null;
 };
 
 export type PendingAttachmentDecision = {
   message: TelegramMessage;
   activeLead: Pick<Lead, "id" | "name">;
+};
+
+export type PendingClarification = {
+  chatId: number;
+  promptMessageId?: number | null;
+  message: TelegramMessage;
+  orchestrationText: string;
+  result: CrmOrchestrationResult;
+  kind: "calendar" | "reminder";
+};
+
+export type TakePendingClarificationInput = {
+  chatId: number;
+  replyToMessageId?: number | null;
 };
 
 export type TelegramLeadSearchInput = {
@@ -265,6 +282,9 @@ export type TelegramGeneratedDocument = {
   mimeType: string | null;
   bytes: Uint8Array;
   caption?: string;
+  offerVersion?: number | null;
+  offerMissingFields?: string[];
+  offerTotalGross?: number | null;
 };
 
 export type TelegramSendMessageOptions = {
@@ -350,11 +370,59 @@ export function formatOrchestrationReply(
 }
 
 function helpText(): string {
-  return [
-    "LightCrm bot is running.",
-    "Send a lead/update/reminder message and I will return a LangGraph plan or execution result.",
-    "Current mode: auto-safe lead/client writes are enabled; review-risk actions stay as previews."
-  ].join("\n");
+  return helpResponse("general");
+}
+
+type HelpTopic = "intro" | "general" | "lead" | "reminder" | "offer" | "files" | "mobile";
+
+function helpResponse(topic: HelpTopic): string {
+  const replies: Record<HelpTopic, string> = {
+    intro: [
+      "LightCrm help",
+      "I am your CRM assistant for leads, documents, reminders, and commercial offers.",
+      "Send me a client request, forwarded message, file, image, PDF, or voice note. I will save it to the right lead or create a draft when it looks new.",
+      "Ask naturally how leads, reminders, files, mobile CRM, or offers work."
+    ].join("\n"),
+    general: [
+      "LightCrm help",
+      "1. New lead: send the request, files, screenshots, or voice notes. I can create a draft lead when some details are still missing.",
+      "2. Update lead: reply to a lead card and write what changed.",
+      "3. Reminder: write: remind me in two weeks to call the client.",
+      "4. Offer: open a lead card and tap offer. I will generate the DOCX if the price can be calculated.",
+      "5. CRM: tap CRM to open the lead in the web/mobile app."
+    ].join("\n"),
+    lead: [
+      "New lead",
+      "Send the client request in one message if possible. You can add PDFs, images, voice notes, and forwarded context.",
+      "Good example: the client asks for a house in Munich, 140 m2, and wants an LP 3-4 offer.",
+      "If details are missing, I will create a draft lead and you can fill it later."
+    ].join("\n"),
+    reminder: [
+      "Reminders",
+      "Write a natural request with a date or relative time.",
+      "Example: remind me in two weeks to send the offer.",
+      "If you reply to a lead card, the reminder will be linked to that lead."
+    ].join("\n"),
+    offer: [
+      "Commercial offers",
+      "Tap offer on a lead card. I use the active DOCX template and fee table from CRM settings.",
+      "If the price is ready, I send back a DOCX like commercial-offer-v1.",
+      "If fields are missing, I will say what to add before sending, for example: client name, project address."
+    ].join("\n"),
+    files: [
+      "Files and documents",
+      "Send PDFs, images, documents, or voice notes with a short caption.",
+      "I save them in Downloads, summarize them, and attach them to the active or replied lead.",
+      "Recent documents appear first. Commercial offers are shown as V1, V2, V3."
+    ].join("\n"),
+    mobile: [
+      "Mobile and TG",
+      "Use TG for quick intake: forward requests, add files, and reply to lead cards.",
+      "Use CRM for review: tap CRM to open the lead card, documents, calendar, and details.",
+      "On mobile, lead cards are compact and show summary, downloads, and next actions."
+    ].join("\n")
+  };
+  return replies[topic];
 }
 
 function forwardedSource(message: TelegramMessage): string | null {
@@ -468,9 +536,9 @@ function leadNameFromFacts(result: CrmOrchestrationResult, fallbackText: string)
   }
   const projectParts = [result.facts.projectType, result.facts.location].filter(Boolean);
   if (projectParts.length > 0) {
-    return projectParts.join(" - ").slice(0, 120);
+    return projectParts.join(" - ");
   }
-  return fallbackText.slice(0, 80) || "TG lead";
+  return fallbackText.replace(/\s+/g, " ").trim() || "TG lead";
 }
 
 function draftLeadName(message: TelegramMessage, attachments: TelegramAttachment[]): string {
@@ -995,6 +1063,26 @@ function extractLeadIdFromReply(reply: TelegramReplyMessage | undefined): string
   return match?.[1] ?? null;
 }
 
+function replyText(reply: TelegramReplyMessage | undefined): string {
+  return [reply?.text, reply?.caption].filter(Boolean).join("\n").trim();
+}
+
+function appendReplyContext(text: string, reply: TelegramReplyMessage | undefined): string {
+  const replied = replyText(reply);
+  if (!replied || extractLeadIdFromReply(reply)) {
+    return text;
+  }
+  return [text.trim(), `Replied message: ${replied}`].filter(Boolean).join("\n\n");
+}
+
+function sentTelegramMessageId(value: unknown): number | null {
+  if (!value || typeof value !== "object" || !("message_id" in value)) {
+    return null;
+  }
+  const messageId = (value as { message_id?: unknown }).message_id;
+  return typeof messageId === "number" && Number.isSafeInteger(messageId) ? messageId : null;
+}
+
 function leadCardReplyMarkup(
   deps: TelegramBotDeps,
   lead: Pick<Lead, "id" | "name"> & Partial<Pick<Lead, "code">>
@@ -1111,11 +1199,15 @@ function telegramLeadDownloadsQuote(documents: TelegramLeadDocument[]): string |
     return null;
   }
   const title = `Downloads: ${documents.length} ${documents.length === 1 ? "item" : "items"}`;
+  const labels = labelTelegramDocuments(documents);
   const documentLine = (document: TelegramLeadDocument, index: number) => {
     const summary = document.shortSummary || document.longSummary || "No summary yet.";
     const createdAt = compactDocumentDate(document.createdAt);
+    const label = document.downloadUrl
+      ? `<a href="${escapeHtml(document.downloadUrl)}">${escapeHtml(labels[index] ?? documentKindLabel(document))}</a>`
+      : escapeHtml(labels[index] ?? documentKindLabel(document));
     return [
-      `${index + 1}. ${escapeHtml(compactLine(document.fileName, 34))}`,
+      label,
       escapeHtml(compactLine(summary, documents.length === 1 ? 120 : 80)),
       createdAt ? escapeHtml(createdAt) : null
     ]
@@ -1127,6 +1219,68 @@ function telegramLeadDownloadsQuote(documents: TelegramLeadDocument[]): string |
   }
   const body = documents.slice(0, 8).map(documentLine).join("; ");
   return expandableQuote(title, body);
+}
+
+function documentKindLabel(document: Pick<TelegramLeadDocument, "fileName" | "mimeType">): string {
+  const offerVersion = commercialOfferVersionLabel(document);
+  if (offerVersion) {
+    return offerVersion;
+  }
+  const fileName = document.fileName.toLocaleLowerCase();
+  const mimeType = document.mimeType?.toLocaleLowerCase() ?? "";
+  if (mimeType.startsWith("image/") || /\.(png|jpe?g|gif|webp|heic|heif|bmp|tiff?)$/i.test(fileName)) {
+    return "picture";
+  }
+  if (mimeType === "application/pdf" || fileName.endsWith(".pdf")) {
+    return "PDF";
+  }
+  if (
+    mimeType.includes("spreadsheet") ||
+    mimeType.includes("excel") ||
+    /\.(xlsx?|csv|ods)$/i.test(fileName)
+  ) {
+    return "spreadsheet";
+  }
+  if (
+    mimeType.includes("word") ||
+    mimeType.includes("officedocument.wordprocessingml") ||
+    /\.(docx?|rtf)$/i.test(fileName)
+  ) {
+    return "DOC";
+  }
+  if (mimeType.startsWith("audio/") || /\.(mp3|m4a|ogg|wav|aac|opus)$/i.test(fileName)) {
+    return "audio";
+  }
+  if (mimeType.startsWith("video/") || /\.(mp4|mov|avi|mkv|webm)$/i.test(fileName)) {
+    return "video";
+  }
+  return "document";
+}
+
+function commercialOfferVersionLabel(document: Pick<TelegramLeadDocument, "fileName"> & { shortSummary?: string | null }): string | null {
+  const combined = `${document.fileName} ${document.shortSummary ?? ""}`.toLocaleLowerCase();
+  if (!combined.includes("commercial offer")) {
+    return null;
+  }
+  const versionMatch =
+    combined.match(/commercial-offer-v(\d+)/) ??
+    combined.match(/\bcommercial offer v(\d+)\b/) ??
+    combined.match(/\boffer v(\d+)\b/);
+  return versionMatch?.[1] ? `V${versionMatch[1]}` : "offer";
+}
+
+function labelTelegramDocuments(documents: Array<Pick<TelegramLeadDocument, "fileName" | "mimeType" | "shortSummary">>): string[] {
+  const baseLabels = documents.map(documentKindLabel);
+  const counts = new Map<string, number>();
+  for (const label of baseLabels) {
+    counts.set(label, (counts.get(label) ?? 0) + 1);
+  }
+  const seen = new Map<string, number>();
+  return baseLabels.map((label) => {
+    const next = (seen.get(label) ?? 0) + 1;
+    seen.set(label, next);
+    return (counts.get(label) ?? 0) > 1 ? `${label} ${next}` : label;
+  });
 }
 
 function displaySummaryText(lead: TelegramLeadCard): string | null {
@@ -1226,11 +1380,6 @@ function telegramLeadFullSummaryTextCompact(lead: TelegramLeadCard): string {
     .slice(0, 3900);
 }
 
-function compactDocumentButtonLabel(fileName: string, index: number): string {
-  const compacted = compactLine(fileName.replace(/\.[^.]+$/, ""), 24);
-  return `${index + 1}. ${compacted}`;
-}
-
 function compactDocumentDate(value: string | Date | null | undefined): string | null {
   if (!value) {
     return null;
@@ -1263,28 +1412,33 @@ function telegramCalendarLine(events: TelegramCalendarEventResult[]): string | n
       events.length > 1 ? `${index + 1}.` : null,
       escapeHtml(event.title),
       "-",
-      escapeHtml(formatTelegramDateTime(event.startsAt))
+      `<b>${escapeHtml(formatTelegramDateTime(event.startsAt))}</b>`
     ]
       .filter((part): part is string => Boolean(part))
       .join(" ");
   if (events.length === 1) {
-    return `<b>Calendar</b>: ${eventLine(events[0]!, 0)}`;
+    return `<i>Calendar</i>: ${eventLine(events[0]!, 0)}`;
   }
-  return expandableQuote("Calendar", events.map(eventLine).join("; "));
+  return `<i>Calendar</i>: ${events.map(eventLine).join("; ")}`;
 }
 
 function telegramLeadDownloadsText(documents: TelegramLeadDocument[]): string {
   if (documents.length === 0) {
     return ["<b>Downloads</b>", "No documents are attached to this lead yet."].join("\n");
   }
+  const labels = labelTelegramDocuments(documents);
   return [
     "<b>Downloads</b>",
     ...documents.flatMap((document, index) => {
       const summary = document.shortSummary || document.longSummary || "No description yet.";
       const createdAt = compactDocumentDate(document.createdAt);
+      const label = labels[index] ?? documentKindLabel(document);
+      const linkedLabel = document.downloadUrl
+        ? `<a href="${escapeHtml(document.downloadUrl)}">${escapeHtml(label)}</a>`
+        : escapeHtml(label);
       return [
         "",
-        `${index + 1}. <b>${escapeHtml(compactLine(document.fileName, 70))}</b>`,
+        `${index + 1}. <b>${linkedLabel}</b>`,
         `description: ${escapeHtml(compactLine(summary, 180))}`,
         createdAt ? `added: ${escapeHtml(createdAt)}` : null
       ].filter((line): line is string => Boolean(line));
@@ -1295,10 +1449,12 @@ function telegramLeadDownloadsText(documents: TelegramLeadDocument[]): string {
 }
 
 function telegramLeadDownloadsReplyMarkup(documents: TelegramLeadDocument[]): TelegramSendMessageOptions | undefined {
+  const labels = labelTelegramDocuments(documents);
   const rows = documents
-    .filter((document) => Boolean(document.downloadUrl))
+    .map((document, index) => ({ document, label: labels[index] ?? documentKindLabel(document) }))
+    .filter(({ document }) => Boolean(document.downloadUrl))
     .slice(0, 8)
-    .map((document, index) => [{ text: compactDocumentButtonLabel(document.fileName, index), url: document.downloadUrl! }]);
+    .map(({ document, label }) => [{ text: label, url: document.downloadUrl! }]);
   if (rows.length === 0) {
     return undefined;
   }
@@ -1373,6 +1529,134 @@ async function maybeSearchLeads(
   return true;
 }
 
+function explicitLeadQuery(text: string): string | null {
+  const normalized = text.replace(/\s+/g, " ").trim();
+  const fullCode = normalized.match(/\bL-\d{4}-\d{1,6}\b/i)?.[0];
+  if (fullCode) {
+    return fullCode.toUpperCase();
+  }
+  const shortCode =
+    normalized.match(/(?:#|lead\s*|лид\s*|лиду\s*|лида\s*|к\s+)(\d{1,6})\b/i)?.[1] ??
+    normalized.match(/\b0*(\d{1,6})\b/)?.[1];
+  if (shortCode && /(?:#|lead|лид|лиду|лида|к\s+)\s*0*\d/i.test(normalized)) {
+    return `L-2026-${shortCode.padStart(3, "0")}`;
+  }
+  return null;
+}
+
+function leadTargetQuery(text: string): string {
+  const explicit = explicitLeadQuery(text);
+  if (explicit) {
+    return explicit;
+  }
+  return text
+    .replace(/\b(this\s+is\s+)?for\b/gi, " ")
+    .replace(/\bbelongs\s+to\b/gi, " ")
+    .replace(/\badd\s+(this\s+)?to\b/gi, " ")
+    .replace(/\battach\s+(this\s+)?to\b/gi, " ")
+    .replace(/\blead\b/gi, " ")
+    .replace(/(?:это\s+)?(?:для|к|ко|относится\s+к|добавь\s+к|прикрепи\s+к|прислюнь\s+к)\s+/gi, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+async function resolveLeadFromDirectorText(
+  text: string,
+  deps: TelegramBotDeps
+): Promise<(Pick<Lead, "id" | "name"> & Partial<Pick<Lead, "code">>) | null> {
+  if (!deps.searchLeads) {
+    return null;
+  }
+  const query = leadTargetQuery(text);
+  if (!query) {
+    return null;
+  }
+  const search = await deps.searchLeads({ workspaceId: deps.workspaceId, query, limit: 5 });
+  if (search.matches.length === 0) {
+    return null;
+  }
+  const normalizedQuery = query.toLocaleLowerCase();
+  return (
+    search.matches.find((match) => match.code?.toLocaleLowerCase() === normalizedQuery) ??
+    search.matches.find((match) => match.name.toLocaleLowerCase() === normalizedQuery) ??
+    search.matches.find((match) => match.name.toLocaleLowerCase().includes(normalizedQuery)) ??
+    search.matches[0] ??
+    null
+  );
+}
+
+function pendingClarificationKind(result: CrmOrchestrationResult): PendingClarification["kind"] | null {
+  const requestsReview = result.actions.some((action) => action.type === "request_review");
+  if (!requestsReview || result.risk !== "review") {
+    return null;
+  }
+  if (result.intent === "create_meeting" || result.actions.some((action) => action.type === "create_meeting")) {
+    return "calendar";
+  }
+  if (result.intent === "create_reminder" || result.actions.some((action) => action.type === "create_reminder")) {
+    return "reminder";
+  }
+  return null;
+}
+
+function resumePendingResult(
+  pending: PendingClarification,
+  lead: Pick<Lead, "id" | "name">
+): CrmOrchestrationResult {
+  const actionType = pending.kind === "calendar" ? "create_meeting" : "create_reminder";
+  return {
+    ...pending.result,
+    risk: "auto",
+    facts: {
+      ...pending.result.facts,
+      contactName: pending.result.facts.contactName ?? lead.name
+    },
+    actions: [
+      {
+        type: actionType,
+        risk: "auto",
+        reason: `Clarification selected ${lead.name}.`,
+        payload: { targetId: lead.id }
+      }
+    ],
+    explanations: [`Resumed pending ${pending.kind} clarification for ${lead.name}.`]
+  };
+}
+
+async function maybeResumePendingClarification(
+  message: TelegramMessage,
+  text: string,
+  deps: TelegramBotDeps
+): Promise<Pick<Lead, "id" | "name"> | null | undefined> {
+  const pending = deps.takePendingClarification?.({
+    chatId: message.chat.id,
+    replyToMessageId: message.reply_to_message?.message_id ?? null
+  });
+  if (!pending) {
+    return undefined;
+  }
+  const targetLead = await resolveLeadFromDirectorText(text, deps);
+  if (!targetLead) {
+    await deps.sendMessage(message.chat.id, `I could not find a lead for: ${leadTargetQuery(text) || text.trim()}`);
+    return null;
+  }
+  const result = resumePendingResult(pending, targetLead);
+  const resumedText = [pending.orchestrationText, text.trim() ? `Clarification: ${text.trim()}` : null]
+    .filter((line): line is string => Boolean(line))
+    .join("\n\n");
+  const resumedMessage = {
+    ...message,
+    message_id: pending.message.message_id,
+    date: pending.message.date ?? message.date
+  };
+  if (pending.kind === "calendar") {
+    const outcome = await maybeCreateCalendarEvent(resumedMessage, resumedText, result, targetLead.id, deps);
+    return outcome.handled ? { id: targetLead.id, name: targetLead.name } : null;
+  }
+  const outcome = await maybeCreateReminder(resumedMessage, resumedText, result, targetLead.id, deps);
+  return outcome.handled ? { id: targetLead.id, name: targetLead.name } : null;
+}
+
 function reminderTitle(text: string, result: CrmOrchestrationResult): string {
   return (
     result.facts.projectName ??
@@ -1385,6 +1669,28 @@ function reminderTitle(text: string, result: CrmOrchestrationResult): string {
 
 const LOCAL_DATE_TIME_RE = /^(\d{4})-(\d{2})-(\d{2})[T\s](\d{2}):(\d{2})(?::(\d{2})(?:\.\d{1,3})?)?$/;
 const DATE_TIME_WITH_ZONE_RE = /(?:z|[+-]\d{2}:?\d{2})$/i;
+const WEEKDAY_TIME_RE =
+  /\b(monday|tuesday|wednesday|thursday|friday|saturday|sunday|понедельник|вторник|среда|среду|четверг|пятница|пятницу|суббота|субботу|воскресенье)\b(?:\s*(?:at|around|около|в)?\s*)?(\d{1,2})(?::(\d{2}))?\s*(am|pm)?\b/i;
+
+const WEEKDAY_INDEX: Record<string, number> = {
+  sunday: 0,
+  monday: 1,
+  tuesday: 2,
+  wednesday: 3,
+  thursday: 4,
+  friday: 5,
+  saturday: 6,
+  воскресенье: 0,
+  понедельник: 1,
+  вторник: 2,
+  среда: 3,
+  среду: 3,
+  четверг: 4,
+  пятница: 5,
+  пятницу: 5,
+  суббота: 6,
+  субботу: 6
+};
 
 function timeZoneOffsetMs(timeZone: string, date: Date): number {
   const parts = new Intl.DateTimeFormat("en-US", {
@@ -1425,9 +1731,73 @@ function localDateTimeToUtcIso(value: string, timeZone: string): string | null {
   return new Date(localAsUtc.getTime() - secondOffset).toISOString();
 }
 
-function normalizeReminderDueAt(value: string, timeZone = process.env.LIGHTCRM_TIME_ZONE ?? "Europe/Paris"): string | null {
+function datePartsInTimeZone(date: Date, timeZone: string): { year: number; month: number; day: number; weekday: number } {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    weekday: "short"
+  }).formatToParts(date);
+  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  const weekday = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].indexOf(values.weekday ?? "");
+  return {
+    year: Number(values.year),
+    month: Number(values.month),
+    day: Number(values.day),
+    weekday: weekday >= 0 ? weekday : date.getUTCDay()
+  };
+}
+
+function addDaysToYmd(year: number, month: number, day: number, days: number): { year: number; month: number; day: number } {
+  const next = new Date(Date.UTC(year, month - 1, day + days));
+  return { year: next.getUTCFullYear(), month: next.getUTCMonth() + 1, day: next.getUTCDate() };
+}
+
+function relativeWeekdayTimeToUtcIso(value: string, timeZone: string, referenceDate: Date): string | null {
+  const normalized = value.trim().replace(/\s+/g, " ");
+  const match = WEEKDAY_TIME_RE.exec(normalized);
+  if (!match) {
+    return null;
+  }
+  const weekday = WEEKDAY_INDEX[match[1]!.toLocaleLowerCase()];
+  if (weekday === undefined) {
+    return null;
+  }
+  let hour = Number(match[2]);
+  const minute = Number(match[3] ?? "0");
+  const meridiem = match[4]?.toLocaleLowerCase();
+  if (meridiem === "pm" && hour < 12) {
+    hour += 12;
+  }
+  if (meridiem === "am" && hour === 12) {
+    hour = 0;
+  }
+  if (hour > 23 || minute > 59) {
+    return null;
+  }
+  const reference = datePartsInTimeZone(referenceDate, timeZone);
+  const daysAhead = (weekday - reference.weekday + 7) % 7 || 7;
+  const target = addDaysToYmd(reference.year, reference.month, reference.day, daysAhead);
+  return localDateTimeToUtcIso(
+    `${target.year}-${String(target.month).padStart(2, "0")}-${String(target.day).padStart(2, "0")}T${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}:00`,
+    timeZone
+  );
+}
+
+function messageReferenceDate(message: TelegramMessage): Date {
+  return typeof message.date === "number" && Number.isFinite(message.date) ? new Date(message.date * 1000) : new Date();
+}
+
+function normalizeReminderDueAt(
+  value: string,
+  timeZone = process.env.LIGHTCRM_TIME_ZONE ?? "Europe/Paris",
+  referenceDate = new Date()
+): string | null {
   const trimmed = value.trim();
-  const isoValue = DATE_TIME_WITH_ZONE_RE.test(trimmed) ? trimmed : localDateTimeToUtcIso(trimmed, timeZone);
+  const isoValue = DATE_TIME_WITH_ZONE_RE.test(trimmed)
+    ? trimmed
+    : localDateTimeToUtcIso(trimmed, timeZone) ?? relativeWeekdayTimeToUtcIso(trimmed, timeZone, referenceDate);
   if (!isoValue) {
     return null;
   }
@@ -1455,7 +1825,7 @@ async function maybeCreateReminder(
     await deps.sendMessage(message.chat.id, "reminder date is missing");
     return { handled: true, reminder: null };
   }
-  const dueAt = normalizeReminderDueAt(result.facts.dueAt);
+  const dueAt = normalizeReminderDueAt(result.facts.dueAt, undefined, messageReferenceDate(message));
   if (!dueAt) {
     await deps.sendMessage(message.chat.id, `reminder date is invalid: ${result.facts.dueAt}`);
     return { handled: true, reminder: null };
@@ -1507,7 +1877,7 @@ async function maybeCreateCalendarEvent(
     await deps.sendMessage(message.chat.id, "calendar event date is missing");
     return { handled: true, event: null };
   }
-  const startsAt = normalizeReminderDueAt(result.facts.dueAt);
+  const startsAt = normalizeReminderDueAt(result.facts.dueAt, undefined, messageReferenceDate(message));
   if (!startsAt) {
     await deps.sendMessage(message.chat.id, `calendar event date is invalid: ${result.facts.dueAt}`);
     return { handled: true, event: null };
@@ -1684,12 +2054,13 @@ export async function handleTelegramUpdate(
   }
 
   const text = message.text ?? message.caption ?? "";
+  const contextualText = appendReplyContext(text, message.reply_to_message);
   const attachments = extractTelegramAttachments(message);
-  const orchestrationText = buildOrchestrationText(message, text, attachments);
-  if (text === "/start" || text === "/help") {
+  if (text.trim() === "/start" || text.trim() === "/help") {
     await deps.sendMessage(chatId, helpText());
     return null;
   }
+  const orchestrationText = buildOrchestrationText(message, contextualText, attachments);
   if (!text.trim() && attachments.length === 0) {
     await deps.sendMessage(chatId, "Please send text or attach files so I can save a draft lead.");
     return null;
@@ -1698,6 +2069,10 @@ export async function handleTelegramUpdate(
   const orchestrate = deps.orchestrate ?? runCrmOrchestration;
   const author = authorName(message.from);
   const replyLeadId = extractLeadIdFromReply(message.reply_to_message);
+  const pendingClarification = await maybeResumePendingClarification(message, text, deps);
+  if (pendingClarification !== undefined) {
+    return pendingClarification;
+  }
   const replyLead = replyLeadId ? { id: replyLeadId, name: "replied lead" } : null;
   if (attachments.length > 1) {
     await deps.sendMessage(chatId, "reviewing the files, back shortly");
@@ -1737,21 +2112,29 @@ export async function handleTelegramUpdate(
           sourceChannel: "telegram"
         })
       : draftOrchestrationResult(deps.workspaceId, message, orchestrationText, author, attachments);
+  if (result.intent === "system_help") {
+    await deps.sendMessage(chatId, helpResponse("general"));
+    return null;
+  }
   if (await maybeSearchLeads(message, orchestrationText, result, deps)) {
     return null;
   }
   const shouldCreateLead = hasAutoAction(result, "create_lead");
+  const resolvedTargetLead = replyLeadId
+    ? null
+    : await resolveLeadFromDirectorText(text.trim() || result.facts.contactName || "", deps);
+  const targetLeadId = replyLeadId ?? resolvedTargetLead?.id ?? null;
   const standaloneCalendarEvent = shouldCreateLead
     ? { handled: false, event: null }
-    : await maybeCreateCalendarEvent(message, orchestrationText, result, replyLeadId, deps);
+    : await maybeCreateCalendarEvent(message, orchestrationText, result, targetLeadId, deps);
   if (standaloneCalendarEvent.handled) {
-    return replyLeadId ? { id: replyLeadId, name: "replied lead" } : null;
+    return replyLeadId ? { id: replyLeadId, name: "replied lead" } : resolvedTargetLead ? { id: resolvedTargetLead.id, name: resolvedTargetLead.name } : null;
   }
   const standaloneReminder = shouldCreateLead
     ? { handled: false, reminder: null }
-    : await maybeCreateReminder(message, orchestrationText, result, replyLeadId, deps);
+    : await maybeCreateReminder(message, orchestrationText, result, targetLeadId, deps);
   if (standaloneReminder.handled) {
-    return replyLeadId ? { id: replyLeadId, name: "replied lead" } : null;
+    return replyLeadId ? { id: replyLeadId, name: "replied lead" } : resolvedTargetLead ? { id: resolvedTargetLead.id, name: resolvedTargetLead.name } : null;
   }
   const updatedLead =
     result.intent === "attach_document" ? null : await maybeUpdateLead(message, orchestrationText, author, result, replyLeadId, deps);
@@ -1833,6 +2216,17 @@ export async function handleTelegramUpdate(
     return replyLead;
   }
 
-  await deps.sendMessage(chatId, formatOrchestrationReply(result));
+  const sent = await deps.sendMessage(chatId, formatOrchestrationReply(result));
+  const pendingKind = pendingClarificationKind(result);
+  if (pendingKind && deps.createPendingClarification) {
+    deps.createPendingClarification({
+      chatId,
+      promptMessageId: sentTelegramMessageId(sent),
+      message,
+      orchestrationText,
+      result,
+      kind: pendingKind
+    });
+  }
   return null;
 }

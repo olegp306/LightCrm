@@ -3,6 +3,7 @@ import {
   applyTablePreferences,
   buildCreateRecordPayload,
   compactDocumentTitle,
+  documentDisplayLabel,
   documentExtensionLabel,
   formatAreaValue,
   nextActionStateForTodo,
@@ -176,6 +177,13 @@ describe("table-model", () => {
     expect(documentExtensionLabel("budget.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")).toBe("XLS");
     expect(compactDocumentTitle("architectural-layout-final-version.pdf")).toBe("architectu…l-version");
     expect(compactDocumentTitle("brief.pdf")).toBe("brief");
+  });
+
+  it("formats visible document links with readable type labels", () => {
+    expect(documentDisplayLabel("telegram-photo-1866.jpg", "image/jpeg")).toBe("Picture");
+    expect(documentDisplayLabel("telegram-photo-1867.jpg", "image/jpeg", 1)).toBe("Picture 2");
+    expect(documentDisplayLabel("offer.pdf", "application/pdf")).toBe("PDF");
+    expect(documentDisplayLabel("offer-final.pdf", "application/pdf", 1)).toBe("PDF 2");
   });
 
   it("formats lead area values with readable units", () => {

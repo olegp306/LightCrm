@@ -1,7 +1,7 @@
 import { evaluateCommercialOfferReadiness } from "@lightcrm/core";
 import { storeCrmFile } from "@lightcrm/storage";
 import { randomUUID } from "node:crypto";
-import type { createCrmService } from "@lightcrm/core";
+import type { createCrmService, DocumentFile } from "@lightcrm/core";
 import {
   getCrmRuntimeSettings,
   readActiveOfferTemplate,
@@ -20,6 +20,7 @@ const noteFields = {
 export type CommercialOfferGenerationResult = {
   document: Awaited<ReturnType<CrmService["upsertDocumentFile"]>>;
   readiness: ReturnType<typeof evaluateCommercialOfferReadiness>;
+  offerVersion: number;
 };
 
 export type CommercialOfferAutoResult =
@@ -39,8 +40,19 @@ function readNumber(value: string | null): number | null {
   if (!value) {
     return null;
   }
-  const match = value.replace(",", ".").match(/\d+(?:\.\d+)?/);
-  return match ? Number(match[0]) : null;
+  const match = value.match(/\d[\d\s.,]*/);
+  if (!match) {
+    return null;
+  }
+  const raw = match[0].replace(/\s+/g, "");
+  const normalized =
+    raw.includes(".") && raw.includes(",")
+      ? raw.replace(/\./g, "").replace(",", ".")
+      : raw.includes(".") && /^\d{1,3}(?:\.\d{3})+$/.test(raw)
+        ? raw.replace(/\./g, "")
+        : raw.replace(",", ".");
+  const numeric = Number(normalized);
+  return Number.isFinite(numeric) ? numeric : null;
 }
 
 function formatCurrency(value: number | null): string | null {
@@ -61,6 +73,16 @@ function projectTypeFromLead(project: string | null, description: string | null)
     return "EFH Neubau";
   }
   return null;
+}
+
+function nextCommercialOfferVersion(documents: DocumentFile[], leadId: string): number {
+  const activeLeadOffers = documents.filter(
+    (document) =>
+      document.leadId === leadId &&
+      document.archivedAt === null &&
+      document.shortSummary.toLocaleLowerCase().startsWith("commercial offer")
+  );
+  return activeLeadOffers.length + 1;
 }
 
 export async function generateCommercialOfferForLead(input: {
@@ -115,6 +137,12 @@ export async function generateCommercialOfferForLead(input: {
   }
 
   const now = new Date();
+  const existingDocuments = await input.crm.listRecords({
+    entity: "documentFile",
+    workspaceId: input.workspaceId,
+    includeArchived: true
+  });
+  const offerVersion = nextCommercialOfferVersion(existingDocuments, lead.id);
   const validUntil = new Date(now);
   validUntil.setDate(validUntil.getDate() + settings.commercialOffers.offerValidityDays);
   const values = {
@@ -140,7 +168,7 @@ export async function generateCommercialOfferForLead(input: {
 
   const template = await readActiveOfferTemplate();
   const rendered = renderDocxTemplate(template, values);
-  const fileName = `${lead.code ?? lead.id}-commercial-offer.docx`;
+  const fileName = `${lead.code ?? lead.id}-commercial-offer-v${offerVersion}.docx`;
   const stored = await storeCrmFile({
     bytes: new Uint8Array(rendered),
     fileName,
@@ -155,8 +183,8 @@ export async function generateCommercialOfferForLead(input: {
     leadId: lead.id,
     clientId: lead.clientId,
     fileName: stored.fileName,
-    shortSummary: `Commercial offer ${formatCurrency(readiness.values.totalGross)} EUR gross`,
-    longSummary: `Generated commercial offer from active DOCX template. Missing fields: ${
+    shortSummary: `Commercial offer v${offerVersion} ${formatCurrency(readiness.values.totalGross)} EUR gross`,
+    longSummary: `Generated commercial offer v${offerVersion} from active DOCX template. Missing fields: ${
       readiness.missingFields.join(", ") || "none"
     }.`,
     downloadUrl: stored.downloadUrl,
@@ -167,7 +195,7 @@ export async function generateCommercialOfferForLead(input: {
     sizeBytes: stored.sizeBytes
   });
 
-  return { document, readiness };
+  return { document, readiness, offerVersion };
 }
 
 export async function maybeAutoGenerateCommercialOfferForLead(input: {

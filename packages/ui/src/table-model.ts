@@ -328,6 +328,21 @@ export function documentExtensionLabel(fileName: string, mimeType?: string | nul
   return (ext || "FILE").slice(0, 4).toUpperCase();
 }
 
+export function documentDisplayLabel(fileName: string, mimeType: string | null | undefined, sameTypeIndex = 0): string {
+  const extension = documentExtensionLabel(fileName, mimeType);
+  const label =
+    extension === "IMG"
+      ? "Picture"
+      : extension === "AUD"
+        ? "Audio"
+        : extension === "XLS"
+          ? "Sheet"
+          : extension === "DOC"
+            ? "DOC"
+            : extension;
+  return sameTypeIndex > 0 ? `${label} ${sameTypeIndex + 1}` : label;
+}
+
 export function compactDocumentTitle(fileName: string, maxLength = 20): string {
   const base = fileName.replace(/\.[^.]+$/, "");
   if (base.length <= maxLength) {

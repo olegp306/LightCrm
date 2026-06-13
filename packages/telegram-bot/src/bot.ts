@@ -17,7 +17,9 @@ import {
   type TelegramLeadSearchInput,
   type TelegramLeadSearchResult,
   type TelegramLeadUpdateInput,
+  type PendingClarification,
   type PendingAttachmentDecision,
+  type TakePendingClarificationInput,
   type TelegramReminderInput,
   type TelegramReminderResult,
   type TelegramSendMessageOptions,
@@ -52,6 +54,7 @@ const activeLeadTtlMs = Number(process.env.TELEGRAM_ACTIVE_LEAD_TTL_MS ?? 30 * 6
 const pendingAttachmentDecisionTtlMs = Number(
   process.env.TELEGRAM_PENDING_ATTACHMENT_DECISION_TTL_MS ?? 10 * 60 * 1000
 );
+const pendingClarificationTtlMs = Number(process.env.TELEGRAM_PENDING_CLARIFICATION_TTL_MS ?? 15 * 60 * 1000);
 const crmAppBaseUrl = process.env.NEXT_PUBLIC_APP_URL ?? process.env.NEXTAUTH_URL ?? crmApiBase;
 const attachmentAnalysisModelFallback = process.env.OPENAI_MODEL ?? "gpt-4.1-mini";
 const attachmentAudioModel = process.env.OPENAI_AUDIO_MODEL ?? "whisper-1";
@@ -245,7 +248,7 @@ async function listLeadDocuments(input: TelegramLeadDocumentsInput): Promise<Tel
   const lead = payload.find((item) => item.id === input.leadId || item.code === input.leadId);
   const documents = (lead?.documents ?? [])
     .slice()
-    .sort((left, right) => new Date(left.createdAt ?? 0).getTime() - new Date(right.createdAt ?? 0).getTime())
+    .sort((left, right) => new Date(right.createdAt ?? 0).getTime() - new Date(left.createdAt ?? 0).getTime())
     .slice(0, input.limit ?? 8)
     .map((document) => ({
       ...document,
@@ -288,6 +291,13 @@ type GenerateOfferResponse = {
     downloadUrl?: string | null;
     mimeType?: string | null;
   };
+  offerVersion?: number;
+  readiness?: {
+    missingFields?: string[];
+    values?: {
+      totalGross?: number | null;
+    };
+  };
 };
 
 function absoluteCrmUrl(value: string): string {
@@ -316,8 +326,40 @@ async function generateOffer(leadId: string): Promise<TelegramGeneratedDocument>
       document.mimeType ??
       "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     bytes: new Uint8Array(await response.arrayBuffer()),
-    caption: "commercial offer ready"
+    caption: formatOfferDocumentCaption(payload.offerVersion, payload.readiness),
+    offerVersion: payload.offerVersion ?? null,
+    offerMissingFields: payload.readiness?.missingFields ?? [],
+    offerTotalGross: payload.readiness?.values?.totalGross ?? null
   };
+}
+
+function formatOfferCurrency(value: number | null | undefined): string | null {
+  return typeof value === "number" && Number.isFinite(value)
+    ? value.toLocaleString("de-DE", { maximumFractionDigits: 0 })
+    : null;
+}
+
+function humanOfferFieldName(value: string): string {
+  const labels: Record<string, string> = {
+    bgf: "project area / BGF",
+    project_name: "project name",
+    project_address: "project address",
+    client_name: "client name"
+  };
+  return labels[value] ?? value.replace(/_/g, " ");
+}
+
+function formatOfferDocumentCaption(version: number | undefined, readiness: GenerateOfferResponse["readiness"]): string {
+  const total = formatOfferCurrency(readiness?.values?.totalGross);
+  const missingFields = readiness?.missingFields?.map(humanOfferFieldName).filter(Boolean) ?? [];
+  const title = `commercial offer${version ? ` v${version}` : ""} ready${total ? `: ${total} EUR gross` : ""}`;
+  if (missingFields.length === 0) {
+    return `${title}\nAll key offer fields are filled.`;
+  }
+  return [
+    title,
+    `Please add before sending: ${missingFields.join(", ")}.`
+  ].join("\n");
 }
 
 async function prepareAttachment(input: PrepareTelegramAttachmentInput): Promise<LeadIntakeAttachmentInput> {
@@ -376,11 +418,20 @@ async function runPolling() {
   const chatIntakes = new Map<string, ChatIntakeBuffer>();
   const activeLeads = new Map<string, { lead: { id: string; name: string }; updatedAt: number }>();
   const pendingAttachmentDecisions = new Map<string, PendingAttachmentDecision & { createdAt: number }>();
+  const pendingClarifications = new Map<string, PendingClarification & { id: string; createdAt: number }>();
   let pendingAttachmentDecisionCounter = 0;
+  let pendingClarificationCounter = 0;
   const cleanupPendingAttachmentDecisions = (now: number) => {
     for (const [id, pending] of pendingAttachmentDecisions) {
       if (now - pending.createdAt > pendingAttachmentDecisionTtlMs) {
         pendingAttachmentDecisions.delete(id);
+      }
+    }
+  };
+  const cleanupPendingClarifications = (now: number) => {
+    for (const [id, pending] of pendingClarifications) {
+      if (now - pending.createdAt > pendingClarificationTtlMs) {
+        pendingClarifications.delete(id);
       }
     }
   };
@@ -402,6 +453,34 @@ async function runPolling() {
       activeLead: pending.activeLead
     };
   };
+  const createPendingClarification = (input: PendingClarification) => {
+    cleanupPendingClarifications(Date.now());
+    pendingClarificationCounter += 1;
+    const id = `${Date.now().toString(36)}c${pendingClarificationCounter.toString(36)}`;
+    pendingClarifications.set(id, { ...input, id, createdAt: Date.now() });
+    return id;
+  };
+  const takePendingClarification = (input: TakePendingClarificationInput) => {
+    cleanupPendingClarifications(Date.now());
+    const entries = [...pendingClarifications.entries()].filter(([, pending]) => pending.chatId === input.chatId);
+    const matchByReply = input.replyToMessageId
+      ? entries.find(([, pending]) => pending.promptMessageId === input.replyToMessageId)
+      : null;
+    const match = matchByReply ?? entries.sort((left, right) => right[1].createdAt - left[1].createdAt)[0] ?? null;
+    if (!match) {
+      return null;
+    }
+    pendingClarifications.delete(match[0]);
+    const pending = match[1];
+    return {
+      chatId: pending.chatId,
+      promptMessageId: pending.promptMessageId,
+      message: pending.message,
+      orchestrationText: pending.orchestrationText,
+      result: pending.result,
+      kind: pending.kind
+    };
+  };
   for (;;) {
     try {
       const updates = await getUpdates(offset);
@@ -414,6 +493,7 @@ async function runPolling() {
       }
       const now = Date.now();
       cleanupPendingAttachmentDecisions(now);
+      cleanupPendingClarifications(now);
       const nextOffset =
         updates.length > 0 ? Math.max(...updates.map((update) => update.update_id)) + 1 : offset;
       const mediaReady = collectReadyMediaGroupUpdates(updates, mediaGroups, mediaGroupFlushMs, now);
@@ -446,7 +526,9 @@ async function runPolling() {
             generateOffer,
             archiveLead,
             createPendingAttachmentDecision,
-            takePendingAttachmentDecision
+            takePendingAttachmentDecision,
+            createPendingClarification,
+            takePendingClarification
           });
           if (update.callback_query?.data?.startsWith("undo_lead:") && callbackChatId) {
             activeLeads.delete(String(callbackChatId));

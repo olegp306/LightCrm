@@ -22,6 +22,7 @@ import {
   applyTablePreferences,
   buildCreateRecordPayload,
   compactDocumentTitle,
+  documentDisplayLabel,
   documentExtensionLabel,
   formatAreaValue,
   nextActionStateForTodo,
@@ -36,6 +37,7 @@ import {
   type TablePreferences,
   type TableSort
 } from "./table-model";
+import { darkTableTheme, lightTableTheme, scaledTableTheme } from "./table-theme";
 
 type DrawCellArgs = Parameters<NonNullable<ComponentProps<typeof DataEditor>["drawCell"]>>[0];
 
@@ -286,40 +288,6 @@ function relatedTableHeaderTheme(color: string, isDarkMode: boolean): Partial<Th
 
 const groupHeaderHeight = 20;
 const rowMarkerWidth = 34;
-const lightTableTheme: Partial<Theme> = {
-  headerFontStyle: "600 12px",
-  bgCell: "#ffffff",
-  bgCellMedium: "#f7f8fb",
-  bgHeader: "#f7f8fb",
-  bgHeaderHovered: "#eef2f7",
-  bgBubble: "#ffffff",
-  borderColor: "#d9dee8",
-  horizontalBorderColor: "#e5e7ee",
-  textDark: "#172033",
-  textMedium: "#667085",
-  textHeader: "#344054",
-  bgIconHeader: "#667085",
-  accentColor: "#6d63ff",
-  accentLight: "#ebe9ff"
-};
-
-const darkTableTheme: Partial<Theme> = {
-  headerFontStyle: "600 12px",
-  bgCell: "#1f1f24",
-  bgCellMedium: "#24242a",
-  bgHeader: "#222228",
-  bgHeaderHovered: "#30303a",
-  bgBubble: "#2a2a31",
-  borderColor: "#3a3a45",
-  horizontalBorderColor: "#34343d",
-  textDark: "#f4f5f8",
-  textMedium: "#b6bac8",
-  textHeader: "#d9dbe5",
-  bgIconHeader: "#8e93a6",
-  accentColor: "#8b8cff",
-  accentLight: "#323257"
-};
-
 const documentChipWidth = 106;
 const documentIconChipWidth = 26;
 const documentChipGap = 1;
@@ -409,17 +377,6 @@ function readSavedTableColor(key: string): string {
   } catch {
     return defaultTableColor;
   }
-}
-
-function scaledTableTheme(theme: Partial<Theme>, scale: number): Partial<Theme> {
-  const cellFontSize = Math.round(13 * scale);
-  const headerFontSize = Math.round(12 * scale);
-  return {
-    ...theme,
-    baseFontStyle: `${cellFontSize}px`,
-    editorFontSize: `${cellFontSize}px`,
-    headerFontStyle: `600 ${headerFontSize}px`
-  };
 }
 
 function columnFontStyle(baseTheme: Partial<Theme>, textStyle?: ColumnTextStyle): string | undefined {
@@ -741,7 +698,7 @@ function sortDocumentsByAdded(documents: DocumentCellValue): DocumentCellValue {
     const leftTime = Number.isFinite(parsedLeftTime) ? parsedLeftTime : Number.POSITIVE_INFINITY;
     const rightTime = Number.isFinite(parsedRightTime) ? parsedRightTime : Number.POSITIVE_INFINITY;
     if (leftTime !== rightTime) {
-      return leftTime - rightTime;
+      return rightTime - leftTime;
     }
     return left.fileName.localeCompare(right.fileName);
   });
@@ -848,9 +805,23 @@ function isMobileMultilineColumn(columnId: string): boolean {
   return ["description", "todo", "address", "notes", "rawInput"].includes(columnId);
 }
 
-function documentChipTitle(fileName: string): string {
-  const base = fileName.replace(/\.[^.]+$/, "");
-  return base.length <= 10 ? base : `${base.slice(0, 10)}...`;
+function documentTypeIndex(documents: DocumentCellValue, documentIndex: number): number {
+  const document = documents[documentIndex];
+  if (!document) {
+    return 0;
+  }
+  const extension = documentExtensionLabel(document.fileName, document.mimeType);
+  return documents
+    .slice(0, documentIndex)
+    .filter((previous) => documentExtensionLabel(previous.fileName, previous.mimeType) === extension).length;
+}
+
+function documentListDisplayLabel(documents: DocumentCellValue, documentIndex: number): string {
+  const document = documents[documentIndex];
+  if (!document) {
+    return "File";
+  }
+  return documentDisplayLabel(document.fileName, document.mimeType, documentTypeIndex(documents, documentIndex));
 }
 
 function formatDocumentCreatedAt(value: string | null | undefined): string | null {
@@ -951,7 +922,7 @@ const documentCellRenderer: CustomRenderer<DocumentsCustomCell> = {
       ctx.textAlign = "left";
       if (!compactDocuments) {
         const titleLeft = iconLeft + documentIconWidth + 6;
-        ctx.fillText(documentChipTitle(document.fileName), titleLeft, top + documentChipHeight / 2, chipWidth - (titleLeft - left) - 17);
+        ctx.fillText(documentListDisplayLabel(documents, index), titleLeft, top + documentChipHeight / 2, chipWidth - (titleLeft - left) - 17);
       }
       left += chipWidth + documentChipGap;
     }
@@ -3200,9 +3171,10 @@ export function CrmTable({
                   </summary>
                   {documents.length > 0 ? (
                     <div className="leadDocumentCardList">
-                      {documents.map((document) => {
+                      {documents.map((document, documentIndex) => {
                         const extension = documentExtensionLabel(document.fileName, document.mimeType);
                         const createdAt = formatDocumentCreatedAt(document.createdAt);
+                        const displayLabel = documentListDisplayLabel(documents, documentIndex);
                         return (
                           <button
                             type="button"
@@ -3218,7 +3190,7 @@ export function CrmTable({
                               {extension.slice(0, 3)}
                             </span>
                             <span className="leadDocumentCardMain">
-                              <strong>{documentChipTitle(document.fileName)}</strong>
+                              <strong>{displayLabel}</strong>
                               <span>{createdAt ? `Added ${createdAt}` : "Added date unknown"}</span>
                             </span>
                             <span className="leadDocumentCardSummary">{document.shortSummary || "No summary yet"}</span>
@@ -3256,9 +3228,10 @@ export function CrmTable({
                       <span>{column.title}</span>
                       {documents.length > 0 ? (
                         <div className="leadDocumentCardList">
-                          {documents.map((document) => {
+                          {documents.map((document, documentIndex) => {
                             const extension = documentExtensionLabel(document.fileName, document.mimeType);
                             const createdAt = formatDocumentCreatedAt(document.createdAt);
+                            const displayLabel = documentListDisplayLabel(documents, documentIndex);
                             return (
                               <button
                                 type="button"
@@ -3274,7 +3247,7 @@ export function CrmTable({
                                   {extension.slice(0, 3)}
                                 </span>
                                 <span className="leadDocumentCardMain">
-                                  <strong>{documentChipTitle(document.fileName)}</strong>
+                                  <strong>{displayLabel}</strong>
                                   <span>{createdAt ? `Added ${createdAt}` : "Added date unknown"}</span>
                                 </span>
                                 <span className="leadDocumentCardSummary">{document.shortSummary || "No summary yet"}</span>
@@ -3532,9 +3505,10 @@ export function CrmTable({
               <div className="detailsDrawerDocuments">
                 {detailsPanelDocuments.length > 0 ? (
                   <div className="leadDocumentCardList">
-                    {detailsPanelDocuments.map((document) => {
+                    {detailsPanelDocuments.map((document, documentIndex) => {
                       const extension = documentExtensionLabel(document.fileName, document.mimeType);
                       const createdAt = formatDocumentCreatedAt(document.createdAt);
+                      const displayLabel = documentListDisplayLabel(detailsPanelDocuments, documentIndex);
                       return (
                         <button
                           type="button"
@@ -3550,7 +3524,7 @@ export function CrmTable({
                             {extension.slice(0, 3)}
                           </span>
                           <span className="leadDocumentCardMain">
-                            <strong>{documentChipTitle(document.fileName)}</strong>
+                            <strong>{displayLabel}</strong>
                             <span>{createdAt ? `Added ${createdAt}` : "Added date unknown"}</span>
                           </span>
                           <span className="leadDocumentCardSummary">{document.shortSummary || "No summary yet"}</span>

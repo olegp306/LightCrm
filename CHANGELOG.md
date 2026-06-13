@@ -2,6 +2,31 @@
 
 All notable LightCrm releases are documented here. Starting with `0.2.0`, every version bump must include a changelog entry.
 
+## 0.3.28 - 2026-06-13
+
+### Added
+
+- Added a read-only CRM Excel backup export from the sidebar `backup` button with `Календарь`, `Клиенты`, and `Лиды` sheets, linked CRM URLs, nearest calendar dates, lead/client relationships, document counts, and a `Сегодня` calendar helper column.
+- Added a reusable core backup model with coverage for the cross-linked export sheet contract.
+- Added explicit Telegram follow-up handling so review requests can be completed by replying with a lead/client reference after the original calendar or lead action needs clarification.
+
+### Changed
+
+- Improved Telegram calendar date parsing for relative weekday phrases and stricter calendar-event date validation.
+- Extended orchestrator settings/schema options for clarification and follow-up behavior.
+- Forced `LIGHTCRM_REPOSITORY=memory` to use the memory CRM repository even when a local `DATABASE_URL` is present, making explicit memory-mode tests reliable.
+
+### Fixed
+
+- Fixed dark-theme table column selection colors so selected columns remain readable instead of turning white.
+- Preserved table column sizing stability when selection and hover states change.
+
+### Verification
+
+- `pnpm typecheck`
+- `pnpm test`
+- Local XLSX smoke test: downloaded `/api/crm/backup` and verified workbook sheets `Календарь`, `Клиенты`, `Лиды`.
+
 ## 0.3.27 - 2026-06-13
 
 ### Changed

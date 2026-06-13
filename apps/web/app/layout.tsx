@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { CalendarDays, FileText, Folders, Megaphone, MoreHorizontal, Send, Settings, UsersRound, type LucideIcon } from "lucide-react";
 import appPackage from "../package.json";
+import { BackupButton } from "./components/BackupButton";
 import { ThemeToggle } from "./components/ThemeToggle";
 import "./globals.css";
 
@@ -72,7 +73,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                   <span className="navSummaryIcon" aria-hidden="true">
                     <MoreHorizontal size={16} strokeWidth={1.8} />
                   </span>
-                  <span>More tables</span>
+                  <span className="navMoreLabelDesktop">More tables</span>
+                  <span className="navMoreLabelMobile">More</span>
                 </summary>
                 <div>
                   {tableNavItems.map((item) => (
@@ -84,8 +86,13 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                 </div>
               </details>
             </nav>
-            <div className="sidebarBottom">
-              <ThemeToggle />
+            <div className="sidebarFooter">
+              <div className="sidebarBackup">
+                <BackupButton />
+              </div>
+              <div className="sidebarBottom">
+                <ThemeToggle />
+              </div>
             </div>
           </aside>
           <main className="mainShell">

@@ -23,6 +23,7 @@ export const SemanticIntentSchema = z.enum([
   "attach_document",
   "generate_offer_task",
   "add_lead_note",
+  "system_help",
   "ask_clarification",
   "no_action"
 ]);

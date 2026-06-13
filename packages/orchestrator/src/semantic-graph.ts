@@ -200,13 +200,14 @@ function semanticSystemPrompt(state: SemanticOrchestrationState, nodeInstruction
 const intentJsonContract = [
   "Return exactly this JSON shape:",
   "{",
-  '  "primaryIntent": "create_lead | search_leads | update_lead | create_task | create_reminder | create_meeting | attach_document | generate_offer_task | add_lead_note | ask_clarification | no_action",',
+  '  "primaryIntent": "create_lead | search_leads | update_lead | create_task | create_reminder | create_meeting | attach_document | generate_offer_task | add_lead_note | system_help | ask_clarification | no_action",',
   '  "secondaryIntents": [],',
   '  "confidence": 0.0,',
   '  "reason": "short explanation",',
   '  "evidence": ["short source quote or observation"]',
   "}",
-  "When a message both introduces a new client/project/opportunity and asks for a meeting or reminder, keep both intents: use create_lead plus create_meeting and/or create_reminder in secondaryIntents."
+  "When a message both introduces a new client/project/opportunity and asks for a meeting or reminder, keep both intents: use create_lead plus create_meeting and/or create_reminder in secondaryIntents.",
+  "When a message asks how LightCrm works or how to use leads, reminders, documents, TG/mobile, or commercial offers, use system_help and do not create or update CRM records."
 ].join("\n");
 
 const targetJsonContract = [
