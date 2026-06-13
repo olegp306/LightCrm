@@ -4,6 +4,9 @@ import { defaultWorkspaceId, getCrm, handleRouteError } from "../_shared";
 import { getCrmRuntimeSettings } from "../settings/crm-settings-store";
 import { leadNoteFields, readNoteField } from "./note-fields";
 
+const leadSummaryShortMax = 120;
+const leadSummaryLongMax = 420;
+
 function readNumber(value: string | null): number | null {
   if (!value) {
     return null;
@@ -73,8 +76,8 @@ function readLatestLeadSummary(notes: string | null): { summaryShort: string | n
   const [summary] = latest.split(/\n\nOriginal takes\n/);
   const cleanSummary = summary.trim();
   return {
-    summaryShort: compactSummary(cleanSummary, 180),
-    summaryLong: compactSummary(cleanSummary, 700)
+    summaryShort: compactSummary(cleanSummary, leadSummaryShortMax),
+    summaryLong: compactSummary(cleanSummary, leadSummaryLongMax)
   };
 }
 
@@ -117,7 +120,7 @@ export async function GET(request: Request) {
         const client = lead.clientId ? clientsById.get(lead.clientId) ?? null : null;
         const project = readNoteField(lead.notes, leadNoteFields.project) ?? lead.company;
         const area = readNoteField(lead.notes, leadNoteFields.area);
-        const description = readNoteField(lead.notes, leadNoteFields.description) ?? lead.notes;
+        const description = readNoteField(lead.notes, leadNoteFields.description);
         const address = readNoteField(lead.notes, leadNoteFields.address);
         const todo = readNoteField(lead.notes, leadNoteFields.todo);
         const storedSummary = latestSummaryByLeadId.get(lead.id);

@@ -45,6 +45,9 @@ function compactText(value: string, maxLength = 240): string {
   return `${compacted.slice(0, Math.max(0, maxLength - 1)).trimEnd()}...`;
 }
 
+const leadSummaryShortMax = 120;
+const leadSummaryLongMax = 420;
+
 function attachmentKindLabel(kind: LeadIntakeAttachmentInput["kind"]): string {
   const labels: Record<LeadIntakeAttachmentInput["kind"], string> = {
     image: "Image",
@@ -132,19 +135,19 @@ export function summarizeLeadIntake(
   ].filter((signal): signal is string => Boolean(signal));
 
   const kindList = [...new Set(attachments.map((attachment) => attachment.kind))];
-  const shortSummary = [
-    text ? compactText(text, 160) : "No text notes yet",
+  const shortSummary = compactText([
+    text ? compactText(text, 90) : "No text notes yet",
     attachments.length > 0
       ? `${attachments.length} file(s): ${attachments.map((attachment) => attachment.fileName).join(", ")}`
       : "no files"
-  ].join("; ");
-  const longSummary = [
+  ].join("; "), leadSummaryShortMax);
+  const longSummary = compactText([
     `Source: ${displaySourceChannel(input.sourceChannel)}${input.sourceThreadId ? ` thread ${input.sourceThreadId}` : ""}.`,
     text ? `Text: ${compactText(text)}.` : "Text: no text notes yet.",
     attachments.length > 0
       ? `Files: ${attachments.length} attachment(s)${kindList.length > 0 ? ` [${kindList.join(", ")}]` : ""}: ${attachmentSummaries.map((attachment) => `${attachment.fileName} (${attachment.kind}; ${attachment.shortSummary})`).join("; ")}.`
       : "Files: no attachments."
-  ].join(" ");
+  ].join(" "), leadSummaryLongMax);
 
   return {
     shortSummary,

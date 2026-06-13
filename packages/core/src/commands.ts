@@ -126,6 +126,9 @@ function compactText(value: string, maxLength = 240): string {
   return `${compacted.slice(0, Math.max(0, maxLength - 1)).trimEnd()}...`;
 }
 
+const leadSummaryShortMax = 120;
+const leadSummaryLongMax = 420;
+
 function displaySourceChannel(value: string | null | undefined): string {
   return value?.toLocaleLowerCase() === "telegram" ? "TG" : value ?? "intake";
 }
@@ -594,8 +597,8 @@ export function createCrmService(repository: CrmRepository) {
       id: createId("leadSummary"),
       workspaceId: input.workspaceId,
       leadId: input.leadId,
-      shortSummary: compactText(input.shortSummary, 220),
-      longSummary: nullable(input.longSummary),
+      shortSummary: compactText(input.shortSummary, leadSummaryShortMax),
+      longSummary: nullable(input.longSummary ? compactText(input.longSummary, leadSummaryLongMax) : null),
       source: nullable(input.source),
       createdAt: timestamp,
       updatedAt: timestamp,

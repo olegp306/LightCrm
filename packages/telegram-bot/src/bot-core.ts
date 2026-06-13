@@ -1004,6 +1004,9 @@ function compactLine(value: string, maxLength: number): string {
   return `${compacted.slice(0, Math.max(0, maxLength - 1)).trimEnd()}...`;
 }
 
+const telegramSummaryShortMax = 120;
+const telegramSummaryFullMax = 420;
+
 function optionalStringProperty(value: object, key: string): string | null {
   if (!(key in value)) {
     return null;
@@ -1050,7 +1053,7 @@ function telegramLeadCardText(lead: TelegramLeadCard): string {
     cardField("Address", lead.address, 90),
     cardField("Messenger", lead.messenger, 80),
     lead.status ? `Status: ${lead.status}` : null,
-    lead.summaryShort ? `Summary: ${compactLine(lead.summaryShort, 140)}` : null
+    lead.summaryShort ? `Summary: ${compactLine(lead.summaryShort, telegramSummaryShortMax)}` : null
   ]
     .filter((line): line is string => Boolean(line))
     .join("\n")
@@ -1063,7 +1066,7 @@ function telegramLeadFullSummaryText(lead: TelegramLeadCard): string {
     "Full summary",
     lead.code ? `${lead.code} · ${lead.name}` : lead.name,
     `Lead ID: ${lead.id}`,
-    summary ? compactLine(summary, 1200) : "No full summary is available yet.",
+    summary ? compactLine(summary, telegramSummaryFullMax) : "No full summary is available yet.",
     lead.summaryUpdatedAt ? `Summary date: ${lead.summaryUpdatedAt}` : null
   ]
     .filter((line): line is string => Boolean(line))
@@ -1072,7 +1075,7 @@ function telegramLeadFullSummaryText(lead: TelegramLeadCard): string {
 }
 
 function telegramLeadCardTextCompact(lead: TelegramLeadCard): string {
-  const summary = lead.summaryShort ? compactLine(lead.summaryShort, 120) : null;
+  const summary = lead.summaryShort ? compactLine(lead.summaryShort, telegramSummaryShortMax) : null;
   return [
     "[+] lead saved",
     `<b>${escapeHtml(leadDisplayRef(lead))}</b> - ${escapeHtml(lead.name)}`,
@@ -1095,7 +1098,7 @@ function telegramLeadFullSummaryTextCompact(lead: TelegramLeadCard): string {
   return [
     "[summary] full",
     `<b>${escapeHtml(leadDisplayRef(lead))}</b> - ${escapeHtml(lead.name)}`,
-    summary ? escapeHtml(compactLine(summary, 1200)) : "No full summary is available yet.",
+    summary ? escapeHtml(compactLine(summary, telegramSummaryFullMax)) : "No full summary is available yet.",
     lead.summaryUpdatedAt ? `summary date: ${escapeHtml(lead.summaryUpdatedAt)}` : null
   ]
     .filter((line): line is string => Boolean(line))

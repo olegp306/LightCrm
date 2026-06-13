@@ -1436,13 +1436,13 @@ input {
 }
 
 .relatedTableTooltip strong {
-  font-size: 11px;
+  font-size: var(--table-tooltip-font-size, 11px);
   line-height: 1.2;
 }
 
 .relatedTableTooltip span {
   color: var(--tooltip-muted);
-  font-size: 11px;
+  font-size: var(--table-tooltip-font-size, 11px);
   line-height: 1.35;
 }
 
@@ -2284,6 +2284,214 @@ input {
   font-weight: 700;
   line-height: 1.15;
   margin: 2px 0 1px;
+}
+
+.mobileLeadCard {
+  gap: 0;
+  padding: 8px 10px 9px;
+}
+
+.mobileLeadCardHeader {
+  appearance: none;
+  background: transparent;
+  border: 0;
+  color: inherit;
+  cursor: copy;
+  display: grid;
+  gap: 2px;
+  margin: 0 0 6px;
+  min-width: 0;
+  padding: 0;
+  text-align: left;
+  touch-action: manipulation;
+}
+
+.mobileLeadCardHeader:active {
+  opacity: 0.72;
+}
+
+.mobileLeadCardCode {
+  color: color-mix(in srgb, var(--ink) 82%, var(--muted));
+  font-size: 10.5px;
+  font-weight: 560;
+  line-height: 1.15;
+}
+
+.mobileLeadCardName {
+  color: var(--ink);
+  display: block;
+  font-size: 14px;
+  font-weight: 650;
+  line-height: 1.15;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.mobileLeadCopiedNotice {
+  background: color-mix(in srgb, var(--accent-soft) 72%, var(--panel));
+  border: 1px solid color-mix(in srgb, var(--accent-line) 70%, transparent);
+  border-radius: 999px;
+  color: var(--accent);
+  font-size: 10px;
+  font-weight: 650;
+  justify-self: start;
+  line-height: 1.1;
+  margin: -1px 0 5px;
+  padding: 3px 7px;
+}
+
+.mobileLeadCardFields {
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr);
+  column-gap: 6px;
+  row-gap: 2px;
+  margin-bottom: 5px;
+  min-width: 0;
+}
+
+.mobileLeadCardFields span,
+.mobileLeadCardSection > span,
+.mobileLeadDownloads summary {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 560;
+  letter-spacing: 0;
+  line-height: 1.2;
+  text-transform: none;
+}
+
+.mobileLeadCardFields strong {
+  color: var(--ink);
+  font-size: 10.5px;
+  font-weight: 560;
+  line-height: 1.2;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.mobileLeadCardSection,
+.mobileLeadDownloads {
+  border-top: 1px solid var(--line);
+  margin-top: 5px;
+  padding-top: 5px;
+}
+
+.mobileLeadCardSection p {
+  color: var(--ink);
+  font-size: 11px;
+  line-height: 1.28;
+  margin: 3px 0 0;
+  overflow-wrap: anywhere;
+}
+
+.mobileLeadMissingChips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 3px;
+}
+
+.mobileLeadMissingChips i {
+  background: color-mix(in srgb, #fff4d8 82%, var(--panel));
+  border: 1px solid color-mix(in srgb, #d9a441 56%, var(--line));
+  border-radius: 5px;
+  color: color-mix(in srgb, #8a5a00 42%, var(--ink));
+  font-size: 10px;
+  font-style: normal;
+  line-height: 1.2;
+  padding: 2px 5px;
+}
+
+.mobileLeadMuted {
+  color: var(--muted) !important;
+  font-size: 10.5px !important;
+}
+
+.mobileLeadCardSummaryText {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+}
+
+.mobileLeadFullSummary {
+  background: color-mix(in srgb, var(--control) 72%, var(--panel));
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  margin-top: 5px;
+  padding: 5px 7px;
+}
+
+.mobileLeadFullSummary summary {
+  color: color-mix(in srgb, var(--ink) 70%, var(--muted));
+  cursor: pointer;
+  font-size: 10.5px;
+  font-weight: 650;
+  list-style: none;
+}
+
+.mobileLeadFullSummary summary::-webkit-details-marker,
+.mobileLeadDownloads summary::-webkit-details-marker {
+  display: none;
+}
+
+.mobileLeadFullSummary p {
+  display: -webkit-box;
+  margin-top: 5px;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 7;
+}
+
+.mobileLeadFullSummary button {
+  background: var(--control);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--ink);
+  font: inherit;
+  font-size: 10.5px;
+  font-weight: 650;
+  margin-top: 5px;
+  padding: 3px 7px;
+}
+
+.mobileLeadDownloads summary {
+  align-items: center;
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  list-style: none;
+}
+
+.mobileLeadDownloads summary i {
+  color: color-mix(in srgb, var(--ink) 65%, var(--muted));
+  font-style: normal;
+  transition: transform 160ms ease;
+}
+
+.mobileLeadDownloads[open] summary i {
+  transform: rotate(180deg);
+}
+
+.mobileLeadDownloads .leadDocumentCardList {
+  gap: 5px;
+  padding-top: 5px;
+}
+
+.mobileLeadDocumentCard.leadDocumentCard {
+  grid-template-columns: 25px minmax(0, 1fr);
+  gap: 6px;
+  min-height: 30px;
+  padding: 4px 6px 4px 4px;
+}
+
+.mobileLeadDocumentCard .leadDocumentCardBadge {
+  height: 20px;
+  width: 25px;
+}
+
+.mobileLeadDocumentCard .leadDocumentCardSummary {
+  grid-column: 2;
 }
 
 .mobileTableRow .mobileField {

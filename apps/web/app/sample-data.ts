@@ -44,41 +44,24 @@ export const tables: Record<string, TableDefinition> = {
   leads: {
     title: "Leads",
     description: "Potential opportunities, optionally linked to client records.",
-    tableKey: "leads.v4",
+    tableKey: "leads.v5",
     archiveEntity: "lead",
     columns: [
-      { id: "client.name", title: "Client", width: 190, mobilePriority: 1, group: "Client" },
-      { id: "projectName", title: "Project", width: 210, mobilePriority: 2 },
-      { id: "area", title: "Area", width: 120, mobilePriority: 3, valueKind: "area" },
-      { id: "description", title: "Description", width: 280, mobilePriority: 4, valueKind: "longText" },
-      { id: "interest", title: "Interest", width: 120, mobilePriority: 5 },
-      { id: "urgency", title: "Urgency", width: 120, mobilePriority: 6 },
+      { id: "code", title: "Lead ID", width: 120, mobilePriority: 1 },
+      { id: "client.name", title: "Client", width: 190, mobilePriority: 2, group: "Client" },
+      { id: "projectName", title: "Lead name", width: 230, mobilePriority: 3 },
+      { id: "area", title: "Area", width: 120, mobilePriority: 4, valueKind: "area" },
+      { id: "description", title: "Description", width: 280, mobilePriority: 5, valueKind: "longText" },
+      { id: "interest", title: "Interest", width: 120, mobilePriority: 6 },
+      { id: "urgency", title: "Urgency", width: 120, mobilePriority: 7 },
       { id: "todo", title: "Todo", width: 180 },
       { id: "address", title: "Address", width: 210 },
       { id: "client.phone", title: "Phone", width: 150, group: "Client" },
       { id: "client.email", title: "Email", width: 230, group: "Client" },
       { id: "messenger", title: "Messenger", width: 150 },
       { id: "sourceChannel", title: "Source", width: 140 },
-      { id: "clientProjects", title: "Active projects", width: 150 },
-      { id: "budgetEur", title: "Money brought", width: 150 },
-      { id: "code", title: "Lead ID", width: 120, defaultVisible: false },
-      { id: "nextAction", title: "Next", width: 130, defaultVisible: false, valueKind: "action" },
-      { id: "nextActionState", title: "Next state", width: 120, defaultVisible: false },
-      { id: "project", title: "Project", width: 260, defaultVisible: false },
-      { id: "calendar", title: "Calendar", width: 260, defaultVisible: false, valueKind: "calendar" },
-      { id: "summaryShort", title: "Summary", width: 260, defaultVisible: false },
-      { id: "summaryLong", title: "Full summary", width: 360, defaultVisible: false },
-      { id: "summaryUpdatedAt", title: "Summary date", width: 170, defaultVisible: false },
-      { id: "documents", title: "Documents", width: 300, defaultVisible: false, valueKind: "documents" },
-      { id: "offerStatus", title: "Offer", width: 140, defaultVisible: false },
-      { id: "offerTotalGross", title: "Offer gross", width: 130, defaultVisible: false },
-      { id: "status", title: "Lead status", width: 130, defaultVisible: false },
-      { id: "name", title: "Lead name", width: 240, defaultVisible: false },
-      { id: "email", title: "Lead email", width: 230, defaultVisible: false },
-      { id: "phone", title: "Lead phone", width: 150, defaultVisible: false },
-      { id: "offerMissingFields", title: "Offer missing", width: 260, defaultVisible: false },
-      { id: "rawInput", title: "Raw input", width: 320, defaultVisible: false },
-      { id: "notes", title: "All notes", width: 320, defaultVisible: false }
+      { id: "documents", title: "Documents", width: 300, valueKind: "documents" },
+      { id: "calendar", title: "Calendar", width: 260, valueKind: "calendar" }
     ],
     createRecord: {
       endpoint: "/api/crm/leads/upsert",
@@ -87,12 +70,10 @@ export const tables: Record<string, TableDefinition> = {
         "client.name": "name",
         "client.phone": "phone",
         "client.email": "email",
-        projectName: "company",
-        project: "company"
+        projectName: "company"
       },
       noteFields: {
         projectName: "Project",
-        project: "Project",
         area: "Area",
         description: "Description",
         interest: "Interest",
@@ -102,7 +83,7 @@ export const tables: Record<string, TableDefinition> = {
       },
       fields: [
         { id: "client.name", label: "Client", required: true },
-        { id: "projectName", label: "Name" },
+        { id: "projectName", label: "Lead name" },
         { id: "area", label: "Area" },
         { id: "description", label: "Description", multiline: true },
         { id: "client.phone", label: "Phone" },
@@ -129,10 +110,7 @@ export const tables: Record<string, TableDefinition> = {
             }
           ],
           area: "140 m2",
-          summaryShort: "Source: TG thread. Text: planning request. Files: initial brief and budget table.",
-          summaryLong:
-            "Source: TG thread. Text: planning request. Files: initial brief and budget table. Original intake describes a private house request with early budget material attached.",
-          summaryUpdatedAt: "2026-06-09T09:00:00.000Z",
+          projectName: "Northwind house",
           description: "Planning request",
           interest: "hot",
           urgency: "June",
@@ -142,8 +120,6 @@ export const tables: Record<string, TableDefinition> = {
           "client.email": "ada@example.com",
           messenger: "TG",
           sourceChannel: "telegram",
-          clientProjects: 1,
-          budgetEur: 0,
           documents: [
             {
               id: "sample-doc-1",
@@ -163,25 +139,19 @@ export const tables: Record<string, TableDefinition> = {
               mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
               sizeBytes: 78400
             }
-          ],
-          name: "Nora Prospect",
-          status: "qualified"
+          ]
         }
       },
       {
         id: "2",
         values: {
           "client.name": "Ivan Buyer",
-          project: "Blue Market apartment",
+          projectName: "Blue Market apartment",
           description: "Needs follow-up",
           interest: "warm",
           todo: "Clarify area",
           messenger: "WhatsApp",
-          sourceChannel: "referral",
-          clientProjects: 1,
-          budgetEur: 0,
-          name: "Ivan Buyer",
-          status: "new"
+          sourceChannel: "referral"
         }
       }
     ]

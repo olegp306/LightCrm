@@ -8,6 +8,9 @@ const RegenerateLeadSummaryInput = z.object({
   leadId: z.string().min(1)
 });
 
+const leadSummaryShortMax = 120;
+const leadSummaryLongMax = 420;
+
 function compactText(value: string | null | undefined, maxLength: number): string {
   const compacted = (value ?? "").replace(/\s+/g, " ").trim();
   if (compacted.length <= maxLength) {
@@ -70,7 +73,7 @@ export async function POST(request: Request) {
         formattedArea ? `Area: ${formattedArea}` : null,
         todo ? `Next: ${todo}` : null
       ]),
-      220
+      leadSummaryShortMax
     );
     const longSummary = compactText(
       [
@@ -88,7 +91,7 @@ export async function POST(request: Request) {
       ]
         .filter(Boolean)
         .join("\n\n"),
-      1000
+      leadSummaryLongMax
     );
 
     const existingRegenerated = summaries

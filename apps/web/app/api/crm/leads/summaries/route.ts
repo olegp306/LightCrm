@@ -5,8 +5,8 @@ import { defaultWorkspaceId, getCrm, handleRouteError, parseJson, resolveWorkspa
 const CreateLeadSummaryInput = z.object({
   workspaceId: z.string().min(1).optional(),
   leadId: z.string().min(1),
-  shortSummary: z.string().trim().min(1).max(240),
-  longSummary: z.string().trim().max(1200).optional().nullable(),
+  shortSummary: z.string().trim().min(1).max(120),
+  longSummary: z.string().trim().max(420).optional().nullable(),
   source: z.string().trim().max(80).optional().nullable()
 });
 

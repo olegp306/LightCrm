@@ -812,6 +812,17 @@ function mobileLeadSummary(row: CrmTableRow): { short: string; long: string | nu
   };
 }
 
+function offerMissingFieldChips(value: CrmTableCellValue | undefined): string[] {
+  const text = textCellValue(value);
+  if (!text) {
+    return [];
+  }
+  return text
+    .split(/[,;\n]/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
 const mobileReadonlyColumnIds = new Set([
   "code",
   "nextAction",
@@ -1152,6 +1163,7 @@ export function CrmTable({
   const [longTextPreview, setLongTextPreview] = useState<LongTextPreview | null>(null);
   const [archivingSummaryIds, setArchivingSummaryIds] = useState<Set<string>>(() => new Set());
   const [summaryArchiveConfirmId, setSummaryArchiveConfirmId] = useState<string | null>(null);
+  const [copiedLeadCode, setCopiedLeadCode] = useState<string | null>(null);
 
   useEffect(() => {
     if (!showColumnMenu) {
@@ -1169,8 +1181,22 @@ export function CrmTable({
   }, [showColumnMenu]);
   const [mobileCalendarMonths, setMobileCalendarMonths] = useState<Record<string, string>>({});
   const mobileRowRefs = useRef(new Map<string, HTMLElement>());
+  const isLeadTable = useMemo(
+    () => columns.some((column) => column.id === "projectName") && columns.some((column) => column.id === "code"),
+    [columns]
+  );
   const isDarkMode = useDarkModeEnabled();
   const tableFontScale = normalizedFontScale(preferences.fontScale);
+  const tableTooltipFontSize = Math.round(11 * tableFontScale);
+  const tableTooltipStyle = useCallback(
+    (left: number, top: number) =>
+      ({
+        left,
+        top,
+        "--table-tooltip-font-size": `${tableTooltipFontSize}px`
+      }) as ComponentProps<"div">["style"],
+    [tableTooltipFontSize]
+  );
   const tableColor = preferences.tableColor ?? defaultTableColor;
   const activeTableTheme = useMemo(
     () => scaledTableTheme(isDarkMode ? darkTableTheme : lightTableTheme, tableFontScale),
@@ -2159,6 +2185,30 @@ export function CrmTable({
     }
   }, [openMobileEdit, updateRecordEndpoint]);
 
+  const copyLeadCode = useCallback(async (code: string) => {
+    const text = code.trim();
+    if (!text) {
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      const element = document.createElement("textarea");
+      element.value = text;
+      element.setAttribute("readonly", "true");
+      element.style.position = "fixed";
+      element.style.opacity = "0";
+      document.body.appendChild(element);
+      element.select();
+      document.execCommand("copy");
+      document.body.removeChild(element);
+    }
+    setCopiedLeadCode(text);
+    window.setTimeout(() => {
+      setCopiedLeadCode((current) => (current === text ? null : current));
+    }, 1600);
+  }, []);
+
   const cancelMobileEdit = useCallback(() => {
     setMobileEditTarget(null);
   }, []);
@@ -2909,7 +2959,7 @@ export function CrmTable({
         {relatedTooltip ? (
           <div
             className={`relatedTableTooltip ${relatedTooltip.placement === "below" ? "relatedTableTooltipBelow" : ""}`}
-            style={{ left: relatedTooltip.left, top: relatedTooltip.top }}
+            style={tableTooltipStyle(relatedTooltip.left, relatedTooltip.top)}
           >
             <strong>Related table</strong>
             <span>These columns show fields from the linked client record.</span>
@@ -2918,7 +2968,7 @@ export function CrmTable({
       {documentTooltip ? (
         <div
           className={`relatedTableTooltip documentCellTooltip ${documentTooltip.placement === "below" ? "relatedTableTooltipBelow" : ""}`}
-          style={{ left: documentTooltip.left, top: documentTooltip.top }}
+          style={tableTooltipStyle(documentTooltip.left, documentTooltip.top)}
         >
           <strong>{documentTooltip.document.fileName}</strong>
           {formatDocumentCreatedAt(documentTooltip.document.createdAt) ? (
@@ -2930,7 +2980,7 @@ export function CrmTable({
         {calendarTooltip ? (
         <div
           className={`relatedTableTooltip calendarCellTooltip ${calendarTooltip.placement === "below" ? "relatedTableTooltipBelow" : ""}`}
-          style={{ left: calendarTooltip.left, top: calendarTooltip.top }}
+          style={tableTooltipStyle(calendarTooltip.left, calendarTooltip.top)}
         >
           <strong>Scheduled events</strong>
           {sortCalendarItemsByStart(calendarTooltip.items).map((item) => (
@@ -3064,6 +3114,125 @@ export function CrmTable({
           const hasSummary = Boolean(summary.short);
           const description = textCellValue(row.values.description);
           const publicRowCode = textCellValue(row.values.code);
+          const leadName = textCellValue(row.values.projectName) ?? textCellValue(row.values.name) ?? row.id;
+          const clientName = textCellValue(row.values["client.name"]) ?? textCellValue(row.values.name);
+          const offerMissingFields = offerMissingFieldChips(row.values.offerMissingFields);
+          const documents = sortDocumentsByAdded(cellDocuments(row.values.documents));
+          if (isLeadTable) {
+            return (
+              <article
+                className={`mobileTableRow mobileLeadCard${row.id === flashRowId ? " focused" : ""}`}
+                key={row.id}
+                ref={(element) => {
+                  if (element) {
+                    mobileRowRefs.current.set(row.id, element);
+                  } else {
+                    mobileRowRefs.current.delete(row.id);
+                  }
+                }}
+              >
+                <button
+                  type="button"
+                  className="mobileLeadCardHeader"
+                  onClick={() => void copyLeadCode(publicRowCode ?? row.id)}
+                  aria-label={`Copy lead number ${publicRowCode ?? row.id}`}
+                >
+                  <span className="mobileLeadCardCode">{publicRowCode ?? row.id}</span>
+                  <strong className="mobileLeadCardName">{leadName}</strong>
+                </button>
+                {copiedLeadCode === (publicRowCode ?? row.id) ? (
+                  <div className="mobileLeadCopiedNotice" role="status">
+                    Lead number copied
+                  </div>
+                ) : null}
+
+                <div className="mobileLeadCardFields">
+                  <span>Client</span>
+                  <strong>{clientName ?? "n/a"}</strong>
+                  <span>Lead name</span>
+                  <strong>{leadName}</strong>
+                </div>
+
+                {description ? (
+                  <section className="mobileLeadCardSection">
+                    <span>Description</span>
+                    <p>{description}</p>
+                  </section>
+                ) : null}
+
+                <section className="mobileLeadCardSection">
+                  <span>Missing for offer</span>
+                  {offerMissingFields.length > 0 ? (
+                    <div className="mobileLeadMissingChips">
+                      {offerMissingFields.map((field) => (
+                        <i key={field}>{field}</i>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="mobileLeadMuted">No missing fields detected.</p>
+                  )}
+                </section>
+
+                {hasSummary ? (
+                  <section className="mobileLeadCardSection">
+                    <span>Summary</span>
+                    <p className="mobileLeadCardSummaryText">{summary.short}</p>
+                    {summary.long ? (
+                      <details className="mobileLeadFullSummary">
+                        <summary>Full summary</summary>
+                        <p>{summary.long}</p>
+                        {leadSummariesEndpoint ? (
+                          <button type="button" onClick={() => openLeadSummaryHistory(row)}>
+                            History
+                          </button>
+                        ) : null}
+                      </details>
+                    ) : null}
+                  </section>
+                ) : null}
+
+                <details className="mobileLeadDownloads">
+                  <summary>
+                    <span>
+                      Downloads: {documents.length} {documents.length === 1 ? "item" : "items"}
+                    </span>
+                    <i aria-hidden="true">⌄</i>
+                  </summary>
+                  {documents.length > 0 ? (
+                    <div className="leadDocumentCardList">
+                      {documents.map((document) => {
+                        const extension = documentExtensionLabel(document.fileName, document.mimeType);
+                        const createdAt = formatDocumentCreatedAt(document.createdAt);
+                        return (
+                          <button
+                            type="button"
+                            className="leadDocumentCard mobileLeadDocumentCard"
+                            key={document.id}
+                            title={`${document.fileName}${document.shortSummary ? `\n${document.shortSummary}` : ""}`}
+                            onClick={() => setPreviewDocument(document)}
+                          >
+                            <span
+                              className="leadDocumentCardBadge"
+                              style={{ "--document-color": documentBadgeColor(extension) } as ComponentProps<"span">["style"]}
+                            >
+                              {extension.slice(0, 3)}
+                            </span>
+                            <span className="leadDocumentCardMain">
+                              <strong>{documentChipTitle(document.fileName)}</strong>
+                              <span>{createdAt ? `Added ${createdAt}` : "Added date unknown"}</span>
+                            </span>
+                            <span className="leadDocumentCardSummary">{document.shortSummary || "No summary yet"}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <p className="mobileLeadMuted">No documents yet.</p>
+                  )}
+                </details>
+              </article>
+            );
+          }
           return (
             <article
               className={`mobileTableRow${row.id === flashRowId ? " focused" : ""}`}
@@ -3305,7 +3474,7 @@ export function CrmTable({
               <div>
                 <span>Lead details</span>
                 <h2>{String(mobileDisplayValue(detailsPanelRow.values.code) || detailsPanelRow.id)}</h2>
-                <p>{String(mobileDisplayValue(detailsPanelRow.values.name) || detailsPanelRow.id)}</p>
+                <p>{String(mobileDisplayValue(detailsPanelRow.values.projectName) || detailsPanelRow.id)}</p>
               </div>
               <button type="button" onClick={() => setDetailsPanel(null)} aria-label="Close lead details">
                 <X size={18} />

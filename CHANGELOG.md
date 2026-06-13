@@ -2,6 +2,28 @@
 
 All notable LightCrm releases are documented here. Starting with `0.2.0`, every version bump must include a changelog entry.
 
+## 0.3.24 - 2026-06-13
+
+### Added
+
+- Replaced the mobile web lead list with compact lead cards showing lead number, lead name, client, description, offer-missing fields, clipped summary, and collapsible `Downloads: n items` document previews.
+- Added tap-to-copy behavior for the mobile lead card header so tapping the lead number/name copies the readable lead number and shows an inline confirmation.
+
+### Changed
+
+- Shortened generated lead summaries for Telegram/mobile use and capped full summaries for compact lead cards.
+- Reduced the default leads table column set to the canonical operational fields while keeping Documents and Calendar visible.
+- Made table tooltips follow the selected table font size.
+
+### Verification
+
+- `pnpm --filter @lightcrm/ui typecheck`
+- `pnpm --filter @lightcrm/web typecheck`
+- `pnpm --filter @lightcrm/core test`
+- `pnpm --filter @lightcrm/orchestrator test`
+- `pnpm --filter @lightcrm/telegram-bot test`
+- `pnpm typecheck`
+
 ## 0.3.23 - 2026-06-13
 
 ### Fixed
