@@ -629,6 +629,73 @@ describe("semantic crm orchestration", () => {
     expect(systems.join("\n")).toContain("Do not extract them as clientName");
   });
 
+  it("includes semantic active-lead policy in TG prompts", async () => {
+    const systems: string[] = [];
+    await runSemanticCrmOrchestration(
+      {
+        workspaceId: "default",
+        messageId: "m-active-policy-1",
+        author: "director",
+        text: "Forwarded request from another client for a new house.",
+        sourceChannel: "telegram",
+        recentLeads: [{ id: "lead-active", label: "L-2026-005 Thomas", summary: null, lastTouchedAt: null }]
+      },
+      {
+        llmProvider: {
+          async callJson(input: { system: string }) {
+            systems.push(input.system);
+            if (input.system.includes("Classify")) {
+              return {
+                primaryIntent: "create_lead",
+                secondaryIntents: [],
+                confidence: 0.91,
+                reason: "The message introduces a separate request.",
+                evidence: ["another client"]
+              };
+            }
+            if (input.system.includes("Resolve")) {
+              return {
+                targetType: "none",
+                targetId: null,
+                confidence: 0.86,
+                candidates: [],
+                needsClarification: false,
+                clarificationQuestion: null
+              };
+            }
+            if (input.system.includes("Extract")) {
+              return {
+                fields: {
+                  requestType: {
+                    value: "new house",
+                    confidence: 0.88,
+                    evidence: "new house",
+                    sourceMessageIds: ["m-active-policy-1"]
+                  }
+                },
+                missingData: [],
+                notes: []
+              };
+            }
+            return {
+              approved: true,
+              riskLevel: "low",
+              reason: "Validated.",
+              needsHumanConfirmation: false
+            };
+          }
+        }
+      }
+    );
+
+    const promptText = systems.join("\n");
+    expect(promptText).toContain("Recent TG lead context is a strong magnet for natural continuations, but not a supermagnet.");
+    expect(promptText).toContain("Do not attach to a recent/active lead merely because it is recent.");
+    expect(promptText).toContain("Contact-name overlap alone is weak evidence");
+    expect(promptText).toContain("Undated follow-up intent must not replace lead creation.");
+    expect(promptText).toContain("If it is ambiguous whether the message is a continuation or a new opportunity");
+  });
+
   it("plans lead intake and reminder from the same semantic message", async () => {
     const result = await runSemanticCrmOrchestration(
       {

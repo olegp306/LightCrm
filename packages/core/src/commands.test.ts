@@ -350,6 +350,70 @@ describe("createCrmService", () => {
     });
   });
 
+  it("undoes a lead intake by archiving its latest summary and removing the notes block", async () => {
+    const repository = new MemoryCrmRepository();
+    const crm = createCrmService(repository);
+    const lead = await crm.upsertLead({ workspaceId: "workspace-1", name: "Active lead" });
+    await crm.upsertLead({
+      ...lead,
+      workspaceId: "workspace-1",
+      id: lead.id,
+      phone: "+491711234567",
+      externalMessageId: "901"
+    });
+
+    const intake = await crm.ingestLeadIntake({
+      workspaceId: "workspace-1",
+      leadId: lead.id,
+      sourceChannel: "telegram",
+      sourceThreadId: "763604722",
+      sourceMessageId: "901",
+      textItems: [{ sourceMessageId: "901", author: "Katya", text: "Wrongly attached note" }],
+      attachments: [
+        {
+          sourceMessageId: "901",
+          kind: "pdf",
+          fileName: "wrong.pdf",
+          storageProvider: "local",
+          storageKey: "leads/lead-1/wrong.pdf",
+          mimeType: "application/pdf",
+          sizeBytes: 1200,
+          summary: "Wrong attachment"
+        }
+      ]
+    });
+    const leadWithUpdateMarker = await repository.get("lead", lead.id);
+    await repository.save("lead", {
+      ...leadWithUpdateMarker!,
+      notes: `${leadWithUpdateMarker!.notes}\n\nRaw input: Wrongly attached note\n\nUpdated from telegram message 901.`
+    });
+
+    const undone = await crm.undoLeadIntake({
+      workspaceId: "workspace-1",
+      leadId: lead.id,
+      sourceMessageId: "901"
+    });
+
+    expect(undone.lead.id).toBe(lead.id);
+    expect(undone.archivedDocumentIds).toEqual([intake.documents[0]?.id]);
+    expect(undone.archivedSummaryIds).toEqual([intake.leadSummary.id]);
+    expect(undone.lead.phone).toBeNull();
+    expect(undone.lead.notes ?? "").not.toContain("Wrongly attached note");
+    expect(undone.lead.notes ?? "").not.toContain("Updated from telegram message 901.");
+    expect(undone.lead.notes ?? "").not.toContain("Lead intake summary");
+
+    const documents = await crm.listRecords({ workspaceId: "workspace-1", entity: "documentFile", includeArchived: true });
+    expect(documents[0]?.archivedAt).toBeInstanceOf(Date);
+    const summaries = await crm.listRecords({ workspaceId: "workspace-1", entity: "leadSummary", includeArchived: true });
+    expect(summaries[0]?.archivedAt).toBeInstanceOf(Date);
+    const auditLogs = await repository.listAuditLogs("workspace-1");
+    expect(auditLogs.find((log) => log.action === "lead.intakeUndo")).toMatchObject({
+      entity: "lead",
+      entityId: lead.id,
+      metadata: expect.objectContaining({ restoredFields: expect.arrayContaining(["phone"]) })
+    });
+  });
+
   it("summarizes all active lead documents when later intake adds files", async () => {
     const repository = new MemoryCrmRepository();
     const crm = createCrmService(repository);

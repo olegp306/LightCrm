@@ -1052,6 +1052,7 @@ describe("telegram bot core", () => {
         }
       }
     );
+    expect(sendMessage).toHaveBeenCalledWith(111111, expect.stringContaining("<code>create</code>"), expect.anything());
     expect(sendMessage).toHaveBeenCalledWith(111111, expect.stringContaining("<b>L-2026-301</b>"), expect.anything());
     expect(sendMessage).toHaveBeenCalledWith(111111, expect.stringContaining("<b>Maria  private_house</b>"), expect.anything());
     expect(sendMessage).toHaveBeenCalledWith(111111, expect.stringContaining("<blockquote expandable><b>Missing for offer</b>"), expect.anything());
@@ -1321,7 +1322,7 @@ describe("telegram bot core", () => {
 
     expect(sendMessage).toHaveBeenCalledWith(
       111111,
-      expect.stringContaining("<blockquote><b>Summary</b> Thomas Wachter wants an interior apartment proposal and a Zoom follow-up.</blockquote>"),
+      expect.stringContaining("<blockquote expandable><b>Summary</b> Thomas Wachter: interior apartment</blockquote>"),
       expect.anything()
     );
     expect(sendMessage).not.toHaveBeenCalledWith(111111, expect.stringContaining("Source: TG thread"), expect.anything());
@@ -1436,6 +1437,31 @@ describe("telegram bot core", () => {
 
     expect(archiveLead).toHaveBeenCalledWith({ workspaceId: "default", leadId: "lead-303" });
     expect(sendMessage).toHaveBeenCalledWith(111111, "undone: lead-303");
+  });
+
+  it("undoes a lead intake update from the undo_write callback button", async () => {
+    const sendMessage = vi.fn();
+    const undoLeadIntake = vi.fn().mockResolvedValue({ archivedDocumentIds: [], archivedSummaryIds: ["summary-1"] });
+
+    await handleTelegramUpdate(
+      {
+        update_id: 101,
+        callback_query: {
+          id: "callback-undo-write",
+          data: "undo_write:lead-303:304",
+          message: { chat: { id: 111111 }, message_id: 903 }
+        }
+      },
+      {
+        allowedChatIds: new Set([111111]),
+        workspaceId: "default",
+        sendMessage,
+        undoLeadIntake
+      }
+    );
+
+    expect(undoLeadIntake).toHaveBeenCalledWith({ workspaceId: "default", leadId: "lead-303", sourceMessageId: "304" });
+    expect(sendMessage).toHaveBeenCalledWith(111111, "undone update: lead-303");
   });
 
   it("answers full summary callback buttons with the long lead summary", async () => {
@@ -1707,7 +1733,7 @@ describe("telegram bot core", () => {
         replyMarkup: expect.objectContaining({
           inline_keyboard: [
             [
-              { text: "undo", callback_data: "undo_write:lead-303" },
+              { text: "undo", callback_data: "undo_write:lead-303:304" },
               { text: "offer", callback_data: "offer_lead:lead-303" },
               { text: "CRM", callback_data: "crm_lead:lead-303" }
             ]
@@ -1788,13 +1814,17 @@ describe("telegram bot core", () => {
     expect(sendMessage).toHaveBeenCalledWith(111111, "Found 1 lead(s) for: Thomas");
     expect(sendMessage).toHaveBeenCalledWith(
       111111,
-      expect.stringContaining("<blockquote><b>Summary</b>"),
+      expect.stringContaining("<blockquote expandable><b>Summary</b>"),
       {
         replyMarkup: {
           inline_keyboard: [
             [
               { text: "offer", callback_data: "offer_lead:lead-404" },
               { text: "CRM", callback_data: "crm_lead:lead-404:L-2026-404" }
+            ],
+            [
+              { text: "summary", callback_data: "summary_lead:lead-404" },
+              { text: "downloads", callback_data: "downloads_lead:lead-404" }
             ]
           ]
         }
@@ -2610,16 +2640,16 @@ describe("telegram bot core", () => {
     );
   });
 
-  it("saves text-only follow-ups to the active lead intake without creating a new lead", async () => {
+  it("asks for review before attaching text-only follow-ups to the active lead", async () => {
     const sendMessage = vi.fn();
     const createLead = vi.fn();
-    const ingestLeadIntake = vi.fn().mockResolvedValue({ documents: [], summary: "Client prefers the smaller house." });
+    const ingestLeadIntake = vi.fn();
     const orchestrate = vi.fn().mockResolvedValue({
       workspaceId: "default",
       normalizedText: "client prefers the smaller house",
-      intent: "add_lead_note",
-      risk: "review",
-      explanations: ["The message adds context to the active lead."],
+      intent: "update_lead",
+      risk: "auto",
+      explanations: ["The semantic graph resolved this as a continuation of the active lead."],
       settings: DEFAULT_LANGGRAPH_SETTINGS,
       facts: {
         contactName: null,
@@ -2638,7 +2668,7 @@ describe("telegram bot core", () => {
           textSnippet: "client prefers the smaller house"
         }
       },
-      actions: [{ type: "request_review", risk: "review", reason: "A note can be reviewed later.", payload: {} }]
+      actions: [{ type: "update_lead", risk: "auto", reason: "Safe continuation of the active lead.", payload: {} }]
     });
 
     const lead = await handleTelegramUpdate(
@@ -2663,31 +2693,364 @@ describe("telegram bot core", () => {
       }
     );
 
-    expect(lead).toEqual({ id: "lead-active", name: "Active lead" });
+    expect(lead).toBeNull();
     expect(createLead).not.toHaveBeenCalled();
-    expect(ingestLeadIntake).toHaveBeenCalledWith({
+    expect(ingestLeadIntake).not.toHaveBeenCalled();
+    expect(sendMessage).toHaveBeenCalledWith(111111, expect.stringContaining("[!] needs review"));
+    expect(sendMessage).toHaveBeenCalledWith(111111, expect.stringContaining("active lead context alone is not enough"));
+  });
+
+  it("offers new lead or add to active for ambiguous active text updates", async () => {
+    const sendMessage = vi.fn();
+    const createLead = vi.fn();
+    const ingestLeadIntake = vi.fn();
+    const createPendingAttachmentDecision = vi.fn().mockReturnValue("pending-text-1");
+    const orchestrate = vi.fn().mockResolvedValue({
       workspaceId: "default",
-      leadId: "lead-active",
-      sourceChannel: "telegram",
-      sourceThreadId: "111111",
-      sourceMessageId: "408",
-      textItems: [{ sourceMessageId: "408", author: "Katya", text: "client prefers the smaller house" }],
-      attachments: []
+      normalizedText: "new client with a small house",
+      intent: "update_lead",
+      risk: "auto",
+      explanations: ["The model treated the active lead as context."],
+      settings: DEFAULT_LANGGRAPH_SETTINGS,
+      facts: {
+        contactName: "Maxim",
+        projectName: null,
+        projectType: "small house",
+        location: null,
+        areaM2: null,
+        phone: null,
+        budgetEur: null,
+        dueAt: null,
+        sourceMessageId: "410",
+        evidence: {
+          sourceMessageId: "410",
+          author: "Katya",
+          sourceChannel: "telegram",
+          textSnippet: "new client with a small house"
+        }
+      },
+      actions: [{ type: "update_lead", risk: "auto", reason: "Active context.", payload: {} }]
     });
+
+    const lead = await handleTelegramUpdate(
+      {
+        update_id: 20,
+        message: {
+          message_id: 410,
+          text: "new client with a small house",
+          chat: { id: 111111 },
+          from: { first_name: "Katya" }
+        }
+      },
+      {
+        allowedChatIds: new Set([111111]),
+        workspaceId: "default",
+        crmAppBaseUrl: "http://localhost:4900",
+        activeLead: { id: "lead-active", name: "Active lead" },
+        sendMessage,
+        orchestrate,
+        createLead,
+        ingestLeadIntake,
+        createPendingAttachmentDecision
+      }
+    );
+
+    expect(lead).toBeNull();
+    expect(createLead).not.toHaveBeenCalled();
+    expect(ingestLeadIntake).not.toHaveBeenCalled();
+    expect(createPendingAttachmentDecision).toHaveBeenCalledWith(
+      expect.objectContaining({ activeLead: { id: "lead-active", name: "Active lead" } })
+    );
     expect(sendMessage).toHaveBeenCalledWith(
       111111,
-      expect.stringContaining("<blockquote expandable><b>Missing for offer</b>"),
-      {
+      expect.stringContaining("Should I create a new lead or add this text to the active lead?"),
+      expect.objectContaining({
         replyMarkup: {
           inline_keyboard: [
             [
-              { text: "offer", callback_data: "offer_lead:lead-active" },
-              { text: "CRM", callback_data: "crm_lead:lead-active" }
-            ]
+              { text: "new lead", callback_data: "attachment_new:pending-text-1" },
+              { text: "add to active", callback_data: "attachment_active:pending-text-1" }
+            ],
+            [{ text: "cancel", callback_data: "attachment_cancel:pending-text-1" }]
           ]
         }
+      })
+    );
+  });
+
+  it("forces new lead creation when the user chooses new lead for pending text", async () => {
+    const sendMessage = vi.fn();
+    const createLead = vi.fn().mockResolvedValue({ id: "lead-new", name: "Maxim Tyutyunik" });
+    const updateLead = vi.fn();
+    const ingestLeadIntake = vi.fn().mockResolvedValue({ summary: "Maxim Tyutyunik asked about a muster house." });
+    const pendingMessage = {
+      message_id: 411,
+      text: "Следующие клиент, зовут его Максим Тютюнник, он сделал запрос на muster house.",
+      chat: { id: 111111 },
+      from: { first_name: "Katya" }
+    };
+    const takePendingAttachmentDecision = vi.fn().mockReturnValue({
+      message: pendingMessage,
+      activeLead: { id: "lead-active", name: "Maxim Tyutyunik" }
+    });
+    const orchestrate = vi.fn().mockResolvedValue({
+      workspaceId: "default",
+      normalizedText: pendingMessage.text,
+      intent: "update_lead",
+      risk: "auto",
+      explanations: ["The model over-attached the text to the active lead."],
+      settings: DEFAULT_LANGGRAPH_SETTINGS,
+      facts: {
+        contactName: "Maxim Tyutyunik",
+        projectName: null,
+        projectType: "muster house",
+        location: null,
+        areaM2: null,
+        phone: null,
+        budgetEur: null,
+        dueAt: null,
+        sourceMessageId: "411",
+        evidence: {
+          sourceMessageId: "411",
+          author: "Katya",
+          sourceChannel: "telegram",
+          textSnippet: pendingMessage.text
+        }
+      },
+      actions: [
+        {
+          type: "update_lead",
+          risk: "auto",
+          reason: "Incorrectly treated as active lead continuation.",
+          payload: { targetId: "lead-active" }
+        }
+      ]
+    });
+
+    const lead = await handleTelegramUpdate(
+      {
+        update_id: 21,
+        callback_query: {
+          id: "callback-new-text",
+          data: "attachment_new:pending-text-2",
+          message: { chat: { id: 111111 }, message_id: 904 }
+        }
+      },
+      {
+        allowedChatIds: new Set([111111]),
+        workspaceId: "default",
+        crmAppBaseUrl: "http://localhost:4900",
+        sendMessage,
+        orchestrate,
+        createLead,
+        updateLead,
+        ingestLeadIntake,
+        takePendingAttachmentDecision
       }
     );
+
+    expect(lead).toEqual({ id: "lead-new", name: "Maxim Tyutyunik" });
+    expect(takePendingAttachmentDecision).toHaveBeenCalledWith("pending-text-2");
+    expect(orchestrate).toHaveBeenCalledWith(
+      expect.not.objectContaining({
+        recentLeads: expect.anything()
+      })
+    );
+    expect(updateLead).not.toHaveBeenCalled();
+    expect(createLead).toHaveBeenCalledWith(expect.objectContaining({ name: "Maxim Tyutyunik" }));
+    expect(sendMessage).toHaveBeenCalledWith(
+      111111,
+      expect.stringContaining("🟢 <code>create</code>"),
+      expect.objectContaining({
+        replyMarkup: expect.any(Object)
+      })
+    );
+  });
+
+  it("allows text-only updates when the message explicitly names the lead code", async () => {
+    const sendMessage = vi.fn();
+    const createLead = vi.fn();
+    const updateLead = vi.fn().mockResolvedValue({ id: "lead-target", code: "L-2026-123", name: "Target lead" });
+    const ingestLeadIntake = vi.fn().mockResolvedValue({ summary: "Added phone number." });
+    const searchLeads = vi.fn().mockResolvedValue({
+      matches: [{ id: "lead-target", code: "L-2026-123", name: "Target lead", score: 1 }]
+    });
+    const orchestrate = vi.fn().mockResolvedValue({
+      workspaceId: "default",
+      normalizedText: "update lead 123 add phone +491711234567",
+      intent: "update_lead",
+      risk: "auto",
+      explanations: ["The message names the target lead explicitly."],
+      settings: DEFAULT_LANGGRAPH_SETTINGS,
+      facts: {
+        contactName: null,
+        projectName: null,
+        projectType: null,
+        location: null,
+        areaM2: null,
+        phone: "+491711234567",
+        budgetEur: null,
+        dueAt: null,
+        sourceMessageId: "409",
+        evidence: {
+          sourceMessageId: "409",
+          author: "Katya",
+          sourceChannel: "telegram",
+          textSnippet: "update lead 123 add phone +491711234567"
+        }
+      },
+      actions: [{ type: "update_lead", risk: "auto", reason: "Explicit target lead.", payload: {} }]
+    });
+
+    const lead = await handleTelegramUpdate(
+      {
+        update_id: 19,
+        message: {
+          message_id: 409,
+          text: "update lead 123 add phone +491711234567",
+          chat: { id: 111111 },
+          from: { first_name: "Katya" }
+        }
+      },
+      {
+        allowedChatIds: new Set([111111]),
+        workspaceId: "default",
+        crmAppBaseUrl: "http://localhost:4900",
+        activeLead: { id: "lead-active", name: "Active lead" },
+        sendMessage,
+        orchestrate,
+        createLead,
+        updateLead,
+        ingestLeadIntake,
+        searchLeads
+      }
+    );
+
+    expect(lead).toEqual({ id: "lead-target", code: "L-2026-123", name: "Target lead" });
+    expect(createLead).not.toHaveBeenCalled();
+    expect(updateLead).toHaveBeenCalledWith(
+      expect.objectContaining({
+        leadId: "lead-target",
+        patch: expect.objectContaining({ phone: "+491711234567" })
+      })
+    );
+    expect(sendMessage).not.toHaveBeenCalledWith(111111, expect.stringContaining("[!] needs review"));
+    expect(sendMessage).toHaveBeenCalledWith(111111, expect.stringContaining("<b>L-2026-123</b>"), expect.anything());
+  });
+
+  it("does not silently attach a different named lead to the active lead", async () => {
+    const sendMessage = vi.fn();
+    const createLead = vi.fn();
+    const ingestLeadIntake = vi.fn();
+    const orchestrate = vi.fn().mockResolvedValue({
+      workspaceId: "default",
+      normalizedText: "Ещё новый лид: снова Максим Тютюник, проект в Швейцарии, частный дом",
+      intent: "add_lead_note",
+      risk: "review",
+      explanations: ["The message may be related to recent chat context."],
+      settings: DEFAULT_LANGGRAPH_SETTINGS,
+      facts: {
+        contactName: "Максим Тютюник",
+        projectName: "частный дом",
+        projectType: "private house",
+        location: "Швейцария",
+        areaM2: null,
+        phone: null,
+        budgetEur: null,
+        dueAt: null,
+        sourceMessageId: "709",
+        evidence: {
+          sourceMessageId: "709",
+          author: "Katya",
+          sourceChannel: "telegram",
+          textSnippet: "Ещё новый лид: снова Максим Тютюник, проект в Швейцарии, частный дом"
+        }
+      },
+      actions: [{ type: "request_review", risk: "review", reason: "Needs target confirmation.", payload: {} }]
+    });
+
+    const lead = await handleTelegramUpdate(
+      {
+        update_id: 18,
+        message: {
+          message_id: 709,
+          text: "Ещё новый лид: снова Максим Тютюник, проект в Швейцарии, частный дом",
+          chat: { id: 111111 },
+          from: { first_name: "Katya" }
+        }
+      },
+      {
+        allowedChatIds: new Set([111111]),
+        workspaceId: "default",
+        crmAppBaseUrl: "http://localhost:4900",
+        activeLead: { id: "lead-arthur", name: "Артур Grauberger" },
+        sendMessage,
+        orchestrate,
+        createLead,
+        ingestLeadIntake
+      }
+    );
+
+    expect(lead).toBeNull();
+    expect(createLead).not.toHaveBeenCalled();
+    expect(ingestLeadIntake).not.toHaveBeenCalled();
+    expect(sendMessage).toHaveBeenCalledWith(111111, expect.stringContaining("[!] needs review"));
+  });
+
+  it("asks for review instead of auto-attaching text updates with new lead facts", async () => {
+    const sendMessage = vi.fn();
+    const ingestLeadIntake = vi.fn();
+    const orchestrate = vi.fn().mockResolvedValue({
+      workspaceId: "default",
+      normalizedText: "The same contact has a separate house request in another country.",
+      intent: "update_lead",
+      risk: "auto",
+      explanations: ["The model selected the active lead because the contact name overlaps."],
+      settings: DEFAULT_LANGGRAPH_SETTINGS,
+      facts: {
+        contactName: "Maxim",
+        projectName: "separate house request",
+        projectType: "private house",
+        location: "Switzerland",
+        areaM2: null,
+        phone: null,
+        budgetEur: null,
+        dueAt: null,
+        sourceMessageId: "710",
+        evidence: {
+          sourceMessageId: "710",
+          author: "Katya",
+          sourceChannel: "telegram",
+          textSnippet: "The same contact has a separate house request in another country."
+        }
+      },
+      actions: [{ type: "update_lead", risk: "auto", reason: "Selected active lead.", payload: {} }]
+    });
+
+    const lead = await handleTelegramUpdate(
+      {
+        update_id: 19,
+        message: {
+          message_id: 710,
+          text: "The same contact has a separate house request in another country.",
+          chat: { id: 111111 },
+          from: { first_name: "Katya" }
+        }
+      },
+      {
+        allowedChatIds: new Set([111111]),
+        workspaceId: "default",
+        crmAppBaseUrl: "http://localhost:4900",
+        activeLead: { id: "lead-active", name: "Maxim private house in Munich" },
+        sendMessage,
+        orchestrate,
+        ingestLeadIntake
+      }
+    );
+
+    expect(lead).toBeNull();
+    expect(ingestLeadIntake).not.toHaveBeenCalled();
+    expect(sendMessage).toHaveBeenCalledWith(111111, expect.stringContaining("active lead context alone is not enough"));
   });
 
   it("still creates a new lead when semantic orchestration says text plus attachments are a new lead", async () => {

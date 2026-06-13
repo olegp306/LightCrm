@@ -157,7 +157,11 @@ function tgIntakePolicyPrompt(settings: LangGraphRuntimeSettings): string {
     `- Never create from attachment-only intake: ${policy.neverCreateFromAttachmentOnly}.`,
     `- Require meaningful attachment content before write: ${policy.requireMeaningfulAttachmentContent}.`,
     "If a TG intake contains only files without readable extracted content or a director instruction, prefer ask_clarification/no_action over create_lead.",
-    "Treat file names alone as weak evidence; use extracted document/image/audio summaries as evidence when available."
+    "Treat file names alone as weak evidence; use extracted document/image/audio summaries as evidence when available.",
+    "Recent TG lead context is a strong magnet for natural continuations, but not a supermagnet. Attach a message to the recent lead when the message semantically continues that same client/project/object/request or explicitly asks to update that lead.",
+    "The same client/contact can have multiple independent leads. Contact-name overlap alone is weak evidence and is not enough to update an existing lead when the project, site, object, request, or opportunity differs.",
+    "A message that introduces a potential client, contact, developer, project, or business opportunity remains lead intake even if it also mentions future follow-up. Undated follow-up intent must not replace lead creation.",
+    "When a TG message or forwarded bundle introduces a different client, project, site, object, request, or opportunity, treat it as a new lead candidate even if a previous lead is active. When unsure, ask which lead to use instead of silently updating the active lead."
   ].join("\n");
 }
 

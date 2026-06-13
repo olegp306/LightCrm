@@ -17,6 +17,8 @@ import {
   type TelegramLeadSearchInput,
   type TelegramLeadSearchResult,
   type TelegramLeadUpdateInput,
+  type TelegramUndoLeadIntakeInput,
+  type TelegramUndoLeadIntakeResult,
   type PendingClarification,
   type PendingAttachmentDecision,
   type TakePendingClarificationInput,
@@ -273,6 +275,10 @@ async function archiveLead(input: TelegramArchiveLeadInput) {
   });
 }
 
+async function undoLeadIntake(input: TelegramUndoLeadIntakeInput): Promise<TelegramUndoLeadIntakeResult> {
+  return crmCall<TelegramUndoLeadIntakeResult>("/api/crm/lead-intake/undo", input);
+}
+
 async function createClient(input: UpsertClientInput) {
   return crmCall<{ id: string; name: string }>("/api/crm/clients/upsert", input);
 }
@@ -525,6 +531,7 @@ async function runPolling() {
             sendDocument,
             generateOffer,
             archiveLead,
+            undoLeadIntake,
             createPendingAttachmentDecision,
             takePendingAttachmentDecision,
             createPendingClarification,

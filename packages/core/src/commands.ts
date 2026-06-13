@@ -36,6 +36,18 @@ type ArchiveRecordInput = {
   id: string;
 };
 
+type UndoLeadIntakeInput = {
+  workspaceId: string;
+  leadId: string;
+  sourceMessageId?: string | null;
+};
+
+type UndoLeadIntakeResult = {
+  lead: Lead;
+  archivedDocumentIds: string[];
+  archivedSummaryIds: string[];
+};
+
 type ListRecordsInput = {
   workspaceId: string;
   entity: CrmCollection;
@@ -60,6 +72,75 @@ function createId(entity: CrmCollection | "auditLog"): string {
 
 function now(): Date {
   return new Date();
+}
+
+const undoableLeadFields = [
+  "clientId",
+  "name",
+  "email",
+  "phone",
+  "whatsapp",
+  "company",
+  "status",
+  "sourceChannel",
+  "externalThreadId",
+  "externalMessageId"
+] as const satisfies readonly (keyof Lead)[];
+
+type UndoableLeadField = (typeof undoableLeadFields)[number];
+type LeadFieldSnapshot = {
+  before: Partial<Record<UndoableLeadField, string | null>>;
+  after: Partial<Record<UndoableLeadField, string | null>>;
+};
+
+function leadFieldSnapshot(existing: Lead | null, record: Lead): LeadFieldSnapshot | null {
+  if (!existing) {
+    return null;
+  }
+  const before: Partial<Record<UndoableLeadField, string | null>> = {};
+  const after: Partial<Record<UndoableLeadField, string | null>> = {};
+  for (const field of undoableLeadFields) {
+    if (existing[field] !== record[field]) {
+      before[field] = existing[field] as string | null;
+      after[field] = record[field] as string | null;
+    }
+  }
+  return Object.keys(before).length > 0 ? { before, after } : null;
+}
+
+function validLeadFieldSnapshot(value: unknown): LeadFieldSnapshot | null {
+  if (!value || typeof value !== "object" || !("before" in value)) {
+    return null;
+  }
+  const before = (value as { before?: unknown }).before;
+  if (!before || typeof before !== "object") {
+    return null;
+  }
+  const snapshotBefore: Partial<Record<UndoableLeadField, string | null>> = {};
+  const snapshotAfter: Partial<Record<UndoableLeadField, string | null>> = {};
+  for (const field of undoableLeadFields) {
+    const previous = (before as Record<string, unknown>)[field];
+    if (previous === null || typeof previous === "string") {
+      snapshotBefore[field] = previous;
+    }
+    const next = ((value as { after?: unknown }).after as Record<string, unknown> | undefined)?.[field];
+    if (next === null || typeof next === "string") {
+      snapshotAfter[field] = next;
+    }
+  }
+  return Object.keys(snapshotBefore).length > 0 ? { before: snapshotBefore, after: snapshotAfter } : null;
+}
+
+function restoreLeadSnapshot(lead: Lead, snapshot: LeadFieldSnapshot | null): Lead {
+  if (!snapshot) {
+    return lead;
+  }
+  return undoableLeadFields.reduce<Lead>((record, field) => {
+    if (field in snapshot.before) {
+      return { ...record, [field]: snapshot.before[field] ?? null };
+    }
+    return record;
+  }, lead);
 }
 
 function businessCodeYear(date: Date): string {
@@ -239,6 +320,37 @@ function appendIntakeNotes(existingNotes: string | null, summary: string, origin
   return [trimText(existingNotes), block].filter(Boolean).join("\n\n");
 }
 
+function removeLatestIntakeNotesBlock(notes: string | null): string | null {
+  const cleaned = trimText(notes);
+  if (!cleaned) {
+    return null;
+  }
+  const marker = "\n\nLead intake summary\n";
+  const markerIndex = cleaned.lastIndexOf(marker);
+  if (markerIndex >= 0) {
+    return trimText(cleaned.slice(0, markerIndex)) || null;
+  }
+  return cleaned.startsWith("Lead intake summary\n") ? null : cleaned;
+}
+
+function removeTelegramUpdateNotesBlock(notes: string | null, sourceMessageId: string | null | undefined): string | null {
+  const cleaned = trimText(notes);
+  if (!cleaned || !sourceMessageId) {
+    return cleaned || null;
+  }
+  const marker = `Updated from telegram message ${sourceMessageId}.`;
+  const blocks = cleaned.split(/\n{2,}/);
+  const markerIndex = blocks.findIndex((block) => block.trim() === marker);
+  if (markerIndex < 0) {
+    return cleaned;
+  }
+  const remove = new Set([markerIndex]);
+  if (markerIndex > 0 && blocks[markerIndex - 1]?.startsWith("Raw input:")) {
+    remove.add(markerIndex - 1);
+  }
+  return trimText(blocks.filter((_, index) => !remove.has(index)).join("\n\n")) || null;
+}
+
 export function createCrmService(repository: CrmRepository) {
   async function audit(log: Omit<AuditLog, "id" | "createdAt">): Promise<AuditLog> {
     return repository.appendAuditLog({
@@ -316,7 +428,12 @@ export function createCrmService(repository: CrmRepository) {
       action: "lead.upsert",
       entity: "lead",
       entityId: record.id,
-      metadata: { name: record.name, clientId: record.clientId }
+      metadata: {
+        name: record.name,
+        clientId: record.clientId,
+        sourceMessageId: input.externalMessageId ?? null,
+        fieldSnapshot: leadFieldSnapshot(existing, record)
+      }
     });
     return record;
   }
@@ -698,6 +815,98 @@ export function createCrmService(repository: CrmRepository) {
     return { lead: updatedLead, documents, leadSummary, summary, originalTakes };
   }
 
+  async function undoLeadIntake(input: UndoLeadIntakeInput): Promise<UndoLeadIntakeResult> {
+    const lead = await repository.get("lead", input.leadId);
+    if (!lead || lead.workspaceId !== input.workspaceId) {
+      throw new Error("Lead not found");
+    }
+    const auditLogs = await repository.listAuditLogs(input.workspaceId);
+    const intakeAudits = auditLogs
+      .filter(
+        (log) =>
+          log.action === "lead.intakeIngest" &&
+          log.entity === "lead" &&
+          log.entityId === lead.id &&
+          (!input.sourceMessageId || log.metadata.sourceMessageId === input.sourceMessageId)
+      )
+      .sort((left, right) => right.createdAt.getTime() - left.createdAt.getTime());
+    const auditLog = intakeAudits[0] ?? null;
+    const summaries = (await repository.list("leadSummary", input.workspaceId))
+      .filter((summary) => summary.leadId === lead.id && !summary.archivedAt)
+      .sort((left, right) => right.createdAt.getTime() - left.createdAt.getTime());
+    const summariesToArchive = auditLog
+      ? summaries.filter((summary) => summary.createdAt.getTime() >= auditLog.createdAt.getTime()).slice(0, 1)
+      : summaries.slice(0, 1);
+    const documents = (await repository.list("documentFile", input.workspaceId))
+      .filter((document) => document.leadId === lead.id && !document.archivedAt)
+      .sort((left, right) => right.createdAt.getTime() - left.createdAt.getTime());
+    const previousAudit = auditLog
+      ? auditLogs
+          .filter(
+            (log) =>
+              log.action === "lead.intakeIngest" &&
+              log.entity === "lead" &&
+              log.entityId === lead.id &&
+              log.createdAt.getTime() < auditLog.createdAt.getTime()
+          )
+          .sort((left, right) => right.createdAt.getTime() - left.createdAt.getTime())[0] ?? null
+      : null;
+    const documentsToArchive = auditLog
+      ? documents.filter((document) => {
+          const createdAt = document.createdAt.getTime();
+          return createdAt <= auditLog.createdAt.getTime() && (!previousAudit || createdAt > previousAudit.createdAt.getTime());
+        })
+      : [];
+    const updateAudit = auditLog
+      ? auditLogs
+          .filter(
+            (log) =>
+              log.action === "lead.upsert" &&
+              log.entity === "lead" &&
+              log.entityId === lead.id &&
+              (!input.sourceMessageId || log.metadata.sourceMessageId === input.sourceMessageId) &&
+              log.createdAt.getTime() <= auditLog.createdAt.getTime()
+          )
+          .sort((left, right) => right.createdAt.getTime() - left.createdAt.getTime())[0] ?? null
+      : null;
+    const fieldSnapshot = validLeadFieldSnapshot(updateAudit?.metadata.fieldSnapshot);
+
+    for (const summary of summariesToArchive) {
+      await archiveRecord({ workspaceId: input.workspaceId, entity: "leadSummary", id: summary.id });
+    }
+    for (const document of documentsToArchive) {
+      await archiveRecord({ workspaceId: input.workspaceId, entity: "documentFile", id: document.id });
+    }
+
+    const notesWithoutIntake = removeLatestIntakeNotesBlock(lead.notes);
+    const restoredLead = restoreLeadSnapshot(lead, fieldSnapshot);
+    const updatedLead: Lead = {
+      ...restoredLead,
+      notes: removeTelegramUpdateNotesBlock(notesWithoutIntake, input.sourceMessageId),
+      updatedAt: now()
+    };
+    await repository.save("lead", updatedLead);
+    await audit({
+      workspaceId: input.workspaceId,
+      actorId: null,
+      action: "lead.intakeUndo",
+      entity: "lead",
+      entityId: lead.id,
+      metadata: {
+        sourceMessageId: input.sourceMessageId ?? null,
+        archivedDocumentIds: documentsToArchive.map((document) => document.id),
+        archivedSummaryIds: summariesToArchive.map((summary) => summary.id),
+        restoredFields: fieldSnapshot ? Object.keys(fieldSnapshot.before) : []
+      }
+    });
+
+    return {
+      lead: updatedLead,
+      archivedDocumentIds: documentsToArchive.map((document) => document.id),
+      archivedSummaryIds: summariesToArchive.map((summary) => summary.id)
+    };
+  }
+
   async function linkLeadToClient(input: LinkLeadToClientInput): Promise<Lead> {
     const lead = await repository.get("lead", input.leadId);
     const client = await repository.get("client", input.clientId);
@@ -765,6 +974,7 @@ export function createCrmService(repository: CrmRepository) {
     upsertDocumentFile,
     createLeadSummary,
     ingestLeadIntake,
+    undoLeadIntake,
     linkLeadToClient,
     archiveRecord,
     globalSearch: (input: { workspaceId: string; query: string }) => globalSearch(repository, input)
