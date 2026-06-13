@@ -119,7 +119,14 @@ export type ExtractedFacts = {
 };
 
 export type PlannedCrmAction = {
-  type: "create_lead" | "update_lead" | "search_leads" | "create_reminder" | "create_contact" | "request_review";
+  type:
+    | "create_lead"
+    | "update_lead"
+    | "search_leads"
+    | "create_reminder"
+    | "create_meeting"
+    | "create_contact"
+    | "request_review";
   risk: RiskLevel;
   reason: string;
   payload: Record<string, unknown>;

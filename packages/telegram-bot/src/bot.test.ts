@@ -1538,6 +1538,67 @@ describe("telegram bot core", () => {
     );
   });
 
+  it("normalizes local reminder datetimes before sending them to CRM", async () => {
+    const sendMessage = vi.fn();
+    const createReminder = vi.fn().mockResolvedValue({
+      id: "reminder-local",
+      title: "Bayern plot",
+      dueAt: "2026-08-25T08:00:00.000Z"
+    });
+    const orchestrate = vi.fn().mockResolvedValue({
+      workspaceId: "default",
+      normalizedText: "remind me 25 August 2026 at 10:00 to collect Bayern plot info",
+      intent: "create_reminder",
+      risk: "auto",
+      explanations: ["The user asks to create a reminder."],
+      settings: DEFAULT_LANGGRAPH_SETTINGS,
+      facts: {
+        contactName: "Thomas Vater",
+        projectName: null,
+        projectType: null,
+        location: "Bayern",
+        areaM2: null,
+        phone: null,
+        budgetEur: null,
+        dueAt: "2026-08-25T10:00:00",
+        sourceMessageId: "406",
+        evidence: {
+          sourceMessageId: "406",
+          author: "Katya",
+          sourceChannel: "telegram",
+          textSnippet: "remind me 25 August 2026 at 10:00 to collect Bayern plot info"
+        }
+      },
+      actions: [{ type: "create_reminder", risk: "auto", reason: "Reminder can be created.", payload: {} }]
+    });
+
+    await handleTelegramUpdate(
+      {
+        update_id: 141,
+        message: {
+          message_id: 406,
+          text: "remind me 25 August 2026 at 10:00 to collect Bayern plot info",
+          chat: { id: 111111 },
+          from: { first_name: "Katya" }
+        }
+      },
+      {
+        allowedChatIds: new Set([111111]),
+        workspaceId: "default",
+        sendMessage,
+        orchestrate,
+        createReminder
+      }
+    );
+
+    expect(createReminder).toHaveBeenCalledWith(
+      expect.objectContaining({
+        dueAt: "2026-08-25T08:00:00.000Z"
+      })
+    );
+    expect(sendMessage).toHaveBeenCalledWith(111111, expect.stringContaining("Reminder created"));
+  });
+
   it("creates a lead and links a secondary reminder to that new lead", async () => {
     const sendMessage = vi.fn();
     const createLead = vi.fn().mockResolvedValue({ id: "lead-500", name: "Country house" });
@@ -1623,6 +1684,71 @@ describe("telegram bot core", () => {
       })
     );
     expect(sendMessage).toHaveBeenCalledWith(111111, expect.stringContaining("project: Country house"), expect.anything());
+  });
+
+  it("creates a calendar event from a meeting action", async () => {
+    const sendMessage = vi.fn();
+    const createCalendarEvent = vi.fn().mockResolvedValue({
+      id: "event-1",
+      title: "Zoom with Thomas Wachter",
+      startsAt: "2026-06-18T14:00:00.000Z",
+      endsAt: "2026-06-18T15:00:00.000Z"
+    });
+    const orchestrate = vi.fn().mockResolvedValue({
+      workspaceId: "default",
+      normalizedText: "Add Zoom with Thomas Wachter on 18 June 2026 at 16:00",
+      intent: "create_meeting",
+      risk: "auto",
+      explanations: ["The user asks to create a calendar event."],
+      settings: DEFAULT_LANGGRAPH_SETTINGS,
+      facts: {
+        contactName: "Thomas Wachter",
+        projectName: null,
+        projectType: null,
+        location: "Zoom",
+        areaM2: null,
+        phone: null,
+        budgetEur: null,
+        dueAt: "2026-06-18T16:00:00",
+        sourceMessageId: "501",
+        evidence: {
+          sourceMessageId: "501",
+          author: "Katya",
+          sourceChannel: "telegram",
+          textSnippet: "Add Zoom with Thomas Wachter on 18 June 2026 at 16:00"
+        }
+      },
+      actions: [{ type: "create_meeting", risk: "auto", reason: "Calendar event can be created.", payload: {} }]
+    });
+
+    await handleTelegramUpdate(
+      {
+        update_id: 151,
+        message: {
+          message_id: 501,
+          text: "Add Zoom with Thomas Wachter on 18 June 2026 at 16:00",
+          chat: { id: 111111 },
+          from: { first_name: "Katya" }
+        }
+      },
+      {
+        allowedChatIds: new Set([111111]),
+        workspaceId: "default",
+        sendMessage,
+        orchestrate,
+        createCalendarEvent
+      }
+    );
+
+    expect(createCalendarEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        workspaceId: "default",
+        title: "Thomas Wachter",
+        startsAt: "2026-06-18T14:00:00.000Z",
+        endsAt: "2026-06-18T15:00:00.000Z"
+      })
+    );
+    expect(sendMessage).toHaveBeenCalledWith(111111, expect.stringContaining("Calendar event created"));
   });
 
   it("attaches later attachment-only intake to the active lead instead of creating a new draft", async () => {

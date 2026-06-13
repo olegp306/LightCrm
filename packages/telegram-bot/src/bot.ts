@@ -7,6 +7,8 @@ import {
   handleTelegramUpdate,
   parseAllowedChatIds,
   type TelegramArchiveLeadInput,
+  type TelegramCalendarEventInput,
+  type TelegramCalendarEventResult,
   type PrepareTelegramAttachmentInput,
   type TelegramGeneratedDocument,
   type TelegramLeadDocument,
@@ -252,6 +254,10 @@ async function createReminder(input: TelegramReminderInput): Promise<TelegramRem
   return crmCall<TelegramReminderResult>("/api/crm/reminders/upsert", input);
 }
 
+async function createCalendarEvent(input: TelegramCalendarEventInput): Promise<TelegramCalendarEventResult> {
+  return crmCall<TelegramCalendarEventResult>("/api/crm/calendar-events/upsert", input);
+}
+
 async function archiveLead(input: TelegramArchiveLeadInput) {
   return crmCall("/api/crm/archive", {
     workspaceId: input.workspaceId,
@@ -400,6 +406,7 @@ async function runPolling() {
             searchLeads,
             updateLead,
             createReminder,
+            createCalendarEvent,
             ingestLeadIntake,
             prepareAttachment,
             listLeadDocuments,

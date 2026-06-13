@@ -463,6 +463,7 @@ const actionTypeByIntent: Partial<Record<SemanticIntent, PlannedCrmAction["type"
   create_lead: "create_lead",
   search_leads: "search_leads",
   create_reminder: "create_reminder",
+  create_meeting: "create_meeting",
   add_lead_note: "update_lead",
   update_lead: "update_lead"
 };

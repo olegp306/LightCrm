@@ -136,6 +136,7 @@ export type TelegramBotDeps = {
   searchLeads?: (input: TelegramLeadSearchInput) => Promise<TelegramLeadSearchResult>;
   updateLead?: (input: TelegramLeadUpdateInput) => Promise<Pick<Lead, "id" | "name">>;
   createReminder?: (input: TelegramReminderInput) => Promise<TelegramReminderResult>;
+  createCalendarEvent?: (input: TelegramCalendarEventInput) => Promise<TelegramCalendarEventResult>;
   ingestLeadIntake?: (input: IngestLeadIntakeInput) => Promise<{ documents?: unknown[]; summary?: string }>;
   prepareAttachment?: (input: PrepareTelegramAttachmentInput) => Promise<LeadIntakeAttachmentInput>;
   listLeadDocuments?: (input: TelegramLeadDocumentsInput) => Promise<TelegramLeadDocumentsResult>;
@@ -227,6 +228,23 @@ export type TelegramReminderResult = {
   id: string;
   title: string;
   dueAt: string | Date;
+};
+
+export type TelegramCalendarEventInput = {
+  workspaceId: string;
+  leadId?: string | null;
+  title: string;
+  description?: string | null;
+  startsAt: string;
+  endsAt: string;
+  location?: string | null;
+};
+
+export type TelegramCalendarEventResult = {
+  id: string;
+  title: string;
+  startsAt: string | Date;
+  endsAt: string | Date;
 };
 
 export type TelegramArchiveLeadInput = {
@@ -1196,6 +1214,62 @@ function reminderTitle(text: string, result: CrmOrchestrationResult): string {
   );
 }
 
+const LOCAL_DATE_TIME_RE = /^(\d{4})-(\d{2})-(\d{2})[T\s](\d{2}):(\d{2})(?::(\d{2})(?:\.\d{1,3})?)?$/;
+const DATE_TIME_WITH_ZONE_RE = /(?:z|[+-]\d{2}:?\d{2})$/i;
+
+function timeZoneOffsetMs(timeZone: string, date: Date): number {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hourCycle: "h23"
+  }).formatToParts(date);
+  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  const zonedAsUtc = Date.UTC(
+    Number(values.year),
+    Number(values.month) - 1,
+    Number(values.day),
+    Number(values.hour),
+    Number(values.minute),
+    Number(values.second)
+  );
+  return zonedAsUtc - date.getTime();
+}
+
+function localDateTimeToUtcIso(value: string, timeZone: string): string | null {
+  const match = LOCAL_DATE_TIME_RE.exec(value.trim());
+  if (!match) {
+    return null;
+  }
+
+  const [, year, month, day, hour, minute, second = "0"] = match;
+  const localAsUtc = new Date(
+    Date.UTC(Number(year), Number(month) - 1, Number(day), Number(hour), Number(minute), Number(second))
+  );
+  const firstOffset = timeZoneOffsetMs(timeZone, localAsUtc);
+  const firstUtc = new Date(localAsUtc.getTime() - firstOffset);
+  const secondOffset = timeZoneOffsetMs(timeZone, firstUtc);
+  return new Date(localAsUtc.getTime() - secondOffset).toISOString();
+}
+
+function normalizeReminderDueAt(value: string, timeZone = process.env.LIGHTCRM_TIME_ZONE ?? "Europe/Paris"): string | null {
+  const trimmed = value.trim();
+  const isoValue = DATE_TIME_WITH_ZONE_RE.test(trimmed) ? trimmed : localDateTimeToUtcIso(trimmed, timeZone);
+  if (!isoValue) {
+    return null;
+  }
+  const date = new Date(isoValue);
+  return Number.isNaN(date.getTime()) ? null : date.toISOString();
+}
+
+function addMinutesIso(value: string, minutes: number): string {
+  return new Date(new Date(value).getTime() + minutes * 60_000).toISOString();
+}
+
 async function maybeCreateReminder(
   message: TelegramMessage,
   text: string,
@@ -1212,6 +1286,11 @@ async function maybeCreateReminder(
     await deps.sendMessage(message.chat.id, "reminder date is missing");
     return { handled: true, reminder: null };
   }
+  const dueAt = normalizeReminderDueAt(result.facts.dueAt);
+  if (!dueAt) {
+    await deps.sendMessage(message.chat.id, `reminder date is invalid: ${result.facts.dueAt}`);
+    return { handled: true, reminder: null };
+  }
   const reminder = await deps.createReminder({
     workspaceId: deps.workspaceId,
     leadId: replyLeadId,
@@ -1223,7 +1302,7 @@ async function maybeCreateReminder(
     ]
       .filter((line): line is string => Boolean(line))
       .join("\n"),
-    dueAt: result.facts.dueAt,
+    dueAt,
     sourceChannel: "telegram"
   });
   if (options.notify ?? true) {
@@ -1241,6 +1320,60 @@ async function maybeCreateReminder(
     );
   }
   return { handled: true, reminder };
+}
+
+async function maybeCreateCalendarEvent(
+  message: TelegramMessage,
+  text: string,
+  result: CrmOrchestrationResult,
+  replyLeadId: string | null,
+  deps: TelegramBotDeps,
+  options: { notify?: boolean } = {}
+): Promise<{ handled: boolean; event: TelegramCalendarEventResult | null }> {
+  const action = actionOfType(result, "create_meeting");
+  if (!deps.createCalendarEvent || action?.type !== "create_meeting" || action.risk !== "auto") {
+    return { handled: false, event: null };
+  }
+  if (!result.facts.dueAt) {
+    await deps.sendMessage(message.chat.id, "calendar event date is missing");
+    return { handled: true, event: null };
+  }
+  const startsAt = normalizeReminderDueAt(result.facts.dueAt);
+  if (!startsAt) {
+    await deps.sendMessage(message.chat.id, `calendar event date is invalid: ${result.facts.dueAt}`);
+    return { handled: true, event: null };
+  }
+  const event = await deps.createCalendarEvent({
+    workspaceId: deps.workspaceId,
+    leadId: replyLeadId,
+    title: reminderTitle(text, result),
+    description: [
+      result.explanations[0] ?? null,
+      `TG message: ${message.message_id}`,
+      text.trim() ? `Context: ${text.trim().slice(0, 500)}` : null
+    ]
+      .filter((line): line is string => Boolean(line))
+      .join("\n"),
+    startsAt,
+    endsAt: addMinutesIso(startsAt, 60),
+    location: result.facts.location
+  });
+  if (options.notify ?? true) {
+    await deps.sendMessage(
+      message.chat.id,
+      [
+        "Calendar event created",
+        `Event ID: ${event.id}`,
+        replyLeadId ? `Lead ID: ${replyLeadId}` : null,
+        `Starts: ${new Date(event.startsAt).toISOString()}`,
+        `Ends: ${new Date(event.endsAt).toISOString()}`,
+        `Title: ${event.title}`
+      ]
+        .filter((line): line is string => Boolean(line))
+        .join("\n")
+    );
+  }
+  return { handled: true, event };
 }
 
 export async function handleTelegramCallback(update: TelegramUpdate, deps: TelegramBotDeps): Promise<boolean> {
@@ -1388,6 +1521,12 @@ export async function handleTelegramUpdate(
     return null;
   }
   const shouldCreateLead = hasAutoAction(result, "create_lead");
+  const standaloneCalendarEvent = shouldCreateLead
+    ? { handled: false, event: null }
+    : await maybeCreateCalendarEvent(message, orchestrationText, result, replyLeadId, deps);
+  if (standaloneCalendarEvent.handled) {
+    return replyLeadId ? { id: replyLeadId, name: "replied lead" } : null;
+  }
   const standaloneReminder = shouldCreateLead
     ? { handled: false, reminder: null }
     : await maybeCreateReminder(message, orchestrationText, result, replyLeadId, deps);
@@ -1406,6 +1545,7 @@ export async function handleTelegramUpdate(
     (createdLead = await maybeCreateLead(message, orchestrationText, author, result, deps));
   if (lead) {
     const reminderOutcome = await maybeCreateReminder(message, orchestrationText, result, lead.id, deps, { notify: false });
+    const calendarOutcome = await maybeCreateCalendarEvent(message, orchestrationText, result, lead.id, deps, { notify: false });
     const preparedAttachments =
       deps.prepareAttachment && attachments.length > 0
         ? await Promise.all(
@@ -1448,6 +1588,9 @@ export async function handleTelegramUpdate(
         }),
         reminderOutcome.reminder
           ? `Reminder: ${reminderOutcome.reminder.id} at ${new Date(reminderOutcome.reminder.dueAt).toISOString()}`
+          : null,
+        calendarOutcome.event
+          ? `Calendar: ${calendarOutcome.event.id} at ${new Date(calendarOutcome.event.startsAt).toISOString()}`
           : null,
         `Intake: saved ${preparedAttachments.length} attachment(s) to ${replyLead.name}.`,
         crmLeadReplyMarkup(deps, replyLead, {

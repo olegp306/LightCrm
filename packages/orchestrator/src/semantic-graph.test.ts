@@ -495,7 +495,7 @@ describe("json llm client", () => {
 
 describe("semantic crm orchestration", () => {
   function semanticProviderFor(options: {
-    intent: "create_lead" | "add_lead_note" | "generate_offer_task";
+    intent: "create_lead" | "add_lead_note" | "generate_offer_task" | "create_meeting";
     secondaryIntents?: Array<"create_reminder">;
     target?: {
       targetType: "lead" | "client" | "project" | "task" | "none";
@@ -663,6 +663,42 @@ describe("semantic crm orchestration", () => {
     expect(result.risk).toBe("auto");
     expect(result.actions.map((action) => action.type)).toEqual(["create_lead", "create_reminder"]);
     expect(result.facts.dueAt).toBe("2026-06-25T09:00:00.000Z");
+  });
+
+  it("maps meeting intent to an executable calendar action", async () => {
+    const result = await runSemanticCrmOrchestration(
+      {
+        workspaceId: "default",
+        messageId: "m-meeting-1",
+        author: "director",
+        text: "Add Zoom with Thomas Wachter to the calendar for 2026-06-18 16:00.",
+        sourceChannel: "telegram"
+      },
+      {
+        llmProvider: semanticProviderFor({
+          intent: "create_meeting",
+          fields: {
+            clientName: {
+              value: "Thomas Wachter",
+              confidence: 0.88,
+              evidence: "Zoom with Thomas Wachter",
+              sourceMessageIds: ["m-meeting-1"]
+            },
+            meetingDateTime: {
+              value: "2026-06-18T16:00:00",
+              confidence: 0.9,
+              evidence: "2026-06-18 16:00",
+              sourceMessageIds: ["m-meeting-1"]
+            }
+          }
+        })
+      }
+    );
+
+    expect(result.risk).toBe("auto");
+    expect(result.actions.map((action) => action.type)).toEqual(["create_meeting"]);
+    expect(result.facts.contactName).toBe("Thomas Wachter");
+    expect(result.facts.dueAt).toBe("2026-06-18T16:00:00");
   });
 
   it("uses meaning-based intent, target resolution, extraction, and validation", async () => {

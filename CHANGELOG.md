@@ -2,6 +2,24 @@
 
 All notable LightCrm releases are documented here. Starting with `0.2.0`, every version bump must include a changelog entry.
 
+## 0.3.22 - 2026-06-13
+
+### Added
+
+- Added executable Telegram `create_meeting` handling that creates CRM calendar events from recognized meeting/calendar requests.
+
+### Fixed
+
+- Normalize Telegram reminder and calendar datetimes to strict ISO UTC before calling CRM APIs, including timezone-free local values interpreted as Europe/Paris.
+
+### Verification
+
+- `pnpm --filter @lightcrm/orchestrator test`
+- `pnpm --filter @lightcrm/telegram-bot test`
+- `pnpm typecheck`
+- `pnpm test`
+- `pnpm build`
+
 ## 0.3.21 - 2026-06-12
 
 ### Changed
