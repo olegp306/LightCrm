@@ -496,7 +496,7 @@ describe("json llm client", () => {
 describe("semantic crm orchestration", () => {
   function semanticProviderFor(options: {
     intent: "create_lead" | "add_lead_note" | "generate_offer_task" | "create_meeting";
-    secondaryIntents?: Array<"create_reminder">;
+    secondaryIntents?: Array<"create_reminder" | "create_meeting">;
     target?: {
       targetType: "lead" | "client" | "project" | "task" | "none";
       targetId: string | null;
@@ -663,6 +663,55 @@ describe("semantic crm orchestration", () => {
     expect(result.risk).toBe("auto");
     expect(result.actions.map((action) => action.type)).toEqual(["create_lead", "create_reminder"]);
     expect(result.facts.dueAt).toBe("2026-06-25T09:00:00.000Z");
+  });
+
+  it("plans lead intake and meeting from the same semantic message", async () => {
+    const result = await runSemanticCrmOrchestration(
+      {
+        workspaceId: "default",
+        messageId: "m-lead-meeting-1",
+        author: "director",
+        text: "New client Thomas Wachter for apartment interior in Munich. Add Zoom on 2026-06-18 16:00.",
+        sourceChannel: "telegram"
+      },
+      {
+        llmProvider: semanticProviderFor({
+          intent: "create_lead",
+          secondaryIntents: ["create_meeting"],
+          fields: {
+            clientName: {
+              value: "Thomas Wachter",
+              confidence: 0.9,
+              evidence: "New client Thomas Wachter",
+              sourceMessageIds: ["m-lead-meeting-1"]
+            },
+            requestType: {
+              value: "apartment interior",
+              confidence: 0.84,
+              evidence: "apartment interior",
+              sourceMessageIds: ["m-lead-meeting-1"]
+            },
+            projectAddress: {
+              value: "Munich",
+              confidence: 0.8,
+              evidence: "in Munich",
+              sourceMessageIds: ["m-lead-meeting-1"]
+            },
+            meetingDateTime: {
+              value: "2026-06-18T16:00:00",
+              confidence: 0.9,
+              evidence: "Zoom on 2026-06-18 16:00",
+              sourceMessageIds: ["m-lead-meeting-1"]
+            }
+          }
+        })
+      }
+    );
+
+    expect(result.risk).toBe("auto");
+    expect(result.actions.map((action) => action.type)).toEqual(["create_lead", "create_meeting"]);
+    expect(result.facts.contactName).toBe("Thomas Wachter");
+    expect(result.facts.dueAt).toBe("2026-06-18T16:00:00");
   });
 
   it("maps meeting intent to an executable calendar action", async () => {

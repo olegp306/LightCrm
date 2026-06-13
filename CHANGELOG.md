@@ -2,6 +2,20 @@
 
 All notable LightCrm releases are documented here. Starting with `0.2.0`, every version bump must include a changelog entry.
 
+## 0.3.23 - 2026-06-13
+
+### Fixed
+
+- Preserve multi-intent Telegram requests that introduce a new lead and also ask for a meeting, so the bot creates the lead and links the calendar event to it.
+
+### Verification
+
+- `pnpm --filter @lightcrm/orchestrator test`
+- `pnpm --filter @lightcrm/telegram-bot test`
+- `pnpm typecheck`
+- `pnpm test`
+- `pnpm build`
+
 ## 0.3.22 - 2026-06-13
 
 ### Added

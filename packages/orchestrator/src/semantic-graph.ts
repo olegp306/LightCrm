@@ -205,7 +205,8 @@ const intentJsonContract = [
   '  "confidence": 0.0,',
   '  "reason": "short explanation",',
   '  "evidence": ["short source quote or observation"]',
-  "}"
+  "}",
+  "When a message both introduces a new client/project/opportunity and asks for a meeting or reminder, keep both intents: use create_lead plus create_meeting and/or create_reminder in secondaryIntents."
 ].join("\n");
 
 const targetJsonContract = [
@@ -605,6 +606,14 @@ function planAction(state: SemanticOrchestrationState): Partial<SemanticOrchestr
         type: "create_reminder",
         risk: "auto",
         reason: "The same message also asks to create a reminder.",
+        payload: semanticPayload(state)
+      });
+    }
+    if (state.intentClassification.secondaryIntents.includes("create_meeting")) {
+      actions.push({
+        type: "create_meeting",
+        risk: "auto",
+        reason: "The same message also asks to create a calendar meeting.",
         payload: semanticPayload(state)
       });
     }

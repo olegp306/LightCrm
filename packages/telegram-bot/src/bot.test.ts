@@ -1751,6 +1751,77 @@ describe("telegram bot core", () => {
     expect(sendMessage).toHaveBeenCalledWith(111111, expect.stringContaining("Calendar event created"));
   });
 
+  it("links a secondary calendar event to a newly created lead", async () => {
+    const sendMessage = vi.fn();
+    const createLead = vi.fn().mockResolvedValue({ id: "lead-501", name: "Thomas Wachter" });
+    const createCalendarEvent = vi.fn().mockResolvedValue({
+      id: "event-501",
+      title: "Thomas Wachter",
+      startsAt: "2026-06-18T14:00:00.000Z",
+      endsAt: "2026-06-18T15:00:00.000Z"
+    });
+    const orchestrate = vi.fn().mockResolvedValue({
+      workspaceId: "default",
+      normalizedText: "New client Thomas Wachter and add Zoom on 18 June 2026 at 16:00",
+      intent: "create_lead",
+      risk: "auto",
+      explanations: ["The message contains lead intake and a calendar request."],
+      settings: DEFAULT_LANGGRAPH_SETTINGS,
+      facts: {
+        contactName: "Thomas Wachter",
+        projectName: null,
+        projectType: "interior apartment",
+        location: "Munich",
+        areaM2: 100,
+        phone: null,
+        budgetEur: null,
+        dueAt: "2026-06-18T16:00:00",
+        sourceMessageId: "502",
+        evidence: {
+          sourceMessageId: "502",
+          author: "Katya",
+          sourceChannel: "telegram",
+          textSnippet: "New client Thomas Wachter and add Zoom on 18 June 2026 at 16:00"
+        }
+      },
+      actions: [
+        { type: "create_lead", risk: "auto", reason: "Draft lead can be created.", payload: {} },
+        { type: "create_meeting", risk: "auto", reason: "Calendar event can be created.", payload: {} }
+      ]
+    });
+
+    const lead = await handleTelegramUpdate(
+      {
+        update_id: 152,
+        message: {
+          message_id: 502,
+          text: "New client Thomas Wachter and add Zoom on 18 June 2026 at 16:00",
+          chat: { id: 111111 },
+          from: { first_name: "Katya" }
+        }
+      },
+      {
+        allowedChatIds: new Set([111111]),
+        workspaceId: "default",
+        crmAppBaseUrl: "http://localhost:4900",
+        sendMessage,
+        orchestrate,
+        createLead,
+        createCalendarEvent
+      }
+    );
+
+    expect(lead).toEqual({ id: "lead-501", name: "Thomas Wachter" });
+    expect(createCalendarEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        workspaceId: "default",
+        leadId: "lead-501",
+        startsAt: "2026-06-18T14:00:00.000Z"
+      })
+    );
+    expect(sendMessage).toHaveBeenCalledWith(111111, expect.stringContaining("Calendar: event-501 at 2026-06-18T14:00:00.000Z"), expect.anything());
+  });
+
   it("attaches later attachment-only intake to the active lead instead of creating a new draft", async () => {
     const sendMessage = vi.fn();
     const createLead = vi.fn();
