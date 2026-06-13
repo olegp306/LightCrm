@@ -747,10 +747,11 @@ describe("telegram bot core", () => {
     );
     expect(sendMessage).toHaveBeenCalledWith(
       111111,
-      expect.stringContaining("project: Obernsees development property"),
+      expect.stringContaining("<i>Lead name</i>: Obernsees development property"),
       expect.anything()
     );
-    expect(sendMessage).toHaveBeenCalledWith(111111, expect.stringContaining("area: 92500"), expect.anything());
+    expect(sendMessage).toHaveBeenCalledWith(111111, expect.stringContaining("<i>Area</i>: 92500"), expect.anything());
+    expect(sendMessage).toHaveBeenCalledWith(111111, expect.stringContaining("<blockquote expandable><b>Downloads: 0 items</b>"), expect.anything());
   });
 
   it("uses attachment summary for draft lead upload when caption is whitespace-only", async () => {
@@ -943,8 +944,9 @@ describe("telegram bot core", () => {
       }
     );
     expect(sendMessage).toHaveBeenCalledWith(111111, expect.stringContaining("<b>L-2026-301</b>"), expect.anything());
-    expect(sendMessage).toHaveBeenCalledWith(111111, expect.stringContaining("client: Maria"), expect.anything());
-    expect(sendMessage).toHaveBeenCalledWith(111111, expect.stringContaining("project: private_house"), expect.anything());
+    expect(sendMessage).toHaveBeenCalledWith(111111, expect.stringContaining("<i>Client</i>: Maria"), expect.anything());
+    expect(sendMessage).toHaveBeenCalledWith(111111, expect.stringContaining("<i>Lead name</i>: private_house"), expect.anything());
+    expect(sendMessage).toHaveBeenCalledWith(111111, expect.stringContaining("<blockquote expandable><b>Missing for offer</b>"), expect.anything());
   });
 
   it("uses a callback CRM button for localhost CRM URLs", async () => {
@@ -1437,7 +1439,7 @@ describe("telegram bot core", () => {
     expect(sendMessage).toHaveBeenCalledWith(111111, "Found 1 lead(s) for: Thomas");
     expect(sendMessage).toHaveBeenCalledWith(
       111111,
-      expect.stringContaining("[summary] Client wants a compact private house proposal."),
+      expect.stringContaining("<blockquote expandable><b>Summary</b>"),
       {
         replyMarkup: {
           inline_keyboard: [
@@ -1450,10 +1452,11 @@ describe("telegram bot core", () => {
         }
       }
     );
-    expect(sendMessage).toHaveBeenCalledWith(111111, expect.stringContaining("client: Thomas Wachter"), expect.anything());
-    expect(sendMessage).toHaveBeenCalledWith(111111, expect.stringContaining("project: House for mother in Bayern"), expect.anything());
-    expect(sendMessage).toHaveBeenCalledWith(111111, expect.stringContaining("area: 142"), expect.anything());
-    expect(sendMessage).toHaveBeenCalledWith(111111, expect.stringContaining("todo: Prepare offer"), expect.anything());
+    expect(sendMessage).toHaveBeenCalledWith(111111, expect.stringContaining("Client wants a compact private house proposal.</blockquote>"), expect.anything());
+    expect(sendMessage).toHaveBeenCalledWith(111111, expect.stringContaining("<i>Client</i>: Thomas Wachter"), expect.anything());
+    expect(sendMessage).toHaveBeenCalledWith(111111, expect.stringContaining("<i>Lead name</i>: House for mother in Bayern"), expect.anything());
+    expect(sendMessage).toHaveBeenCalledWith(111111, expect.stringContaining("<i>Area</i>: 142"), expect.anything());
+    expect(sendMessage).toHaveBeenCalledWith(111111, expect.stringContaining("<i>Todo</i>: Prepare offer"), expect.anything());
     expect(sendMessage).not.toHaveBeenCalledWith(
       111111,
       expect.stringContaining("Full: Client wants a compact private house proposal"),
@@ -1683,7 +1686,7 @@ describe("telegram bot core", () => {
         }
       })
     );
-    expect(sendMessage).toHaveBeenCalledWith(111111, expect.stringContaining("project: Country house"), expect.anything());
+    expect(sendMessage).toHaveBeenCalledWith(111111, expect.stringContaining("<i>Lead name</i>: Country house"), expect.anything());
   });
 
   it("creates a calendar event from a meeting action", async () => {

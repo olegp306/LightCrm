@@ -2,6 +2,19 @@
 
 All notable LightCrm releases are documented here. Starting with `0.2.0`, every version bump must include a changelog entry.
 
+## 0.3.25 - 2026-06-13
+
+### Changed
+
+- Reworked Telegram lead cards to mirror the mobile web card structure: readable lead number first, larger lead name, compact fields, missing-offer state, summary, full summary, and documents.
+- Added Telegram HTML expandable quotes for `Missing for offer`, `Summary`, `Full summary`, and `Downloads: n items`, while keeping CRM/offer/undo actions available as inline buttons.
+- Included lead document previews and summaries directly in Telegram cards when document data is available.
+
+### Verification
+
+- `pnpm --filter @lightcrm/telegram-bot test`
+- `pnpm --filter @lightcrm/telegram-bot typecheck`
+
 ## 0.3.24 - 2026-06-13
 
 ### Added

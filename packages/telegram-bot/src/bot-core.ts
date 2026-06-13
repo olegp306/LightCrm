@@ -993,6 +993,7 @@ type TelegramLeadCard = Pick<Lead, "id" | "name"> &
     summaryShort?: string | null;
     summaryLong?: string | null;
     summaryUpdatedAt?: string | null;
+    offerMissingFields?: string | null;
     score?: number | null;
   };
 
@@ -1039,6 +1040,50 @@ function htmlCardField(label: string, value: string | number | null | undefined,
   return line ? escapeHtml(line) : null;
 }
 
+function htmlLeadField(label: string, value: string | number | null | undefined, maxLength = 120): string | null {
+  if (value === null || value === undefined || value === "") {
+    return null;
+  }
+  return `<i>${escapeHtml(label)}</i>: ${escapeHtml(compactLine(String(value), maxLength))}`;
+}
+
+function expandableQuote(title: string, body: string): string {
+  return `<blockquote expandable><b>${escapeHtml(title)}</b>\n${body}</blockquote>`;
+}
+
+function formatOfferMissingFields(value: string | null | undefined): string {
+  const fields = value
+    ?.split(/[,;\n]/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+  if (!fields || fields.length === 0) {
+    return "No missing fields detected.";
+  }
+  return fields.map((field) => `- ${escapeHtml(field)}`).join("\n");
+}
+
+function telegramLeadDownloadsQuote(documents: TelegramLeadDocument[]): string {
+  const title = `Downloads: ${documents.length} ${documents.length === 1 ? "item" : "items"}`;
+  if (documents.length === 0) {
+    return expandableQuote(title, "No documents yet.");
+  }
+  const body = documents
+    .slice(0, 8)
+    .map((document, index) => {
+      const summary = document.shortSummary || document.longSummary || "No summary yet.";
+      const createdAt = compactDocumentDate(document.createdAt);
+      return [
+        `${index + 1}. <b>${escapeHtml(compactLine(document.fileName, 48))}</b>`,
+        `summary: ${escapeHtml(compactLine(summary, 140))}`,
+        createdAt ? `added: ${escapeHtml(createdAt)}` : null
+      ]
+        .filter((line): line is string => Boolean(line))
+        .join("\n");
+    })
+    .join("\n\n");
+  return expandableQuote(title, body);
+}
+
 function telegramLeadCardText(lead: TelegramLeadCard): string {
   return [
     lead.code ? `${lead.code} · ${lead.name}` : lead.name,
@@ -1074,23 +1119,28 @@ function telegramLeadFullSummaryText(lead: TelegramLeadCard): string {
     .slice(0, 3900);
 }
 
-function telegramLeadCardTextCompact(lead: TelegramLeadCard): string {
+function telegramLeadCardTextCompact(lead: TelegramLeadCard, documents: TelegramLeadDocument[] = []): string {
   const summary = lead.summaryShort ? compactLine(lead.summaryShort, telegramSummaryShortMax) : null;
+  const fullSummary = lead.summaryLong ?? lead.summaryShort;
   return [
-    "[+] lead saved",
-    `<b>${escapeHtml(leadDisplayRef(lead))}</b> - ${escapeHtml(lead.name)}`,
-    htmlCardField("client", lead.clientName, 90),
-    htmlCardField("project", lead.project, 110),
-    htmlCardField("area", lead.area, 50),
-    htmlCardField("todo", lead.todo, 80),
-    htmlCardField("address", lead.address, 80),
-    htmlCardField("messenger", lead.messenger, 70),
-    lead.status ? `status: ${escapeHtml(lead.status)}` : null,
-    summary ? `[summary] ${escapeHtml(summary)}` : null
+    `<b>${escapeHtml(leadDisplayRef(lead))}</b>`,
+    `<b>${escapeHtml(lead.name)}</b>`,
+    htmlLeadField("Client", lead.clientName, 90),
+    htmlLeadField("Lead name", lead.project ?? lead.name, 110),
+    htmlLeadField("Area", lead.area, 50),
+    htmlLeadField("Description", lead.description, 120),
+    htmlLeadField("Todo", lead.todo, 80),
+    htmlLeadField("Address", lead.address, 80),
+    htmlLeadField("Messenger", lead.messenger, 70),
+    expandableQuote("Missing for offer", formatOfferMissingFields(lead.offerMissingFields)),
+    summary ? expandableQuote("Summary", escapeHtml(summary)) : null,
+    fullSummary && fullSummary !== summary
+      ? expandableQuote("Full summary", escapeHtml(compactLine(fullSummary, telegramSummaryFullMax)))
+      : null,
+    telegramLeadDownloadsQuote(documents)
   ]
     .filter((line): line is string => Boolean(line))
-    .join("\n")
-    .slice(0, 950);
+    .join("\n");
 }
 
 function telegramLeadFullSummaryTextCompact(lead: TelegramLeadCard): string {
@@ -1567,6 +1617,9 @@ export async function handleTelegramUpdate(
     const enrichment = await maybeEnrichLeadFromAttachments(message, author, lead, preparedAttachments, deps);
     const replyLead = enrichment.lead;
     const replyResult = enrichment.result ?? result;
+    const replyDocuments = deps.listLeadDocuments
+      ? (await deps.listLeadDocuments({ workspaceId: deps.workspaceId, leadId: replyLead.id, limit: 8 })).documents
+      : [];
     const intake =
       preparedAttachments.length === 0 && deps.ingestLeadIntake
         ? await deps.ingestLeadIntake({
@@ -1588,7 +1641,7 @@ export async function handleTelegramUpdate(
           code: optionalStringProperty(replyLead, "code"),
           status: (optionalStringProperty(replyLead, "status") as Lead["status"] | null) ?? undefined,
           summaryShort: intake?.summary ?? null
-        }),
+        }, replyDocuments),
         reminderOutcome.reminder
           ? `Reminder: ${reminderOutcome.reminder.id} at ${new Date(reminderOutcome.reminder.dueAt).toISOString()}`
           : null,
