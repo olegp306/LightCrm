@@ -2,6 +2,20 @@
 
 All notable LightCrm releases are documented here. Starting with `0.2.0`, every version bump must include a changelog entry.
 
+## 0.3.26 - 2026-06-13
+
+### Changed
+
+- Telegram attachment-only messages no longer attach silently to the active lead. The bot now asks whether to create a new lead or add files to the active lead, while explicit replies and text-guided follow-ups still use the active lead context.
+- Added pending Telegram attachment decisions so inline choices can resume the original file intake as either a new lead or an active-lead attachment.
+
+### Verification
+
+- `pnpm --filter @lightcrm/telegram-bot test -- --runInBand`
+- `pnpm typecheck`
+- `pnpm --filter @lightcrm/telegram-bot build`
+- `pnpm test`
+
 ## 0.3.25 - 2026-06-13
 
 ### Changed

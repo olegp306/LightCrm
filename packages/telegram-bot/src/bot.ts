@@ -17,6 +17,7 @@ import {
   type TelegramLeadSearchInput,
   type TelegramLeadSearchResult,
   type TelegramLeadUpdateInput,
+  type PendingAttachmentDecision,
   type TelegramReminderInput,
   type TelegramReminderResult,
   type TelegramSendMessageOptions,
@@ -48,6 +49,9 @@ const pollIntervalMs = Number(process.env.TELEGRAM_POLL_INTERVAL_MS ?? 2500);
 const mediaGroupFlushMs = 1400;
 const chatIntakeFlushMs = Number(process.env.TELEGRAM_INTAKE_FLUSH_MS ?? 3500);
 const activeLeadTtlMs = Number(process.env.TELEGRAM_ACTIVE_LEAD_TTL_MS ?? 30 * 60 * 1000);
+const pendingAttachmentDecisionTtlMs = Number(
+  process.env.TELEGRAM_PENDING_ATTACHMENT_DECISION_TTL_MS ?? 10 * 60 * 1000
+);
 const crmAppBaseUrl = process.env.NEXT_PUBLIC_APP_URL ?? process.env.NEXTAUTH_URL ?? crmApiBase;
 const attachmentAnalysisModelFallback = process.env.OPENAI_MODEL ?? "gpt-4.1-mini";
 const attachmentAudioModel = process.env.OPENAI_AUDIO_MODEL ?? "whisper-1";
@@ -371,6 +375,33 @@ async function runPolling() {
   const mediaGroups = new Map<string, MediaGroupBuffer>();
   const chatIntakes = new Map<string, ChatIntakeBuffer>();
   const activeLeads = new Map<string, { lead: { id: string; name: string }; updatedAt: number }>();
+  const pendingAttachmentDecisions = new Map<string, PendingAttachmentDecision & { createdAt: number }>();
+  let pendingAttachmentDecisionCounter = 0;
+  const cleanupPendingAttachmentDecisions = (now: number) => {
+    for (const [id, pending] of pendingAttachmentDecisions) {
+      if (now - pending.createdAt > pendingAttachmentDecisionTtlMs) {
+        pendingAttachmentDecisions.delete(id);
+      }
+    }
+  };
+  const createPendingAttachmentDecision = (input: PendingAttachmentDecision) => {
+    cleanupPendingAttachmentDecisions(Date.now());
+    pendingAttachmentDecisionCounter += 1;
+    const id = `${Date.now().toString(36)}${pendingAttachmentDecisionCounter.toString(36)}`;
+    pendingAttachmentDecisions.set(id, { ...input, createdAt: Date.now() });
+    return id;
+  };
+  const takePendingAttachmentDecision = (id: string) => {
+    const pending = pendingAttachmentDecisions.get(id);
+    pendingAttachmentDecisions.delete(id);
+    if (!pending || Date.now() - pending.createdAt > pendingAttachmentDecisionTtlMs) {
+      return null;
+    }
+    return {
+      message: pending.message,
+      activeLead: pending.activeLead
+    };
+  };
   for (;;) {
     try {
       const updates = await getUpdates(offset);
@@ -382,6 +413,7 @@ async function runPolling() {
         });
       }
       const now = Date.now();
+      cleanupPendingAttachmentDecisions(now);
       const nextOffset =
         updates.length > 0 ? Math.max(...updates.map((update) => update.update_id)) + 1 : offset;
       const mediaReady = collectReadyMediaGroupUpdates(updates, mediaGroups, mediaGroupFlushMs, now);
@@ -412,13 +444,16 @@ async function runPolling() {
             listLeadDocuments,
             sendDocument,
             generateOffer,
-            archiveLead
+            archiveLead,
+            createPendingAttachmentDecision,
+            takePendingAttachmentDecision
           });
           if (update.callback_query?.data?.startsWith("undo_lead:") && callbackChatId) {
             activeLeads.delete(String(callbackChatId));
           }
-          if (lead && message) {
-            activeLeads.set(String(message.chat.id), { lead, updatedAt: now });
+          const leadChatId = message?.chat.id ?? callbackChatId ?? null;
+          if (lead && leadChatId) {
+            activeLeads.set(String(leadChatId), { lead, updatedAt: now });
           }
           console.log("TG update handled", {
             ...updateLogContext(update),

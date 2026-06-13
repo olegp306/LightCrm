@@ -127,6 +127,7 @@ export type TelegramBotDeps = {
   workspaceId: string;
   crmAppBaseUrl?: string;
   activeLead?: Pick<Lead, "id" | "name"> | null;
+  forceAttachToActiveLead?: boolean;
   sendMessage: (chatId: number, text: string, options?: TelegramSendMessageOptions) => Promise<unknown> | unknown;
   sendDocument?: (chatId: number, document: TelegramGeneratedDocument) => Promise<unknown> | unknown;
   generateOffer?: (leadId: string) => Promise<TelegramGeneratedDocument>;
@@ -141,6 +142,13 @@ export type TelegramBotDeps = {
   prepareAttachment?: (input: PrepareTelegramAttachmentInput) => Promise<LeadIntakeAttachmentInput>;
   listLeadDocuments?: (input: TelegramLeadDocumentsInput) => Promise<TelegramLeadDocumentsResult>;
   archiveLead?: (input: TelegramArchiveLeadInput) => Promise<unknown>;
+  createPendingAttachmentDecision?: (input: PendingAttachmentDecision) => string;
+  takePendingAttachmentDecision?: (id: string) => PendingAttachmentDecision | null;
+};
+
+export type PendingAttachmentDecision = {
+  message: TelegramMessage;
+  activeLead: Pick<Lead, "id" | "name">;
 };
 
 export type TelegramLeadSearchInput = {
@@ -846,6 +854,28 @@ function attachmentUpdateOrchestrationResult(
   };
 }
 
+function pendingAttachmentDecisionText(lead: Pick<Lead, "id" | "name">): string {
+  return [
+    "Files received without text while another lead is active.",
+    `Active lead: ${lead.name} (${lead.id})`,
+    "Should I add these files to the active lead or create a new lead?"
+  ].join("\n");
+}
+
+function pendingAttachmentDecisionReplyMarkup(id: string): TelegramSendMessageOptions {
+  return {
+    replyMarkup: {
+      inline_keyboard: [
+        [
+          { text: "new lead", callback_data: `attachment_new:${id}` },
+          { text: "add to active", callback_data: `attachment_active:${id}` }
+        ],
+        [{ text: "cancel", callback_data: `attachment_cancel:${id}` }]
+      ]
+    }
+  };
+}
+
 function leadPublicRef(lead: Pick<Lead, "id" | "name"> & Partial<Pick<Lead, "code">>): string {
   return lead.code?.trim() || lead.id;
 }
@@ -896,41 +926,34 @@ function crmLeadReplyMarkup(
   options: { includeUndo?: boolean; undoMode?: "archive" | "not_connected" } = {}
 ): TelegramSendMessageOptions | undefined {
   const url = crmLeadUrl(deps, lead);
-  const hasFullSummary = "summaryLong" in lead && Boolean(lead.summaryLong);
-  const summaryRow = hasFullSummary ? [[{ text: "Full summary", callback_data: `summary_lead:${lead.id}` }]] : [];
-  const downloadsRow = deps.listLeadDocuments
-    ? [[{ text: "Downloads", callback_data: `downloads_lead:${lead.id}` }]]
-    : [];
   const undoCallback = options.undoMode === "not_connected" ? `undo_write:${lead.id}` : `undo_lead:${lead.id}`;
-  const undoRow = options.includeUndo ? [[{ text: "undo", callback_data: undoCallback }]] : [];
+  const actionRow: Array<{ text: string; callback_data?: string; url?: string; web_app?: { url: string } }> = [];
+  if (options.includeUndo) {
+    actionRow.push({ text: "undo", callback_data: undoCallback });
+  }
+  actionRow.push({ text: "offer", callback_data: `offer_lead:${lead.id}` });
   if (!url) {
     return {
       replyMarkup: {
-        inline_keyboard: [[{ text: "offer", callback_data: `offer_lead:${lead.id}` }], ...undoRow, ...summaryRow, ...downloadsRow]
+        inline_keyboard: [actionRow]
       }
     };
   }
   if (isLocalCrmUrl(url)) {
+    actionRow.push({ text: "CRM", callback_data: crmLeadCallbackData(lead) });
     return {
       replyMarkup: {
-        inline_keyboard: [
-          [
-            { text: "CRM", callback_data: crmLeadCallbackData(lead) },
-            { text: "offer", callback_data: `offer_lead:${lead.id}` }
-          ],
-          ...undoRow,
-          ...summaryRow,
-          ...downloadsRow
-        ]
+        inline_keyboard: [actionRow]
       }
     };
   }
   const crmButton = isTelegramWebAppUrl(url)
     ? { text: "CRM", web_app: { url } }
     : { text: "CRM", url };
+  actionRow.push(crmButton);
   return {
     replyMarkup: {
-      inline_keyboard: [[crmButton, { text: "offer", callback_data: `offer_lead:${lead.id}` }], ...undoRow, ...summaryRow, ...downloadsRow]
+      inline_keyboard: [actionRow]
     }
   };
 }
@@ -1047,8 +1070,24 @@ function htmlLeadField(label: string, value: string | number | null | undefined,
   return `<i>${escapeHtml(label)}</i>: ${escapeHtml(compactLine(String(value), maxLength))}`;
 }
 
+function formatTelegramArea(value: string | number | null | undefined): string | null {
+  const raw = typeof value === "number" ? String(value) : typeof value === "string" ? value.trim() : "";
+  if (!raw || raw === "—" || raw === "-") {
+    return null;
+  }
+  const numeric = Number(raw.replace(/\s+/g, "").replace(",", ".").replace(/m²|м²|m2/gi, ""));
+  if (!Number.isFinite(numeric)) {
+    return raw.includes("m²") || raw.includes("м²") || raw.toLocaleLowerCase().includes("m2") ? raw : `${raw} m²`;
+  }
+  const formatted = new Intl.NumberFormat("de-DE", {
+    maximumFractionDigits: Number.isInteger(numeric) ? 0 : 1
+  }).format(numeric);
+  return `${formatted} m²`;
+}
+
 function expandableQuote(title: string, body: string): string {
-  return `<blockquote expandable><b>${escapeHtml(title)}</b>\n${body}</blockquote>`;
+  const compactBody = body.replace(/\s+/g, " ").trim();
+  return `<blockquote expandable><b>${escapeHtml(title)}</b>${compactBody ? ` ${compactBody}` : ""}</blockquote>`;
 }
 
 function formatOfferMissingFields(value: string | null | undefined): string {
@@ -1073,14 +1112,14 @@ function telegramLeadDownloadsQuote(documents: TelegramLeadDocument[]): string {
       const summary = document.shortSummary || document.longSummary || "No summary yet.";
       const createdAt = compactDocumentDate(document.createdAt);
       return [
-        `${index + 1}. <b>${escapeHtml(compactLine(document.fileName, 48))}</b>`,
-        `summary: ${escapeHtml(compactLine(summary, 140))}`,
-        createdAt ? `added: ${escapeHtml(createdAt)}` : null
+        `${index + 1}. ${escapeHtml(compactLine(document.fileName, 34))}`,
+        compactLine(summary, 80),
+        createdAt ? escapeHtml(createdAt) : null
       ]
         .filter((line): line is string => Boolean(line))
-        .join("\n");
+        .join(" - ");
     })
-    .join("\n\n");
+    .join("; ");
   return expandableQuote(title, body);
 }
 
@@ -1127,17 +1166,17 @@ function telegramLeadCardTextCompact(lead: TelegramLeadCard, documents: Telegram
     `<b>${escapeHtml(lead.name)}</b>`,
     htmlLeadField("Client", lead.clientName, 90),
     htmlLeadField("Lead name", lead.project ?? lead.name, 110),
-    htmlLeadField("Area", lead.area, 50),
+    htmlLeadField("Area", formatTelegramArea(lead.area), 50),
     htmlLeadField("Description", lead.description, 120),
     htmlLeadField("Todo", lead.todo, 80),
     htmlLeadField("Address", lead.address, 80),
     htmlLeadField("Messenger", lead.messenger, 70),
     expandableQuote("Missing for offer", formatOfferMissingFields(lead.offerMissingFields)),
+    telegramLeadDownloadsQuote(documents),
     summary ? expandableQuote("Summary", escapeHtml(summary)) : null,
     fullSummary && fullSummary !== summary
       ? expandableQuote("Full summary", escapeHtml(compactLine(fullSummary, telegramSummaryFullMax)))
       : null,
-    telegramLeadDownloadsQuote(documents)
   ]
     .filter((line): line is string => Boolean(line))
     .join("\n");
@@ -1203,6 +1242,18 @@ function telegramLeadDownloadsReplyMarkup(documents: TelegramLeadDocument[]): Te
       inline_keyboard: rows
     }
   };
+}
+
+function formatOfferCallbackError(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error);
+  const normalized = message.toLocaleLowerCase();
+  if (normalized.includes("template")) {
+    return "offer template is missing. add an offer template in CRM settings.";
+  }
+  if (normalized.includes("numbers are not ready") || normalized.includes("active fee table") || normalized.includes("missing fields")) {
+    return `offer numbers are not ready. ${compactLine(message, 220)}`;
+  }
+  return `offer generation failed. ${compactLine(message, 180)}`;
 }
 
 function leadCardMessageOptions(options: TelegramSendMessageOptions | undefined): TelegramSendMessageOptions {
@@ -1429,58 +1480,90 @@ async function maybeCreateCalendarEvent(
   return { handled: true, event };
 }
 
-export async function handleTelegramCallback(update: TelegramUpdate, deps: TelegramBotDeps): Promise<boolean> {
+type TelegramCallbackResult =
+  | { handled: false; lead: null }
+  | { handled: true; lead: Pick<Lead, "id" | "name"> | null };
+
+export async function handleTelegramCallback(update: TelegramUpdate, deps: TelegramBotDeps): Promise<TelegramCallbackResult> {
   const callback = update.callback_query;
   if (!callback?.message) {
-    return false;
+    return { handled: false, lead: null };
   }
   const chatId = callback.message.chat.id;
   if (deps.allowedChatIds.size > 0 && !deps.allowedChatIds.has(chatId)) {
     await deps.sendMessage(chatId, "This chat is not allowed to use this LightCrm bot.");
-    return true;
+    return { handled: true, lead: null };
+  }
+  const pendingNewId = callback.data?.startsWith("attachment_new:") ? callback.data.slice("attachment_new:".length) : null;
+  const pendingActiveId = callback.data?.startsWith("attachment_active:")
+    ? callback.data.slice("attachment_active:".length)
+    : null;
+  const pendingCancelId = callback.data?.startsWith("attachment_cancel:")
+    ? callback.data.slice("attachment_cancel:".length)
+    : null;
+  const pendingId = pendingNewId ?? pendingActiveId ?? pendingCancelId;
+  if (pendingId) {
+    const pending = deps.takePendingAttachmentDecision?.(pendingId) ?? null;
+    if (pendingCancelId) {
+      await deps.sendMessage(chatId, "attachment decision cancelled");
+      return { handled: true, lead: null };
+    }
+    if (!pending) {
+      await deps.sendMessage(chatId, "attachment decision expired. please resend the file if it still matters.");
+      return { handled: true, lead: null };
+    }
+    const lead = await handleTelegramUpdate(
+      { update_id: update.update_id, message: pending.message },
+      {
+        ...deps,
+        activeLead: pendingActiveId ? pending.activeLead : null,
+        forceAttachToActiveLead: Boolean(pendingActiveId)
+      }
+    );
+    return { handled: true, lead };
   }
   const crmLeadRef = callback.data?.startsWith("crm_lead:") ? parseCrmLeadCallbackData(callback.data) : null;
   if (crmLeadRef?.id) {
     if (!deps.crmAppBaseUrl) {
-      return false;
+      return { handled: false, lead: null };
     }
     const url = `${deps.crmAppBaseUrl.replace(/\/$/, "")}/leads?leadId=${encodeURIComponent(crmLeadRef.publicRef)}`;
     await deps.sendMessage(chatId, url);
-    return true;
+    return { handled: true, lead: null };
   }
   const undoLeadId = callback.data?.startsWith("undo_lead:") ? callback.data.slice("undo_lead:".length) : null;
   if (undoLeadId) {
     if (!deps.archiveLead) {
       await deps.sendMessage(chatId, "undo is not connected yet");
-      return true;
+      return { handled: true, lead: null };
     }
     await deps.archiveLead({ workspaceId: deps.workspaceId, leadId: undoLeadId });
     await deps.sendMessage(chatId, `undone: ${undoLeadId}`);
-    return true;
+    return { handled: true, lead: null };
   }
   const undoWriteId = callback.data?.startsWith("undo_write:") ? callback.data.slice("undo_write:".length) : null;
   if (undoWriteId) {
     await deps.sendMessage(chatId, "undo for this update is not connected yet");
-    return true;
+    return { handled: true, lead: null };
   }
   const summaryLeadId = callback.data?.startsWith("summary_lead:") ? callback.data.slice("summary_lead:".length) : null;
   if (summaryLeadId) {
     if (!deps.searchLeads) {
       await deps.sendMessage(chatId, "full summary is not available yet");
-      return true;
+      return { handled: true, lead: null };
     }
     const search = await deps.searchLeads({ workspaceId: deps.workspaceId, query: summaryLeadId, limit: 1 });
     const lead = search.matches.find((match) => match.id === summaryLeadId) ?? search.matches[0] ?? null;
     if (!lead) {
       await deps.sendMessage(chatId, "full summary is not available yet");
-      return true;
+      return { handled: true, lead: null };
     }
     await deps.sendMessage(
       chatId,
       telegramLeadFullSummaryTextCompact(lead),
       leadCardMessageOptions(crmLeadReplyMarkup(deps, { ...lead, summaryLong: null }))
     );
-    return true;
+    return { handled: true, lead: null };
   }
   const downloadsLeadId = callback.data?.startsWith("downloads_lead:")
     ? callback.data.slice("downloads_lead:".length)
@@ -1488,7 +1571,7 @@ export async function handleTelegramCallback(update: TelegramUpdate, deps: Teleg
   if (downloadsLeadId) {
     if (!deps.listLeadDocuments) {
       await deps.sendMessage(chatId, "downloads are not connected yet");
-      return true;
+      return { handled: true, lead: null };
     }
     const result = await deps.listLeadDocuments({ workspaceId: deps.workspaceId, leadId: downloadsLeadId, limit: 8 });
     await deps.sendMessage(
@@ -1496,28 +1579,33 @@ export async function handleTelegramCallback(update: TelegramUpdate, deps: Teleg
       telegramLeadDownloadsText(result.documents),
       leadCardMessageOptions(telegramLeadDownloadsReplyMarkup(result.documents))
     );
-    return true;
+    return { handled: true, lead: null };
   }
   const offerLeadId = callback.data?.startsWith("offer_lead:") ? callback.data.slice("offer_lead:".length) : null;
   if (offerLeadId) {
     if (!deps.generateOffer || !deps.sendDocument) {
       await deps.sendMessage(chatId, "offer generation is not connected yet");
-      return true;
+      return { handled: true, lead: null };
     }
     await deps.sendMessage(chatId, "generating offer, back shortly");
-    const document = await deps.generateOffer(offerLeadId);
-    await deps.sendDocument(chatId, document);
-    return true;
+    try {
+      const document = await deps.generateOffer(offerLeadId);
+      await deps.sendDocument(chatId, document);
+    } catch (error) {
+      await deps.sendMessage(chatId, formatOfferCallbackError(error));
+    }
+    return { handled: true, lead: null };
   }
-  return false;
+  return { handled: false, lead: null };
 }
 
 export async function handleTelegramUpdate(
   update: TelegramUpdate,
   deps: TelegramBotDeps
 ): Promise<Pick<Lead, "id" | "name"> | null> {
-  if (await handleTelegramCallback(update, deps)) {
-    return null;
+  const callbackResult = await handleTelegramCallback(update, deps);
+  if (callbackResult.handled) {
+    return callbackResult.lead;
   }
   const message = update.message;
   if (!message) {
@@ -1550,6 +1638,20 @@ export async function handleTelegramUpdate(
     await deps.sendMessage(chatId, "reviewing the files, back shortly");
   }
   const activeLead = replyLead ?? (deps.activeLead && (attachments.length > 0 || text.trim()) ? deps.activeLead : null);
+  const isAttachmentOnlyActiveLead =
+    Boolean(activeLead && !replyLead && !deps.forceAttachToActiveLead && !text.trim() && attachments.length > 0);
+  if (isAttachmentOnlyActiveLead && activeLead) {
+    if (!deps.createPendingAttachmentDecision) {
+      await deps.sendMessage(
+        chatId,
+        `${pendingAttachmentDecisionText(activeLead)}\n\nReply to the lead card to attach, or resend with a short caption like "new lead".`
+      );
+      return null;
+    }
+    const pendingId = deps.createPendingAttachmentDecision({ message, activeLead });
+    await deps.sendMessage(chatId, pendingAttachmentDecisionText(activeLead), pendingAttachmentDecisionReplyMarkup(pendingId));
+    return null;
+  }
   const result = activeLead
     ? !text.trim() && attachments.length > 0
       ? attachmentUpdateOrchestrationResult(deps.workspaceId, message, text, author, attachments, activeLead)
@@ -1648,7 +1750,6 @@ export async function handleTelegramUpdate(
         calendarOutcome.event
           ? `Calendar: ${calendarOutcome.event.id} at ${new Date(calendarOutcome.event.startsAt).toISOString()}`
           : null,
-        `Intake: saved ${preparedAttachments.length} attachment(s) to ${replyLead.name}.`,
         crmLeadReplyMarkup(deps, replyLead, {
           includeUndo: Boolean(createdLead || updatedLead || enrichment.result),
           undoMode: createdLead ? "archive" : "not_connected"

@@ -483,12 +483,11 @@ describe("telegram bot core", () => {
     expect(ingestLeadIntake).not.toHaveBeenCalled();
     expect(sendMessage).toHaveBeenCalledWith(
       111111,
-      expect.stringContaining("Intake: saved 1 attachment"),
+      expect.stringContaining("<blockquote expandable><b>Downloads: 0 items</b> No documents yet.</blockquote>"),
       {
         replyMarkup: {
           inline_keyboard: [
-            [{ text: "offer", callback_data: "offer_lead:lead-1" }],
-            [{ text: "undo", callback_data: "undo_lead:lead-1" }]
+            [{ text: "undo", callback_data: "undo_lead:lead-1" }, { text: "offer", callback_data: "offer_lead:lead-1" }]
           ]
         }
       }
@@ -554,12 +553,11 @@ describe("telegram bot core", () => {
     );
     expect(sendMessage).toHaveBeenCalledWith(
       111111,
-      expect.stringContaining("Intake: saved 1 attachment"),
+      expect.stringContaining("<blockquote expandable><b>Downloads: 0 items</b> No documents yet.</blockquote>"),
       {
         replyMarkup: {
           inline_keyboard: [
-            [{ text: "offer", callback_data: "offer_lead:lead-draft" }],
-            [{ text: "undo", callback_data: "undo_lead:lead-draft" }]
+            [{ text: "undo", callback_data: "undo_lead:lead-draft" }, { text: "offer", callback_data: "offer_lead:lead-draft" }]
           ]
         }
       }
@@ -635,12 +633,11 @@ describe("telegram bot core", () => {
     );
     expect(sendMessage).toHaveBeenCalledWith(
       111111,
-      expect.stringContaining("Intake: saved 1 attachment"),
+      expect.stringContaining("<blockquote expandable><b>Downloads: 0 items</b> No documents yet.</blockquote>"),
       {
         replyMarkup: {
           inline_keyboard: [
-            [{ text: "offer", callback_data: "offer_lead:lead-image" }],
-            [{ text: "undo", callback_data: "undo_lead:lead-image" }]
+            [{ text: "undo", callback_data: "undo_lead:lead-image" }, { text: "offer", callback_data: "offer_lead:lead-image" }]
           ]
         }
       }
@@ -750,7 +747,7 @@ describe("telegram bot core", () => {
       expect.stringContaining("<i>Lead name</i>: Obernsees development property"),
       expect.anything()
     );
-    expect(sendMessage).toHaveBeenCalledWith(111111, expect.stringContaining("<i>Area</i>: 92500"), expect.anything());
+    expect(sendMessage).toHaveBeenCalledWith(111111, expect.stringContaining("<i>Area</i>: 92.500 m²"), expect.anything());
     expect(sendMessage).toHaveBeenCalledWith(111111, expect.stringContaining("<blockquote expandable><b>Downloads: 0 items</b>"), expect.anything());
   });
 
@@ -827,6 +824,7 @@ describe("telegram bot core", () => {
         mimeType: "image/jpeg",
         sizeBytes: 456
       });
+    const createPendingAttachmentDecision = vi.fn().mockReturnValue("pending-group");
 
     await handleTelegramUpdate(
       {
@@ -861,22 +859,30 @@ describe("telegram bot core", () => {
         activeLead: { id: "lead-active", name: "Active lead" },
         sendMessage,
         createLead,
-        prepareAttachment
+        prepareAttachment,
+        createPendingAttachmentDecision
       }
     );
 
     expect(sendMessage).toHaveBeenNthCalledWith(1, 111111, "reviewing the files, back shortly");
     expect(sendMessage).toHaveBeenCalledTimes(2);
     expect(createLead).not.toHaveBeenCalled();
-    expect(prepareAttachment).toHaveBeenCalledTimes(2);
-    expect(prepareAttachment).toHaveBeenCalledWith(expect.objectContaining({ leadId: "lead-active" }));
+    expect(prepareAttachment).not.toHaveBeenCalled();
+    expect(createPendingAttachmentDecision).toHaveBeenCalledWith({
+      message: expect.objectContaining({ message_id: 211 }),
+      activeLead: { id: "lead-active", name: "Active lead" }
+    });
     expect(sendMessage).toHaveBeenLastCalledWith(
       111111,
-      expect.stringContaining("Intake: saved 2 attachment"),
+      expect.stringContaining("Should I add these files to the active lead or create a new lead?"),
       {
         replyMarkup: {
           inline_keyboard: [
-            [{ text: "offer", callback_data: "offer_lead:lead-active" }]
+            [
+              { text: "new lead", callback_data: "attachment_new:pending-group" },
+              { text: "add to active", callback_data: "attachment_active:pending-group" }
+            ],
+            [{ text: "cancel", callback_data: "attachment_cancel:pending-group" }]
           ]
         }
       }
@@ -930,15 +936,15 @@ describe("telegram bot core", () => {
 
     expect(sendMessage).toHaveBeenCalledWith(
       111111,
-      expect.stringContaining("Intake: saved 0 attachment"),
+      expect.stringContaining("<blockquote expandable><b>Downloads: 0 items</b> No documents yet.</blockquote>"),
       {
         replyMarkup: {
           inline_keyboard: [
             [
-              { text: "CRM", web_app: { url: "https://crm.example.com/leads?leadId=L-2026-301" } },
-              { text: "offer", callback_data: "offer_lead:lead-301" }
-            ],
-            [{ text: "undo", callback_data: "undo_lead:lead-301" }]
+              { text: "undo", callback_data: "undo_lead:lead-301" },
+              { text: "offer", callback_data: "offer_lead:lead-301" },
+              { text: "CRM", web_app: { url: "https://crm.example.com/leads?leadId=L-2026-301" } }
+            ]
           ]
         }
       }
@@ -998,16 +1004,15 @@ describe("telegram bot core", () => {
 
     expect(sendMessage).toHaveBeenCalledWith(
       111111,
-      expect.stringContaining("Intake: saved 0 attachment"),
+      expect.stringContaining("<blockquote expandable><b>Downloads: 0 items</b> No documents yet.</blockquote>"),
       {
         replyMarkup: {
           inline_keyboard: [
             [
-              { text: "CRM", callback_data: "crm_lead:lead-303:L-2026-303" },
-              { text: "offer", callback_data: "offer_lead:lead-303" }
-            ],
-            [{ text: "undo", callback_data: "undo_lead:lead-303" }],
-            [{ text: "Downloads", callback_data: "downloads_lead:lead-303" }]
+              { text: "undo", callback_data: "undo_lead:lead-303" },
+              { text: "offer", callback_data: "offer_lead:lead-303" },
+              { text: "CRM", callback_data: "crm_lead:lead-303:L-2026-303" }
+            ]
           ]
         }
       }
@@ -1061,15 +1066,15 @@ describe("telegram bot core", () => {
 
     expect(sendMessage).toHaveBeenCalledWith(
       111111,
-      expect.stringContaining("Intake: saved 0 attachment"),
+      expect.stringContaining("<blockquote expandable><b>Downloads: 0 items</b> No documents yet.</blockquote>"),
       {
         replyMarkup: {
           inline_keyboard: [
             [
-              { text: "CRM", url: "http://204.168.163.99:3004/leads?leadId=L-2026-304" },
-              { text: "offer", callback_data: "offer_lead:lead-304" }
-            ],
-            [{ text: "undo", callback_data: "undo_lead:lead-304" }]
+              { text: "undo", callback_data: "undo_lead:lead-304" },
+              { text: "offer", callback_data: "offer_lead:lead-304" },
+              { text: "CRM", url: "http://204.168.163.99:3004/leads?leadId=L-2026-304" }
+            ]
           ]
         }
       }
@@ -1183,8 +1188,8 @@ describe("telegram bot core", () => {
         replyMarkup: {
           inline_keyboard: [
             [
-              { text: "CRM", callback_data: "crm_lead:lead-404:L-2026-404" },
-              { text: "offer", callback_data: "offer_lead:lead-404" }
+              { text: "offer", callback_data: "offer_lead:lead-404" },
+              { text: "CRM", callback_data: "crm_lead:lead-404:L-2026-404" }
             ]
           ]
         }
@@ -1290,6 +1295,35 @@ describe("telegram bot core", () => {
     );
   });
 
+  it("returns a clear offer template error from an offer callback button", async () => {
+    const sendMessage = vi.fn();
+    const sendDocument = vi.fn();
+    const generateOffer = vi.fn().mockRejectedValue(new Error("Commercial offer template is not uploaded"));
+
+    await handleTelegramUpdate(
+      {
+        update_id: 111,
+        callback_query: {
+          id: "callback-offer-template-error",
+          data: "offer_lead:lead-303",
+          message: { chat: { id: 111111 }, message_id: 901 }
+        }
+      },
+      {
+        allowedChatIds: new Set([111111]),
+        workspaceId: "default",
+        sendMessage,
+        sendDocument,
+        generateOffer
+      }
+    );
+
+    expect(sendMessage).toHaveBeenCalledWith(111111, "generating offer, back shortly");
+    expect(generateOffer).toHaveBeenCalledWith("lead-303");
+    expect(sendMessage).toHaveBeenCalledWith(111111, "offer template is missing. add an offer template in CRM settings.");
+    expect(sendDocument).not.toHaveBeenCalled();
+  });
+
   it("uses replied lead cards as the target for Telegram lead updates", async () => {
     const sendMessage = vi.fn();
     const updateLead = vi.fn().mockResolvedValue({ id: "lead-303", name: "Maria" });
@@ -1360,8 +1394,11 @@ describe("telegram bot core", () => {
       expect.objectContaining({
         replyMarkup: expect.objectContaining({
           inline_keyboard: [
-            [{ text: "CRM", callback_data: "crm_lead:lead-303" }, { text: "offer", callback_data: "offer_lead:lead-303" }],
-            [{ text: "undo", callback_data: "undo_write:lead-303" }]
+            [
+              { text: "undo", callback_data: "undo_write:lead-303" },
+              { text: "offer", callback_data: "offer_lead:lead-303" },
+              { text: "CRM", callback_data: "crm_lead:lead-303" }
+            ]
           ]
         })
       })
@@ -1444,10 +1481,9 @@ describe("telegram bot core", () => {
         replyMarkup: {
           inline_keyboard: [
             [
-              { text: "CRM", callback_data: "crm_lead:lead-404:L-2026-404" },
-              { text: "offer", callback_data: "offer_lead:lead-404" }
-            ],
-            [{ text: "Full summary", callback_data: "summary_lead:lead-404" }]
+              { text: "offer", callback_data: "offer_lead:lead-404" },
+              { text: "CRM", callback_data: "crm_lead:lead-404:L-2026-404" }
+            ]
           ]
         }
       }
@@ -1455,7 +1491,7 @@ describe("telegram bot core", () => {
     expect(sendMessage).toHaveBeenCalledWith(111111, expect.stringContaining("Client wants a compact private house proposal.</blockquote>"), expect.anything());
     expect(sendMessage).toHaveBeenCalledWith(111111, expect.stringContaining("<i>Client</i>: Thomas Wachter"), expect.anything());
     expect(sendMessage).toHaveBeenCalledWith(111111, expect.stringContaining("<i>Lead name</i>: House for mother in Bayern"), expect.anything());
-    expect(sendMessage).toHaveBeenCalledWith(111111, expect.stringContaining("<i>Area</i>: 142"), expect.anything());
+    expect(sendMessage).toHaveBeenCalledWith(111111, expect.stringContaining("<i>Area</i>: 142 m²"), expect.anything());
     expect(sendMessage).toHaveBeenCalledWith(111111, expect.stringContaining("<i>Todo</i>: Prepare offer"), expect.anything());
     expect(sendMessage).not.toHaveBeenCalledWith(
       111111,
@@ -1678,10 +1714,10 @@ describe("telegram bot core", () => {
         replyMarkup: {
           inline_keyboard: [
             [
-              { text: "CRM", callback_data: "crm_lead:lead-500" },
-              { text: "offer", callback_data: "offer_lead:lead-500" }
-            ],
-            [{ text: "undo", callback_data: "undo_lead:lead-500" }]
+              { text: "undo", callback_data: "undo_lead:lead-500" },
+              { text: "offer", callback_data: "offer_lead:lead-500" },
+              { text: "CRM", callback_data: "crm_lead:lead-500" }
+            ]
           ]
         }
       })
@@ -1825,19 +1861,11 @@ describe("telegram bot core", () => {
     expect(sendMessage).toHaveBeenCalledWith(111111, expect.stringContaining("Calendar: event-501 at 2026-06-18T14:00:00.000Z"), expect.anything());
   });
 
-  it("attaches later attachment-only intake to the active lead instead of creating a new draft", async () => {
+  it("asks before attaching attachment-only intake to the active lead", async () => {
     const sendMessage = vi.fn();
     const createLead = vi.fn();
-    const prepareAttachment = vi.fn().mockResolvedValue({
-      kind: "pdf",
-      fileName: "extra.pdf",
-      storageProvider: "local",
-      storageBucket: null,
-      storageKey: "workspaces/default/leads/lead-active/extra.pdf",
-      downloadUrl: null,
-      mimeType: "application/pdf",
-      sizeBytes: 123
-    });
+    const prepareAttachment = vi.fn();
+    const createPendingAttachmentDecision = vi.fn().mockReturnValue("pending-1");
 
     const lead = await handleTelegramUpdate(
       {
@@ -1862,27 +1890,146 @@ describe("telegram bot core", () => {
         activeLead: { id: "lead-active", name: "Active lead" },
         sendMessage,
         createLead,
-        prepareAttachment
+        prepareAttachment,
+        createPendingAttachmentDecision
       }
     );
 
-    expect(lead).toEqual({ id: "lead-active", name: "Active lead" });
+    expect(lead).toBeNull();
     expect(createLead).not.toHaveBeenCalled();
-    expect(prepareAttachment).toHaveBeenCalledWith(expect.objectContaining({ leadId: "lead-active" }));
+    expect(prepareAttachment).not.toHaveBeenCalled();
+    expect(createPendingAttachmentDecision).toHaveBeenCalledWith({
+      message: expect.objectContaining({ message_id: 302 }),
+      activeLead: { id: "lead-active", name: "Active lead" }
+    });
     expect(sendMessage).toHaveBeenCalledWith(
       111111,
-      expect.stringContaining("<b>lead-active</b>"),
+      expect.stringContaining("Should I add these files to the active lead or create a new lead?"),
       {
         replyMarkup: {
           inline_keyboard: [
             [
-              { text: "CRM", callback_data: "crm_lead:lead-active" },
-              { text: "offer", callback_data: "offer_lead:lead-active" }
-            ]
+              { text: "new lead", callback_data: "attachment_new:pending-1" },
+              { text: "add to active", callback_data: "attachment_active:pending-1" }
+            ],
+            [{ text: "cancel", callback_data: "attachment_cancel:pending-1" }]
           ]
         }
       }
     );
+  });
+
+  it("attaches pending attachment-only intake to the active lead after explicit callback choice", async () => {
+    const sendMessage = vi.fn();
+    const createLead = vi.fn();
+    const prepareAttachment = vi.fn().mockResolvedValue({
+      kind: "pdf",
+      fileName: "extra.pdf",
+      storageProvider: "local",
+      storageBucket: null,
+      storageKey: "workspaces/default/leads/lead-active/extra.pdf",
+      downloadUrl: null,
+      mimeType: "application/pdf",
+      sizeBytes: 123
+    });
+    const pendingMessage = {
+      message_id: 302,
+      chat: { id: 111111 },
+      from: { first_name: "Katya" },
+      document: {
+        file_id: "file-extra",
+        file_unique_id: "unique-extra",
+        file_name: "extra.pdf",
+        mime_type: "application/pdf",
+        file_size: 123
+      }
+    };
+    const takePendingAttachmentDecision = vi.fn().mockReturnValue({
+      message: pendingMessage,
+      activeLead: { id: "lead-active", name: "Active lead" }
+    });
+
+    const lead = await handleTelegramUpdate(
+      {
+        update_id: 9,
+        callback_query: {
+          id: "callback-attach-active",
+          data: "attachment_active:pending-1",
+          message: { chat: { id: 111111 }, message_id: 901 }
+        }
+      },
+      {
+        allowedChatIds: new Set([111111]),
+        workspaceId: "default",
+        crmAppBaseUrl: "http://localhost:4900",
+        sendMessage,
+        createLead,
+        prepareAttachment,
+        takePendingAttachmentDecision
+      }
+    );
+
+    expect(lead).toEqual({ id: "lead-active", name: "Active lead" });
+    expect(takePendingAttachmentDecision).toHaveBeenCalledWith("pending-1");
+    expect(createLead).not.toHaveBeenCalled();
+    expect(prepareAttachment).toHaveBeenCalledWith(expect.objectContaining({ leadId: "lead-active" }));
+  });
+
+  it("creates a new lead from pending attachment-only intake after explicit callback choice", async () => {
+    const sendMessage = vi.fn();
+    const createLead = vi.fn().mockResolvedValue({ id: "lead-new", name: "Draft lead" });
+    const prepareAttachment = vi.fn().mockResolvedValue({
+      kind: "pdf",
+      fileName: "new-project.pdf",
+      storageProvider: "local",
+      storageBucket: null,
+      storageKey: "workspaces/default/leads/lead-new/new-project.pdf",
+      downloadUrl: null,
+      mimeType: "application/pdf",
+      sizeBytes: 123
+    });
+    const pendingMessage = {
+      message_id: 303,
+      chat: { id: 111111 },
+      from: { first_name: "Katya" },
+      document: {
+        file_id: "file-new-project",
+        file_unique_id: "unique-new-project",
+        file_name: "new-project.pdf",
+        mime_type: "application/pdf",
+        file_size: 123
+      }
+    };
+    const takePendingAttachmentDecision = vi.fn().mockReturnValue({
+      message: pendingMessage,
+      activeLead: { id: "lead-active", name: "Active lead" }
+    });
+
+    const lead = await handleTelegramUpdate(
+      {
+        update_id: 10,
+        callback_query: {
+          id: "callback-new-lead",
+          data: "attachment_new:pending-2",
+          message: { chat: { id: 111111 }, message_id: 902 }
+        }
+      },
+      {
+        allowedChatIds: new Set([111111]),
+        workspaceId: "default",
+        crmAppBaseUrl: "http://localhost:4900",
+        sendMessage,
+        createLead,
+        prepareAttachment,
+        takePendingAttachmentDecision
+      }
+    );
+
+    expect(lead).toEqual({ id: "lead-new", name: "Draft lead" });
+    expect(takePendingAttachmentDecision).toHaveBeenCalledWith("pending-2");
+    expect(createLead).toHaveBeenCalled();
+    expect(prepareAttachment).toHaveBeenCalledWith(expect.objectContaining({ leadId: "lead-new" }));
+    expect(prepareAttachment).not.toHaveBeenCalledWith(expect.objectContaining({ leadId: "lead-active" }));
   });
 
   it("uses the active lead as context for text plus attachment follow-ups", async () => {
@@ -1964,13 +2111,13 @@ describe("telegram bot core", () => {
     expect(prepareAttachment).toHaveBeenCalledWith(expect.objectContaining({ leadId: "lead-active" }));
     expect(sendMessage).toHaveBeenCalledWith(
       111111,
-      expect.stringContaining("Intake: saved 1 attachment(s) to Active lead."),
+      expect.stringContaining("<blockquote expandable><b>Downloads: 0 items</b> No documents yet.</blockquote>"),
       {
         replyMarkup: {
           inline_keyboard: [
             [
-              { text: "CRM", callback_data: "crm_lead:lead-active" },
-              { text: "offer", callback_data: "offer_lead:lead-active" }
+              { text: "offer", callback_data: "offer_lead:lead-active" },
+              { text: "CRM", callback_data: "crm_lead:lead-active" }
             ]
           ]
         }
@@ -2044,13 +2191,13 @@ describe("telegram bot core", () => {
     });
     expect(sendMessage).toHaveBeenCalledWith(
       111111,
-      expect.stringContaining("Intake: saved 0 attachment(s) to Active lead."),
+      expect.stringContaining("<blockquote expandable><b>Downloads: 0 items</b> No documents yet.</blockquote>"),
       {
         replyMarkup: {
           inline_keyboard: [
             [
-              { text: "CRM", callback_data: "crm_lead:lead-active" },
-              { text: "offer", callback_data: "offer_lead:lead-active" }
+              { text: "offer", callback_data: "offer_lead:lead-active" },
+              { text: "CRM", callback_data: "crm_lead:lead-active" }
             ]
           ]
         }
