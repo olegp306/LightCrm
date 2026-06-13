@@ -1028,7 +1028,7 @@ function compactLine(value: string, maxLength: number): string {
   return `${compacted.slice(0, Math.max(0, maxLength - 1)).trimEnd()}...`;
 }
 
-const telegramSummaryShortMax = 120;
+const telegramSummaryShortMax = 320;
 const telegramSummaryFullMax = 420;
 
 function optionalStringProperty(value: object, key: string): string | null {
@@ -1090,6 +1090,11 @@ function expandableQuote(title: string, body: string): string {
   return `<blockquote expandable><b>${escapeHtml(title)}</b>${compactBody ? ` ${compactBody}` : ""}</blockquote>`;
 }
 
+function compactQuote(title: string, body: string): string {
+  const compactBody = body.replace(/\s+/g, " ").trim();
+  return `<blockquote><b>${escapeHtml(title)}</b>${compactBody ? ` ${escapeHtml(compactBody)}` : ""}</blockquote>`;
+}
+
 function formatOfferMissingFields(value: string | null | undefined): string {
   const fields = value
     ?.split(/[,;\n]/)
@@ -1101,26 +1106,58 @@ function formatOfferMissingFields(value: string | null | undefined): string {
   return fields.map((field) => `- ${escapeHtml(field)}`).join("\n");
 }
 
-function telegramLeadDownloadsQuote(documents: TelegramLeadDocument[]): string {
-  const title = `Downloads: ${documents.length} ${documents.length === 1 ? "item" : "items"}`;
+function telegramLeadDownloadsQuote(documents: TelegramLeadDocument[]): string | null {
   if (documents.length === 0) {
-    return expandableQuote(title, "No documents yet.");
+    return null;
   }
-  const body = documents
-    .slice(0, 8)
-    .map((document, index) => {
-      const summary = document.shortSummary || document.longSummary || "No summary yet.";
-      const createdAt = compactDocumentDate(document.createdAt);
-      return [
-        `${index + 1}. ${escapeHtml(compactLine(document.fileName, 34))}`,
-        compactLine(summary, 80),
-        createdAt ? escapeHtml(createdAt) : null
-      ]
-        .filter((line): line is string => Boolean(line))
-        .join(" - ");
-    })
-    .join("; ");
+  const title = `Downloads: ${documents.length} ${documents.length === 1 ? "item" : "items"}`;
+  const documentLine = (document: TelegramLeadDocument, index: number) => {
+    const summary = document.shortSummary || document.longSummary || "No summary yet.";
+    const createdAt = compactDocumentDate(document.createdAt);
+    return [
+      `${index + 1}. ${escapeHtml(compactLine(document.fileName, 34))}`,
+      escapeHtml(compactLine(summary, documents.length === 1 ? 120 : 80)),
+      createdAt ? escapeHtml(createdAt) : null
+    ]
+      .filter((line): line is string => Boolean(line))
+      .join(" - ");
+  };
+  if (documents.length === 1) {
+    return `<b>Downloads</b>: ${documentLine(documents[0]!, 0)}`;
+  }
+  const body = documents.slice(0, 8).map(documentLine).join("; ");
   return expandableQuote(title, body);
+}
+
+function displaySummaryText(lead: TelegramLeadCard): string | null {
+  const raw = lead.summaryShort?.trim();
+  if (!raw) {
+    return null;
+  }
+  const cleaned = raw
+    .split(/\n+/)
+    .map((line) =>
+      line
+        .replace(/^Lead intake summary\s*$/i, "")
+        .replace(/^Source:\s*TG thread\s+\S+\.\s*Text:\s*/i, "")
+        .replace(/\s*Files:\s*.*$/i, "")
+        .replace(/^Original takes\s*$/i, "")
+        .replace(/^-\s+.*$/i, "")
+        .replace(/^-\s*(?:image|pdf|audio|voice|document):.*$/i, "")
+        .replace(/^-\s*[^:]{1,40}#?\d*:\s*/i, "")
+        .replace(/^Received TG message\.\s*/i, "")
+        .trim()
+    )
+    .filter(Boolean)
+    .join(" ");
+  return cleaned ? compactLine(cleaned, telegramSummaryShortMax) : null;
+}
+
+function leadCardTitleLine(lead: TelegramLeadCard): string {
+  const client = lead.clientName?.trim() || lead.name;
+  const leadName = lead.project?.trim() || lead.name;
+  const pieces = client === leadName ? [client] : [client, leadName];
+  return pieces.map((piece) => escapeHtml(piece)).join("  ");
 }
 
 function telegramLeadCardText(lead: TelegramLeadCard): string {
@@ -1159,13 +1196,10 @@ function telegramLeadFullSummaryText(lead: TelegramLeadCard): string {
 }
 
 function telegramLeadCardTextCompact(lead: TelegramLeadCard, documents: TelegramLeadDocument[] = []): string {
-  const summary = lead.summaryShort ? compactLine(lead.summaryShort, telegramSummaryShortMax) : null;
-  const fullSummary = lead.summaryLong ?? lead.summaryShort;
+  const summary = displaySummaryText(lead);
   return [
     `<b>${escapeHtml(leadDisplayRef(lead))}</b>`,
-    `<b>${escapeHtml(lead.name)}</b>`,
-    htmlLeadField("Client", lead.clientName, 90),
-    htmlLeadField("Lead name", lead.project ?? lead.name, 110),
+    `<b>${leadCardTitleLine(lead)}</b>`,
     htmlLeadField("Area", formatTelegramArea(lead.area), 50),
     htmlLeadField("Description", lead.description, 120),
     htmlLeadField("Todo", lead.todo, 80),
@@ -1173,10 +1207,7 @@ function telegramLeadCardTextCompact(lead: TelegramLeadCard, documents: Telegram
     htmlLeadField("Messenger", lead.messenger, 70),
     expandableQuote("Missing for offer", formatOfferMissingFields(lead.offerMissingFields)),
     telegramLeadDownloadsQuote(documents),
-    summary ? expandableQuote("Summary", escapeHtml(summary)) : null,
-    fullSummary && fullSummary !== summary
-      ? expandableQuote("Full summary", escapeHtml(compactLine(fullSummary, telegramSummaryFullMax)))
-      : null,
+    summary ? compactQuote("Summary", summary) : null
   ]
     .filter((line): line is string => Boolean(line))
     .join("\n");
@@ -1206,6 +1237,40 @@ function compactDocumentDate(value: string | Date | null | undefined): string | 
   }
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? null : date.toISOString().slice(0, 10);
+}
+
+function formatTelegramDateTime(value: string | Date): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return String(value);
+  }
+  return new Intl.DateTimeFormat("de-DE", {
+    timeZone: process.env.LIGHTCRM_TIME_ZONE ?? "Europe/Paris",
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit"
+  }).format(date);
+}
+
+function telegramCalendarLine(events: TelegramCalendarEventResult[]): string | null {
+  if (events.length === 0) {
+    return null;
+  }
+  const eventLine = (event: TelegramCalendarEventResult, index: number) =>
+    [
+      events.length > 1 ? `${index + 1}.` : null,
+      escapeHtml(event.title),
+      "-",
+      escapeHtml(formatTelegramDateTime(event.startsAt))
+    ]
+      .filter((part): part is string => Boolean(part))
+      .join(" ");
+  if (events.length === 1) {
+    return `<b>Calendar</b>: ${eventLine(events[0]!, 0)}`;
+  }
+  return expandableQuote("Calendar", events.map(eventLine).join("; "));
 }
 
 function telegramLeadDownloadsText(documents: TelegramLeadDocument[]): string {
@@ -1747,9 +1812,7 @@ export async function handleTelegramUpdate(
         reminderOutcome.reminder
           ? `Reminder: ${reminderOutcome.reminder.id} at ${new Date(reminderOutcome.reminder.dueAt).toISOString()}`
           : null,
-        calendarOutcome.event
-          ? `Calendar: ${calendarOutcome.event.id} at ${new Date(calendarOutcome.event.startsAt).toISOString()}`
-          : null,
+        telegramCalendarLine(calendarOutcome.event ? [calendarOutcome.event] : []),
         crmLeadReplyMarkup(deps, replyLead, {
           includeUndo: Boolean(createdLead || updatedLead || enrichment.result),
           undoMode: createdLead ? "archive" : "not_connected"

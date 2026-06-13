@@ -483,7 +483,7 @@ describe("telegram bot core", () => {
     expect(ingestLeadIntake).not.toHaveBeenCalled();
     expect(sendMessage).toHaveBeenCalledWith(
       111111,
-      expect.stringContaining("<blockquote expandable><b>Downloads: 0 items</b> No documents yet.</blockquote>"),
+      expect.stringContaining("<blockquote expandable><b>Missing for offer</b>"),
       {
         replyMarkup: {
           inline_keyboard: [
@@ -553,7 +553,7 @@ describe("telegram bot core", () => {
     );
     expect(sendMessage).toHaveBeenCalledWith(
       111111,
-      expect.stringContaining("<blockquote expandable><b>Downloads: 0 items</b> No documents yet.</blockquote>"),
+      expect.stringContaining("<blockquote expandable><b>Missing for offer</b>"),
       {
         replyMarkup: {
           inline_keyboard: [
@@ -633,7 +633,7 @@ describe("telegram bot core", () => {
     );
     expect(sendMessage).toHaveBeenCalledWith(
       111111,
-      expect.stringContaining("<blockquote expandable><b>Downloads: 0 items</b> No documents yet.</blockquote>"),
+      expect.stringContaining("<blockquote expandable><b>Missing for offer</b>"),
       {
         replyMarkup: {
           inline_keyboard: [
@@ -744,11 +744,11 @@ describe("telegram bot core", () => {
     );
     expect(sendMessage).toHaveBeenCalledWith(
       111111,
-      expect.stringContaining("<i>Lead name</i>: Obernsees development property"),
+      expect.stringContaining("<b>Obernsees development property</b>"),
       expect.anything()
     );
     expect(sendMessage).toHaveBeenCalledWith(111111, expect.stringContaining("<i>Area</i>: 92.500 m²"), expect.anything());
-    expect(sendMessage).toHaveBeenCalledWith(111111, expect.stringContaining("<blockquote expandable><b>Downloads: 0 items</b>"), expect.anything());
+    expect(sendMessage).toHaveBeenCalledWith(111111, expect.stringContaining("<blockquote expandable><b>Missing for offer</b>"), expect.anything());
   });
 
   it("uses attachment summary for draft lead upload when caption is whitespace-only", async () => {
@@ -936,7 +936,7 @@ describe("telegram bot core", () => {
 
     expect(sendMessage).toHaveBeenCalledWith(
       111111,
-      expect.stringContaining("<blockquote expandable><b>Downloads: 0 items</b> No documents yet.</blockquote>"),
+      expect.stringContaining("<blockquote expandable><b>Missing for offer</b>"),
       {
         replyMarkup: {
           inline_keyboard: [
@@ -950,8 +950,7 @@ describe("telegram bot core", () => {
       }
     );
     expect(sendMessage).toHaveBeenCalledWith(111111, expect.stringContaining("<b>L-2026-301</b>"), expect.anything());
-    expect(sendMessage).toHaveBeenCalledWith(111111, expect.stringContaining("<i>Client</i>: Maria"), expect.anything());
-    expect(sendMessage).toHaveBeenCalledWith(111111, expect.stringContaining("<i>Lead name</i>: private_house"), expect.anything());
+    expect(sendMessage).toHaveBeenCalledWith(111111, expect.stringContaining("<b>Maria  private_house</b>"), expect.anything());
     expect(sendMessage).toHaveBeenCalledWith(111111, expect.stringContaining("<blockquote expandable><b>Missing for offer</b>"), expect.anything());
   });
 
@@ -1004,7 +1003,7 @@ describe("telegram bot core", () => {
 
     expect(sendMessage).toHaveBeenCalledWith(
       111111,
-      expect.stringContaining("<blockquote expandable><b>Downloads: 0 items</b> No documents yet.</blockquote>"),
+      expect.stringContaining("<blockquote expandable><b>Missing for offer</b>"),
       {
         replyMarkup: {
           inline_keyboard: [
@@ -1066,7 +1065,7 @@ describe("telegram bot core", () => {
 
     expect(sendMessage).toHaveBeenCalledWith(
       111111,
-      expect.stringContaining("<blockquote expandable><b>Downloads: 0 items</b> No documents yet.</blockquote>"),
+      expect.stringContaining("<blockquote expandable><b>Missing for offer</b>"),
       {
         replyMarkup: {
           inline_keyboard: [
@@ -1109,6 +1108,130 @@ describe("telegram bot core", () => {
       111111,
       "http://localhost:4900/leads?leadId=L-2026-303"
     );
+  });
+
+  it("shows a clean compact intake summary without TG source boilerplate", async () => {
+    const sendMessage = vi.fn();
+    const createLead = vi.fn().mockResolvedValue({ id: "lead-clean", name: "Thomas Wachter" });
+    const ingestLeadIntake = vi.fn().mockResolvedValue({
+      documents: [],
+      summary:
+        "Lead intake summary\nSource: TG thread 410849134. Text: Thomas Wachter wants an interior apartment proposal and a Zoom follow-up. Files: no attachments.\nOriginal takes\n- Katya #77: raw message"
+    });
+    const orchestrate = vi.fn().mockResolvedValue({
+      workspaceId: "default",
+      normalizedText: "New lead Thomas Wachter interior apartment",
+      intent: "create_lead",
+      risk: "auto",
+      explanations: [],
+      settings: DEFAULT_LANGGRAPH_SETTINGS,
+      facts: {
+        contactName: "Thomas Wachter",
+        projectName: null,
+        projectType: "interior apartment",
+        location: null,
+        areaM2: null,
+        phone: null,
+        budgetEur: null,
+        dueAt: null,
+        sourceMessageId: "77",
+        evidence: { sourceMessageId: "77", author: "Katya", sourceChannel: "telegram", textSnippet: "New lead Thomas" }
+      },
+      actions: [{ type: "create_lead", risk: "auto", reason: "Draft lead can be created.", payload: {} }]
+    });
+
+    await handleTelegramUpdate(
+      {
+        update_id: 77,
+        message: {
+          message_id: 77,
+          text: "New lead Thomas Wachter interior apartment",
+          chat: { id: 111111 },
+          from: { first_name: "Katya" }
+        }
+      },
+      {
+        allowedChatIds: new Set([111111]),
+        workspaceId: "default",
+        sendMessage,
+        orchestrate,
+        createLead,
+        ingestLeadIntake
+      }
+    );
+
+    expect(sendMessage).toHaveBeenCalledWith(
+      111111,
+      expect.stringContaining("<blockquote><b>Summary</b> Thomas Wachter wants an interior apartment proposal and a Zoom follow-up.</blockquote>"),
+      expect.anything()
+    );
+    expect(sendMessage).not.toHaveBeenCalledWith(111111, expect.stringContaining("Source: TG thread"), expect.anything());
+  });
+
+  it("shows one download inline and multiple downloads in an expandable drawer", async () => {
+    const orchestrationResult = {
+      workspaceId: "default",
+      normalizedText: "New lead Maria private house",
+      intent: "create_lead",
+      risk: "auto",
+      explanations: [],
+      settings: DEFAULT_LANGGRAPH_SETTINGS,
+      facts: {
+        contactName: "Maria",
+        projectName: null,
+        projectType: "private house",
+        location: null,
+        areaM2: null,
+        phone: null,
+        budgetEur: null,
+        dueAt: null,
+        sourceMessageId: "78",
+        evidence: { sourceMessageId: "78", author: "Katya", sourceChannel: "telegram", textSnippet: "New lead Maria" }
+      },
+      actions: [{ type: "create_lead", risk: "auto", reason: "Draft lead can be created.", payload: {} }]
+    };
+    const runWithDocuments = async (documents: unknown[]) => {
+      const sendMessage = vi.fn();
+      await handleTelegramUpdate(
+        {
+          update_id: 78,
+          message: {
+            message_id: 78,
+            text: "New lead Maria private house",
+            chat: { id: 111111 },
+            from: { first_name: "Katya" }
+          }
+        },
+        {
+          allowedChatIds: new Set([111111]),
+          workspaceId: "default",
+          sendMessage,
+          orchestrate: vi.fn().mockResolvedValue(orchestrationResult),
+          createLead: vi.fn().mockResolvedValue({ id: "lead-docs", name: "Maria" }),
+          listLeadDocuments: vi.fn().mockResolvedValue({ leadId: "lead-docs", documents })
+        }
+      );
+      return sendMessage;
+    };
+
+    const oneDownload = await runWithDocuments([
+      {
+        id: "doc-1",
+        fileName: "brief.pdf",
+        shortSummary: "Permit package and project facts.",
+        downloadUrl: null,
+        mimeType: "application/pdf",
+        createdAt: "2026-06-13T08:00:00.000Z"
+      }
+    ]);
+    expect(oneDownload).toHaveBeenCalledWith(111111, expect.stringContaining("<b>Downloads</b>: 1. brief.pdf - Permit package and project facts."), expect.anything());
+    expect(oneDownload).not.toHaveBeenCalledWith(111111, expect.stringContaining("<blockquote expandable><b>Downloads"), expect.anything());
+
+    const twoDownloads = await runWithDocuments([
+      { id: "doc-1", fileName: "brief.pdf", shortSummary: "Permit package.", downloadUrl: null, mimeType: "application/pdf" },
+      { id: "doc-2", fileName: "plan.pdf", shortSummary: "Floor plans.", downloadUrl: null, mimeType: "application/pdf" }
+    ]);
+    expect(twoDownloads).toHaveBeenCalledWith(111111, expect.stringContaining("<blockquote expandable><b>Downloads: 2 items</b>"), expect.anything());
   });
 
   it("archives a created lead from the undo callback button", async () => {
@@ -1476,7 +1599,7 @@ describe("telegram bot core", () => {
     expect(sendMessage).toHaveBeenCalledWith(111111, "Found 1 lead(s) for: Thomas");
     expect(sendMessage).toHaveBeenCalledWith(
       111111,
-      expect.stringContaining("<blockquote expandable><b>Summary</b>"),
+      expect.stringContaining("<blockquote><b>Summary</b>"),
       {
         replyMarkup: {
           inline_keyboard: [
@@ -1489,8 +1612,7 @@ describe("telegram bot core", () => {
       }
     );
     expect(sendMessage).toHaveBeenCalledWith(111111, expect.stringContaining("Client wants a compact private house proposal.</blockquote>"), expect.anything());
-    expect(sendMessage).toHaveBeenCalledWith(111111, expect.stringContaining("<i>Client</i>: Thomas Wachter"), expect.anything());
-    expect(sendMessage).toHaveBeenCalledWith(111111, expect.stringContaining("<i>Lead name</i>: House for mother in Bayern"), expect.anything());
+    expect(sendMessage).toHaveBeenCalledWith(111111, expect.stringContaining("<b>Thomas Wachter  House for mother in Bayern</b>"), expect.anything());
     expect(sendMessage).toHaveBeenCalledWith(111111, expect.stringContaining("<i>Area</i>: 142 m²"), expect.anything());
     expect(sendMessage).toHaveBeenCalledWith(111111, expect.stringContaining("<i>Todo</i>: Prepare offer"), expect.anything());
     expect(sendMessage).not.toHaveBeenCalledWith(
@@ -1722,7 +1844,7 @@ describe("telegram bot core", () => {
         }
       })
     );
-    expect(sendMessage).toHaveBeenCalledWith(111111, expect.stringContaining("<i>Lead name</i>: Country house"), expect.anything());
+    expect(sendMessage).toHaveBeenCalledWith(111111, expect.stringContaining("<b>Country house</b>"), expect.anything());
   });
 
   it("creates a calendar event from a meeting action", async () => {
@@ -1858,7 +1980,7 @@ describe("telegram bot core", () => {
         startsAt: "2026-06-18T14:00:00.000Z"
       })
     );
-    expect(sendMessage).toHaveBeenCalledWith(111111, expect.stringContaining("Calendar: event-501 at 2026-06-18T14:00:00.000Z"), expect.anything());
+    expect(sendMessage).toHaveBeenCalledWith(111111, expect.stringContaining("<b>Calendar</b>: Thomas Wachter - 18.06.2026, 16:00"), expect.anything());
   });
 
   it("asks before attaching attachment-only intake to the active lead", async () => {
@@ -2111,7 +2233,7 @@ describe("telegram bot core", () => {
     expect(prepareAttachment).toHaveBeenCalledWith(expect.objectContaining({ leadId: "lead-active" }));
     expect(sendMessage).toHaveBeenCalledWith(
       111111,
-      expect.stringContaining("<blockquote expandable><b>Downloads: 0 items</b> No documents yet.</blockquote>"),
+      expect.stringContaining("<blockquote expandable><b>Missing for offer</b>"),
       {
         replyMarkup: {
           inline_keyboard: [
@@ -2191,7 +2313,7 @@ describe("telegram bot core", () => {
     });
     expect(sendMessage).toHaveBeenCalledWith(
       111111,
-      expect.stringContaining("<blockquote expandable><b>Downloads: 0 items</b> No documents yet.</blockquote>"),
+      expect.stringContaining("<blockquote expandable><b>Missing for offer</b>"),
       {
         replyMarkup: {
           inline_keyboard: [

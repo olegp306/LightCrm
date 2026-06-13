@@ -2,6 +2,22 @@
 
 All notable LightCrm releases are documented here. Starting with `0.2.0`, every version bump must include a changelog entry.
 
+## 0.3.27 - 2026-06-13
+
+### Changed
+
+- Reworked Telegram lead cards so the lead number is followed by one bold line containing `client  lead name`, with the separate `Client` field removed.
+- Removed `Full summary` from Telegram cards and kept a short cleaned intake summary without TG source/thread boilerplate.
+- Adjusted Telegram card calendar and download sections: one item is shown inline, while multiple items are shown in an expandable drawer.
+
+### Verification
+
+- `pnpm --filter @lightcrm/telegram-bot test -- --runInBand`
+- `pnpm --filter @lightcrm/telegram-bot typecheck`
+- `pnpm --filter @lightcrm/telegram-bot build`
+- `pnpm test`
+- `pnpm typecheck`
+
 ## 0.3.26 - 2026-06-13
 
 ### Changed
