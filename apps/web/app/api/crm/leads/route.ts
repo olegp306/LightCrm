@@ -123,6 +123,7 @@ export async function GET(request: Request) {
         const description = readNoteField(lead.notes, leadNoteFields.description);
         const address = readNoteField(lead.notes, leadNoteFields.address);
         const todo = readNoteField(lead.notes, leadNoteFields.todo);
+        const ballSide = readNoteField(lead.notes, leadNoteFields.ballSide) ?? "us";
         const budgetEur = readNoteField(lead.notes, leadNoteFields.budgetEur);
         const storedSummary = latestSummaryByLeadId.get(lead.id);
         const notesSummary = readLatestLeadSummary(lead.notes);
@@ -153,6 +154,7 @@ export async function GET(request: Request) {
           interest: readNoteField(lead.notes, leadNoteFields.interest),
           urgency: readNoteField(lead.notes, leadNoteFields.urgency),
           todo,
+          ballSide,
           nextAction: nextAction.nextAction,
           nextActionState: nextAction.nextActionState,
           address,

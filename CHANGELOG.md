@@ -2,6 +2,26 @@
 
 All notable LightCrm releases are documented here. Starting with `0.2.0`, every version bump must include a changelog entry.
 
+## 0.3.33 - 2026-06-14
+
+### Added
+
+- Added a manual `Ball` handoff column for Leads so operators can double-click a cell to move initiative between `us` and `client` with an arcing ball animation.
+- Added selectable handoff ball icons for football, basketball, volleyball, and hot potato through a compact desktop-only toolbar popover.
+- Added real local MP3 handoff sounds from Mixkit assets, with one fixed sound per ball type and a persistent sound on/off toggle.
+
+### Changed
+
+- Styled the handoff cell without boxed `us`/`client` labels, keeping the cell lighter while preserving the curved handoff path.
+- Added a gold insight-style hover glow and placeholder tooltip when the ball is on the `us` side, preparing the cell for future suggested next actions.
+- Reset the Leads table preference key to include the new `Ball` column in the default layout.
+
+### Verification
+
+- `pnpm --filter @lightcrm/web typecheck`
+- Local smoke: `/leads` returned HTTP 200.
+- Local smoke: all four handoff MP3 assets returned HTTP 200 as `audio/mpeg`.
+
 ## 0.3.32 - 2026-06-14
 
 ### Added

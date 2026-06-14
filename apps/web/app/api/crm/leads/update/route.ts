@@ -21,6 +21,7 @@ const LeadPatch = z
     interest: optionalText,
     urgency: optionalText,
     todo: optionalText,
+    ballSide: z.enum(["us", "client"]).optional(),
     address: optionalText,
     messenger: optionalText,
     sourceChannel: optionalText,

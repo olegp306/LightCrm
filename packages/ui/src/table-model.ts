@@ -21,6 +21,8 @@ export type TablePreferences = {
   hidden?: string[];
   fontScale?: number;
   tableColor?: string;
+  handoffBall?: "football" | "basketball" | "volleyball" | "potato";
+  handoffSoundEnabled?: boolean;
   columnTextStyles?: Record<string, ColumnTextStyle>;
 };
 

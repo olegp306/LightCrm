@@ -44,7 +44,7 @@ export const tables: Record<string, TableDefinition> = {
   leads: {
     title: "Leads",
     description: "Potential opportunities, optionally linked to client records.",
-    tableKey: "leads.v6",
+    tableKey: "leads.v8",
     archiveEntity: "lead",
     columns: [
       { id: "code", title: "Lead ID", width: 120, mobilePriority: 1 },
@@ -55,6 +55,7 @@ export const tables: Record<string, TableDefinition> = {
       { id: "interest", title: "Interest", width: 120, mobilePriority: 6 },
       { id: "urgency", title: "Urgency", width: 120, mobilePriority: 7 },
       { id: "todo", title: "Todo", width: 180 },
+      { id: "ballSide", title: "Ball", width: 96, valueKind: "handoff" },
       { id: "address", title: "Address", width: 210 },
       { id: "client.phone", title: "Phone", width: 150, group: "Client" },
       { id: "client.email", title: "Email", width: 230, group: "Client" },
@@ -79,6 +80,7 @@ export const tables: Record<string, TableDefinition> = {
         interest: "Interest",
         urgency: "Urgency",
         todo: "Todo",
+        ballSide: "Ball side",
         address: "Address"
       },
       fields: [
@@ -115,6 +117,7 @@ export const tables: Record<string, TableDefinition> = {
           interest: "hot",
           urgency: "June",
           todo: "Send KP",
+          ballSide: "us",
           address: "Birkenfeld",
           "client.phone": "+33 600 000 001",
           "client.email": "ada@example.com",

@@ -15,7 +15,7 @@ import {
   type Item,
   type Theme
 } from "@glideapps/glide-data-grid";
-import { Check, Columns3, Download, FileText, Italic, Merge, Palette, Plus, Search, Trash2, X } from "lucide-react";
+import { Check, Columns3, Download, FileText, Italic, Merge, Palette, Plus, Search, Trash2, Volume2, VolumeX, X } from "lucide-react";
 import type { ChangeEvent, ComponentProps, FormEvent } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -48,7 +48,7 @@ export type CrmTableColumn = {
   defaultVisible?: boolean;
   mobilePriority?: number;
   group?: string;
-  valueKind?: "text" | "link" | "documents" | "calendar" | "area" | "longText" | "action";
+  valueKind?: "text" | "link" | "documents" | "calendar" | "area" | "longText" | "action" | "handoff";
   textStyle?: ColumnTextStyle;
 };
 
@@ -136,6 +136,22 @@ type CalendarCustomCell = CustomCell<{
   items: CalendarCellValue;
 }>;
 
+type HandoffBallType = "football" | "basketball" | "volleyball" | "potato";
+
+type HandoffSoundPreset = {
+  label: string;
+  src: string;
+};
+
+type HandoffCustomCell = CustomCell<{
+  kind: "handoff-cell";
+  side: "us" | "client";
+  ballType: HandoffBallType;
+  progress: number | null;
+  from: "us" | "client" | null;
+  to: "us" | "client" | null;
+}>;
+
 type DocumentCellAction = { type: "open"; index: number } | { type: "upload" } | null;
 type CalendarCellAction = { type: "delete"; index: number } | null;
 type CellDeleteTarget =
@@ -214,8 +230,33 @@ function defaultPreferences(columns: CrmTableColumn[]): TablePreferences {
     order: columns.map((column) => column.id),
     widths: Object.fromEntries(columns.map((column) => [column.id, column.width ?? 160])),
     hidden: columns.filter((column) => column.defaultVisible === false).map((column) => column.id),
-    tableColor: defaultTableColor
+    tableColor: defaultTableColor,
+    handoffBall: "football",
+    handoffSoundEnabled: true
   };
+}
+
+const handoffBallLabels: Record<HandoffBallType, { label: string; icon: string }> = {
+  football: { label: "Football", icon: "⚽" },
+  basketball: { label: "Basketball", icon: "🏀" },
+  volleyball: { label: "Volleyball", icon: "🏐" },
+  potato: { label: "Hot potato", icon: "🥔" }
+};
+
+const handoffSoundPresets: Record<HandoffBallType, HandoffSoundPreset> = {
+  football: { label: "Quick kick", src: "/sounds/handoff/football-quick-kick.mp3" },
+  basketball: { label: "Net", src: "/sounds/handoff/basketball-net.mp3" },
+  volleyball: { label: "Catch", src: "/sounds/handoff/volleyball-catch.mp3" },
+  potato: { label: "Pop click", src: "/sounds/handoff/potato-pop-click.mp3" }
+};
+
+function normalizedHandoffSide(value: CrmTableCellValue | undefined): "us" | "client" {
+  const text = typeof value === "string" ? value.trim().toLowerCase() : "";
+  return text === "client" || text === "customer" || text === "them" ? "client" : "us";
+}
+
+function normalizedHandoffBall(value: TablePreferences["handoffBall"]): HandoffBallType {
+  return value && value in handoffBallLabels ? value : "football";
 }
 
 function nextSort(current: TableSort | null, columnId: string): TableSort | null {
@@ -1059,6 +1100,100 @@ const calendarCellRenderer: CustomRenderer<CalendarCustomCell> = {
   onPaste: (_value, cellData) => cellData
 };
 
+const handoffCellRenderer: CustomRenderer<HandoffCustomCell> = {
+  kind: GridCellKind.Custom,
+  isMatch: (cell): cell is HandoffCustomCell =>
+    cell.data && typeof cell.data === "object" && "kind" in cell.data && cell.data.kind === "handoff-cell",
+  needsHover: true,
+  draw: (args, cell) => {
+    const { ctx, rect, theme, hoverAmount } = args;
+    const side = cell.data.side;
+    const progress = cell.data.progress;
+    const from = cell.data.from;
+    const to = cell.data.to;
+    const displaySide = progress !== null && to ? to : side;
+    const icon = handoffBallLabels[cell.data.ballType].icon;
+    const leftX = rect.x + 22;
+    const rightX = rect.x + rect.width - 22;
+    const centerY = rect.y + rect.height / 2;
+    const railY = centerY + 8;
+    const startX = from === "client" ? rightX : leftX;
+    const endX = to === "client" ? rightX : leftX;
+    const idleX = displaySide === "client" ? rightX : leftX;
+    const eased = progress === null ? 1 : 1 - Math.pow(1 - progress, 3);
+    const ballX = progress === null ? idleX : startX + (endX - startX) * eased;
+    const arcLift = progress === null ? 0 : Math.sin(Math.PI * progress) * Math.min(18, rect.height * 0.42);
+    const ballY = centerY - arcLift;
+    const insightHover = displaySide === "us" && hoverAmount > 0;
+
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(rect.x, rect.y, rect.width, rect.height);
+    ctx.clip();
+    if (hoverAmount > 0) {
+      ctx.globalAlpha = hoverAmount;
+      ctx.fillStyle = theme.bgHeaderHovered;
+      ctx.fillRect(rect.x + 1, rect.y + 1, rect.width - 2, rect.height - 2);
+      ctx.globalAlpha = 1;
+    }
+
+    ctx.strokeStyle = insightHover ? "rgba(245, 184, 75, 0.48)" : theme.borderColor;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(leftX, railY);
+    ctx.quadraticCurveTo(rect.x + rect.width / 2, rect.y + 7, rightX, railY);
+    ctx.stroke();
+
+    for (const [label, x] of [
+      ["us", leftX],
+      ["client", rightX]
+    ] as const) {
+      const active = displaySide === label;
+      ctx.fillStyle = active ? (label === "us" && insightHover ? "#d79316" : theme.accentColor) : theme.textMedium;
+      ctx.font = "700 8px Inter, sans-serif";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(label === "us" ? "us" : "client", x, railY, 26);
+      if (active) {
+        ctx.globalAlpha = label === "us" && insightHover ? 0.72 : 0.45;
+        ctx.fillStyle = label === "us" && insightHover ? "#f5b84b" : theme.accentColor;
+        ctx.beginPath();
+        ctx.arc(x, railY + 10, 2, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha = 1;
+      }
+    }
+
+    if (displaySide === "us") {
+      ctx.fillStyle = insightHover ? "#f5b84b" : theme.accentColor;
+      ctx.font = "700 12px Inter, sans-serif";
+      ctx.textAlign = "left";
+      ctx.textBaseline = "middle";
+      ctx.fillText("✦", rect.x + 5, centerY - 1);
+    }
+
+    if (insightHover) {
+      const glow = ctx.createRadialGradient(ballX, ballY, 2, ballX, ballY, 22);
+      glow.addColorStop(0, "rgba(245, 184, 75, 0.36)");
+      glow.addColorStop(1, "rgba(245, 184, 75, 0)");
+      ctx.fillStyle = glow;
+      ctx.beginPath();
+      ctx.arc(ballX, ballY, 23, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    ctx.font = `${Math.max(17, Math.min(22, rect.height - 10))}px \"Segoe UI Emoji\", \"Apple Color Emoji\", sans-serif`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.shadowColor = insightHover ? "rgba(245, 184, 75, 0.72)" : "rgba(15, 23, 42, 0.22)";
+    ctx.shadowBlur = insightHover ? 11 : 4;
+    ctx.shadowOffsetY = insightHover ? 0 : 1;
+    ctx.fillText(icon, ballX, ballY + (progress === null ? 0 : Math.sin(progress * Math.PI * 4) * 1.2));
+    ctx.restore();
+  },
+  onPaste: (_value, cellData) => cellData
+};
+
 export function CrmTable({
   title,
   description,
@@ -1085,6 +1220,7 @@ export function CrmTable({
   const [sort, setSort] = useState<TableSort | null>(null);
   const [gridSelection, setGridSelection] = useState<GridSelection>(() => emptySelection());
   const [showColumnMenu, setShowColumnMenu] = useState(false);
+  const [showHandoffMenu, setShowHandoffMenu] = useState(false);
   const lastMobileTapRef = useRef<{ key: string; at: number } | null>(null);
   const [editableRows, setEditableRows] = useState<CrmTableRow[]>(rows);
   const [draftRowIds, setDraftRowIds] = useState<Set<string>>(() => new Set());
@@ -1102,6 +1238,12 @@ export function CrmTable({
     top: number;
     placement: "above" | "below";
     items: CalendarCellValue;
+  } | null>(null);
+  const [handoffTooltip, setHandoffTooltip] = useState<{
+    left: number;
+    top: number;
+    placement: "above" | "below";
+    rowName: string;
   } | null>(null);
   const [previewDocument, setPreviewDocument] = useState<DocumentCellItem | null>(null);
   const [cellDeleteTarget, setCellDeleteTarget] = useState<CellDeleteTarget | null>(null);
@@ -1135,25 +1277,30 @@ export function CrmTable({
   const [summaryArchiveConfirmId, setSummaryArchiveConfirmId] = useState<string | null>(null);
   const [copiedLeadCode, setCopiedLeadCode] = useState<string | null>(null);
   const [copiedOfferFieldsRowId, setCopiedOfferFieldsRowId] = useState<string | null>(null);
+  const [handoffAnimations, setHandoffAnimations] = useState<
+    Record<string, { from: "us" | "client"; to: "us" | "client"; progress: number }>
+  >({});
+  const lastHandoffClickRef = useRef<{ key: string; at: number } | null>(null);
   const updateRecordIdPayload = useCallback(
     (rowId: string) => ({ [updateRecordIdField]: rowId }),
     [updateRecordIdField]
   );
 
   useEffect(() => {
-    if (!showColumnMenu) {
+    if (!showColumnMenu && !showHandoffMenu) {
       return;
     }
-    function closeColumnMenuOnOutsideClick(event: MouseEvent) {
+    function closeToolbarPopoversOnOutsideClick(event: MouseEvent) {
       const target = event.target;
       if (target instanceof Node && toolbarRef.current?.contains(target)) {
         return;
       }
       setShowColumnMenu(false);
+      setShowHandoffMenu(false);
     }
-    document.addEventListener("mousedown", closeColumnMenuOnOutsideClick);
-    return () => document.removeEventListener("mousedown", closeColumnMenuOnOutsideClick);
-  }, [showColumnMenu]);
+    document.addEventListener("mousedown", closeToolbarPopoversOnOutsideClick);
+    return () => document.removeEventListener("mousedown", closeToolbarPopoversOnOutsideClick);
+  }, [showColumnMenu, showHandoffMenu]);
   const [mobileCalendarMonths, setMobileCalendarMonths] = useState<Record<string, string>>({});
   const mobileRowRefs = useRef(new Map<string, HTMLElement>());
   const isLeadTable = useMemo(
@@ -1228,6 +1375,25 @@ export function CrmTable({
     }, 80);
     return () => window.clearInterval(intervalId);
   }, [pendingDocumentUploads]);
+
+  useEffect(() => {
+    if (Object.keys(handoffAnimations).length === 0) {
+      return undefined;
+    }
+    const intervalId = window.setInterval(() => {
+      setHandoffAnimations((current) => {
+        const next: typeof current = {};
+        for (const [rowId, animation] of Object.entries(current)) {
+          const progress = Math.min(1, animation.progress + 0.08);
+          if (progress < 1) {
+            next[rowId] = { ...animation, progress };
+          }
+        }
+        return next;
+      });
+    }, 16);
+    return () => window.clearInterval(intervalId);
+  }, [handoffAnimations]);
 
   useEffect(() => {
     setLoadedPreferencesKey(null);
@@ -1504,6 +1670,25 @@ export function CrmTable({
           contentAlign: "center"
         };
       }
+      if (column?.valueKind === "handoff") {
+        const animation = record ? handoffAnimations[record.id] : undefined;
+        const side = normalizedHandoffSide(value);
+        return {
+          kind: GridCellKind.Custom,
+          data: {
+            kind: "handoff-cell",
+            side,
+            ballType: normalizedHandoffBall(preferences.handoffBall),
+            progress: animation?.progress ?? null,
+            from: animation?.from ?? null,
+            to: animation?.to ?? null
+          },
+          copyData: side,
+          allowOverlay: false,
+          readonly: true,
+          themeOverride: textThemeOverride(activeTableTheme, themeOverride, column.textStyle)
+        };
+      }
       const displayValue = value;
       const displayData = Array.isArray(displayValue)
         ? displayValue.every(isCalendarCellItem)
@@ -1520,7 +1705,7 @@ export function CrmTable({
         contentAlign: column?.id === "interest" ? "center" : undefined
       };
     },
-    [activeDraftRowTheme, activeTableTheme, configuredColumns, draftRowIds, filteredRows, pendingDocumentUploads, uploadPulse]
+    [activeDraftRowTheme, activeTableTheme, configuredColumns, draftRowIds, filteredRows, handoffAnimations, pendingDocumentUploads, preferences.handoffBall, uploadPulse]
   );
 
   const handleItemHovered = useCallback((args: GridMouseEventArgs) => {
@@ -1529,11 +1714,13 @@ export function CrmTable({
       setRelatedTooltip(null);
       setDocumentTooltip(null);
       setCalendarTooltip(null);
+      setHandoffTooltip(null);
       return;
     }
     if (args.kind === "group-header" && args.group === "Client") {
       setDocumentTooltip(null);
       setCalendarTooltip(null);
+      setHandoffTooltip(null);
       setRelatedTooltip({
         left: args.bounds.x - frameBounds.left + args.bounds.width / 2,
         top: args.bounds.y - frameBounds.top + args.bounds.height + 6,
@@ -1554,12 +1741,31 @@ export function CrmTable({
           ? args.location
           : null
       );
+      if (column?.valueKind === "handoff" && row) {
+        const relativeTop = args.bounds.y - frameBounds.top;
+        const showBelow = relativeTop < 76;
+        setRelatedTooltip(null);
+        setDocumentTooltip(null);
+        setCalendarTooltip(null);
+        setHandoffTooltip(
+          normalizedHandoffSide(row.values[column.id]) === "us"
+            ? {
+                left: args.bounds.x - frameBounds.left + Math.min(Math.max(args.bounds.width / 2, 128), Math.max(128, args.bounds.width - 18)),
+                top: showBelow ? relativeTop + args.bounds.height + 8 : Math.max(8, relativeTop - 8),
+                placement: showBelow ? "below" : "above",
+                rowName: String(row.values.projectName ?? row.values.name ?? row.values["client.name"] ?? "this record")
+              }
+            : null
+        );
+        return;
+      }
       if (column?.valueKind === "calendar" && row) {
         const items = cellCalendarItems(row.values[column.id]);
         const relativeTop = args.bounds.y - frameBounds.top;
         const showBelow = relativeTop < 76;
         setRelatedTooltip(null);
         setDocumentTooltip(null);
+        setHandoffTooltip(null);
         setCalendarTooltip(
           items.length > 0
             ? {
@@ -1583,6 +1789,7 @@ export function CrmTable({
         if (action?.type === "open") {
           setRelatedTooltip(null);
           setCalendarTooltip(null);
+          setHandoffTooltip(null);
           const hoveredDocument = documents[action.index];
           if (!hoveredDocument) {
             setDocumentTooltip(null);
@@ -1605,6 +1812,7 @@ export function CrmTable({
     setRelatedTooltip(null);
     setDocumentTooltip(null);
     setCalendarTooltip(null);
+    setHandoffTooltip(null);
   }, [clientOptionsEndpoint, configuredColumns, filteredRows, updateRecordEndpoint]);
 
   const toggleColumn = useCallback((columnId: string) => {
@@ -1845,6 +2053,33 @@ export function CrmTable({
     [persistInlinePatch]
   );
 
+  const playHandoffSound = useCallback((to: "us" | "client") => {
+    try {
+      if (preferences.handoffSoundEnabled === false) {
+        return;
+      }
+      const ballType = normalizedHandoffBall(preferences.handoffBall);
+      const preset = handoffSoundPresets[ballType];
+      const audio = new Audio(preset.src);
+      audio.volume = to === "us" ? 0.42 : 0.36;
+      void audio.play();
+    } catch {
+      // Audio feedback is intentionally best-effort.
+    }
+  }, [preferences.handoffBall, preferences.handoffSoundEnabled]);
+
+  const toggleHandoffBall = useCallback(
+    (row: CrmTableRow, column: CrmTableColumn) => {
+      const from = normalizedHandoffSide(row.values[column.id]);
+      const to = from === "us" ? "client" : "us";
+      setEditableRows((current) => updateRowCell(current, row.id, column.id, to));
+      setHandoffAnimations((current) => ({ ...current, [row.id]: { from, to, progress: 0 } }));
+      playHandoffSound(to);
+      void persistInlinePatch(row, { [column.id]: to }, `Update ${column.title}`);
+    },
+    [persistInlinePatch, playHandoffSound]
+  );
+
   const persistInlineNoteField = useCallback(
     (row: CrmTableRow, column: CrmTableColumn, value: string) => {
       if (!updateRecordEndpoint || !createRecord?.noteFields?.[column.id]) {
@@ -1986,6 +2221,18 @@ export function CrmTable({
         return;
       }
       setDetailAnchorRowId(row.id);
+      if (column.valueKind === "handoff") {
+        event.preventDefault();
+        const key = `${row.id}:${column.id}`;
+        const now = Date.now();
+        const previous = lastHandoffClickRef.current;
+        lastHandoffClickRef.current = { key, at: now };
+        if (previous?.key === key && now - previous.at < 420) {
+          toggleHandoffBall(row, column);
+          lastHandoffClickRef.current = null;
+        }
+        return;
+      }
       if (column.group !== "Client" && column.id !== "client.name") {
         setClientPicker(null);
       }
@@ -2068,7 +2315,7 @@ export function CrmTable({
         window.setTimeout(() => uploadFileInputRef.current?.click(), 0);
       }
     },
-    [configuredColumns, filteredRows]
+    [configuredColumns, filteredRows, toggleHandoffBall]
   );
 
   const closeDocumentUpload = useCallback(() => {
@@ -2906,6 +3153,62 @@ export function CrmTable({
           >
             <Download size={16} />
           </button>
+          {configuredColumns.some((column) => column.valueKind === "handoff") ? (
+            <div className="handoffBallControl">
+              <button
+                type="button"
+                className="toolbarIconButton handoffBallButton"
+                title="Choose handoff ball"
+                aria-label="Choose handoff ball"
+                aria-expanded={showHandoffMenu}
+                onClick={() => setShowHandoffMenu((value) => !value)}
+              >
+                <span aria-hidden="true">{handoffBallLabels[normalizedHandoffBall(preferences.handoffBall)].icon}</span>
+              </button>
+              {showHandoffMenu ? (
+                <div className="handoffBallPopover" role="dialog" aria-label="Choose handoff ball and sound">
+                  <div className="handoffBallGrid" aria-label="Handoff ball">
+                    {Object.entries(handoffBallLabels).map(([value, item]) => {
+                      const isActive = normalizedHandoffBall(preferences.handoffBall) === value;
+                      return (
+                        <button
+                          type="button"
+                          className={`handoffBallOption${isActive ? " active" : ""}`}
+                          key={value}
+                          title={item.label}
+                          aria-label={item.label}
+                          aria-pressed={isActive}
+                          onClick={() => {
+                            setPreferences((current) => ({
+                              ...current,
+                              handoffBall: value as HandoffBallType
+                            }));
+                            setShowHandoffMenu(false);
+                          }}
+                        >
+                          <span aria-hidden="true">{item.icon}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <button
+                    type="button"
+                    className={`handoffSoundToggle${preferences.handoffSoundEnabled === false ? "" : " active"}`}
+                    aria-pressed={preferences.handoffSoundEnabled !== false}
+                    onClick={() =>
+                      setPreferences((current) => ({
+                        ...current,
+                        handoffSoundEnabled: current.handoffSoundEnabled === false
+                      }))
+                    }
+                  >
+                    {preferences.handoffSoundEnabled === false ? <VolumeX size={13} aria-hidden="true" /> : <Volume2 size={13} aria-hidden="true" />}
+                    <strong>{preferences.handoffSoundEnabled === false ? "Sound off" : "Sound on"}</strong>
+                  </button>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
           <div className="tableColorControl">
             <button
               type="button"
@@ -2981,6 +3284,7 @@ export function CrmTable({
         setRelatedTooltip(null);
         setDocumentTooltip(null);
         setCalendarTooltip(null);
+        setHandoffTooltip(null);
         setHoveredClientPickerCell(null);
       }}>
         {relatedTooltip ? (
@@ -3017,6 +3321,16 @@ export function CrmTable({
           ))}
         </div>
       ) : null}
+        {handoffTooltip ? (
+          <div
+            className={`relatedTableTooltip handoffCellTooltip ${handoffTooltip.placement === "below" ? "relatedTableTooltipBelow" : ""}`}
+            style={tableTooltipStyle(handoffTooltip.left, handoffTooltip.top)}
+          >
+            <strong>Insight available</strong>
+            <span>Suggested next action will appear here.</span>
+            <span>{handoffTooltip.rowName}</span>
+          </div>
+        ) : null}
         {activeDetailRow && updateRecordEndpoint ? (
           <button
             className={`detailsFloatingButton${detailsButtonPosition ? " positioned" : ""}`}
@@ -3111,7 +3425,7 @@ export function CrmTable({
           onRowAppended={appendInlineRow}
           onCellEdited={([columnIndex, rowIndex], value) => editCell(columnIndex, rowIndex, value)}
           onCellClicked={handleCellClicked}
-          customRenderers={[documentCellRenderer, calendarCellRenderer]}
+          customRenderers={[documentCellRenderer, calendarCellRenderer, handoffCellRenderer]}
           drawCell={drawCell}
           getGroupDetails={(groupName) =>
             groupName === "Client"
