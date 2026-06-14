@@ -4,6 +4,7 @@ node_modules
 .telegram-bot*.log
 .local-storage
 .superpowers
+.tmp/
 dist
 coverage
 .turbo
