@@ -1662,6 +1662,45 @@ describe("telegram bot core", () => {
     expect(sendDocument).not.toHaveBeenCalled();
   });
 
+  it("asks for offer price fields when numbers are not ready", async () => {
+    const sendMessage = vi.fn();
+    const sendDocument = vi.fn();
+    const generateOffer = vi.fn().mockRejectedValue(
+      new Error("Commercial offer numbers are not ready. Missing price fields: BGF / area or manual gross price.")
+    );
+
+    await handleTelegramUpdate(
+      {
+        update_id: 112,
+        callback_query: {
+          id: "callback-offer-price-error",
+          data: "offer_lead:lead-303",
+          message: { chat: { id: 111111 }, message_id: 901 }
+        }
+      },
+      {
+        allowedChatIds: new Set([111111]),
+        workspaceId: "default",
+        sendMessage,
+        sendDocument,
+        generateOffer
+      }
+    );
+
+    expect(sendMessage).toHaveBeenCalledWith(111111, "generating offer, back shortly");
+    expect(sendMessage).toHaveBeenCalledWith(
+      111111,
+      [
+        "offer price is not ready.",
+        "Lead ID: lead-303",
+        "please add one of: BGF / area + project type, or manual gross price.",
+        "also useful before sending: client name, project name, project address.",
+        "reply here with something like: manual gross price: 12.500 EUR."
+      ].join("\n")
+    );
+    expect(sendDocument).not.toHaveBeenCalled();
+  });
+
   it("uses replied lead cards as the target for Telegram lead updates", async () => {
     const sendMessage = vi.fn();
     const updateLead = vi.fn().mockResolvedValue({ id: "lead-303", name: "Maria" });
@@ -1739,6 +1778,73 @@ describe("telegram bot core", () => {
             ]
           ]
         })
+      })
+    );
+  });
+
+  it("updates offer fields from a reply to an offer prompt", async () => {
+    const sendMessage = vi.fn();
+    const updateLead = vi.fn().mockResolvedValue({ id: "lead-303", name: "Maria Haus" });
+    const orchestrate = vi.fn().mockResolvedValue({
+      workspaceId: "default",
+      normalizedText: "manual gross price: 12.500 EUR",
+      intent: "fill_offer_fields",
+      risk: "auto",
+      explanations: ["The user replies with a manual offer price."],
+      settings: DEFAULT_LANGGRAPH_SETTINGS,
+      facts: {
+        contactName: null,
+        projectName: null,
+        projectType: null,
+        location: null,
+        areaM2: null,
+        phone: null,
+        budgetEur: 12500,
+        dueAt: null,
+        sourceMessageId: "305",
+        evidence: {
+          sourceMessageId: "305",
+          author: "Katya",
+          sourceChannel: "telegram",
+          textSnippet: "manual gross price: 12.500 EUR"
+        }
+      },
+      actions: [{ type: "update_lead", risk: "auto", reason: "Safe offer field update.", payload: {} }]
+    });
+
+    await handleTelegramUpdate(
+      {
+        update_id: 13,
+        message: {
+          message_id: 305,
+          text: "manual gross price: 12.500 EUR",
+          chat: { id: 111111 },
+          from: { first_name: "Katya" },
+          reply_to_message: {
+            message_id: 904,
+            text: "offer price is not ready.\nLead ID: lead-303\nplease add one of: BGF / area + project type, or manual gross price."
+          }
+        }
+      },
+      {
+        allowedChatIds: new Set([111111]),
+        workspaceId: "default",
+        sendMessage,
+        orchestrate,
+        updateLead
+      }
+    );
+
+    expect(orchestrate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        recentLeads: [expect.objectContaining({ id: "lead-303" })]
+      })
+    );
+    expect(updateLead).toHaveBeenCalledWith(
+      expect.objectContaining({
+        leadId: "lead-303",
+        patch: expect.objectContaining({ budgetEur: "12500" }),
+        source: { channel: "telegram", messageId: "305" }
       })
     );
   });

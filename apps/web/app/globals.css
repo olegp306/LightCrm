@@ -1866,11 +1866,11 @@ input {
 }
 
 .detailsDrawerBackdrop {
-  align-items: stretch;
+  align-items: center;
   background: color-mix(in srgb, var(--backdrop) 58%, transparent);
   display: flex;
   inset: 0;
-  justify-content: flex-end;
+  justify-content: center;
   padding: 18px;
   position: fixed;
   z-index: 22;
@@ -1883,11 +1883,12 @@ input {
   box-shadow: 0 22px 54px var(--shadow-strong);
   color: var(--ink);
   display: grid;
-  gap: 14px;
-  grid-template-rows: auto auto minmax(0, 1fr) auto;
-  max-width: min(440px, calc(100vw - 36px));
+  gap: 12px;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  max-height: min(760px, calc(100vh - 36px));
+  max-width: min(920px, calc(100vw - 36px));
   padding: 16px;
-  width: 420px;
+  width: 880px;
 }
 
 .detailsDrawer header {
@@ -1978,16 +1979,25 @@ input {
   padding: 1px 5px;
 }
 
+.detailsDrawerBody {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(0, 1.08fr) minmax(280px, 0.92fr);
+  min-height: 0;
+  overflow: hidden;
+}
+
 .detailsDrawerFields {
   align-content: start;
   display: grid;
-  gap: 10px;
+  gap: 8px;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   overflow: auto;
   padding-right: 2px;
 }
 
-.detailsDrawerFields label {
+.detailsDrawerFields label,
+.detailsDrawerField {
   display: grid;
   gap: 5px;
   min-width: 0;
@@ -1997,14 +2007,18 @@ input {
   grid-column: 1 / -1;
 }
 
-.detailsDrawerFields span {
+.detailsDrawerFields span,
+.detailsDrawerField span,
+.detailsDrawerSection > span,
+.detailsDrawerDetails summary {
   color: var(--muted);
   font-size: 11px;
   font-weight: 700;
 }
 
 .detailsDrawerFields input,
-.detailsDrawerFields textarea {
+.detailsDrawerFields textarea,
+.detailsDrawerField strong {
   background: var(--control);
   border: 1px solid var(--line);
   border-radius: 6px;
@@ -2015,18 +2029,143 @@ input {
   padding: 8px 9px;
 }
 
+.detailsDrawerField strong {
+  font-weight: 650;
+  line-height: 1.35;
+  min-height: 36px;
+  overflow-wrap: anywhere;
+}
+
 .detailsDrawerFields textarea {
   line-height: 1.35;
   resize: vertical;
 }
 
-.detailsDrawerDocuments {
+.detailsDrawerSections {
   align-content: start;
   display: grid;
   gap: 8px;
   min-height: 0;
   overflow: auto;
   padding-right: 2px;
+}
+
+.detailsDrawerSection,
+.detailsDrawerDetails {
+  background: color-mix(in srgb, var(--control) 74%, var(--panel));
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: grid;
+  gap: 7px;
+  padding: 9px;
+}
+
+.detailsDrawerSection.offer {
+  background: color-mix(in srgb, #fff4d8 38%, var(--control));
+}
+
+.detailsDrawerSectionHeader {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  justify-content: space-between;
+}
+
+.detailsDrawerSectionHeader div {
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+}
+
+.detailsDrawerSectionHeader span {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.detailsDrawerSectionHeader strong {
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.detailsDrawerSectionHeader button,
+.detailsDrawerDetails button {
+  background: var(--control);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--ink);
+  cursor: pointer;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 4px 8px;
+}
+
+.detailsDrawerSummary {
+  color: var(--ink);
+  display: -webkit-box;
+  font-size: 12px;
+  line-height: 1.35;
+  margin: 0;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+}
+
+.detailsDrawerDetails {
+  margin: 0;
+}
+
+.detailsDrawerDetails summary {
+  cursor: pointer;
+  list-style: none;
+}
+
+.detailsDrawerDetails summary::-webkit-details-marker {
+  display: none;
+}
+
+.detailsDrawerDetails p {
+  color: var(--ink-soft);
+  font-size: 12px;
+  line-height: 1.35;
+  margin: 0;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.detailsDrawerTimeline {
+  display: grid;
+  gap: 6px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.detailsDrawerTimeline li {
+  border: 1px solid color-mix(in srgb, var(--line) 76%, transparent);
+  border-radius: 7px;
+  display: grid;
+  gap: 2px;
+  padding: 7px;
+}
+
+.detailsDrawerTimeline time {
+  color: var(--muted);
+  font-size: 10.5px;
+  font-weight: 700;
+}
+
+.detailsDrawerTimeline strong {
+  color: var(--ink);
+  font-size: 12px;
+  line-height: 1.25;
+}
+
+.detailsDrawerTimeline span {
+  color: var(--muted);
+  font-size: 10.5px;
 }
 
 .detailsDrawerEmpty {
@@ -2037,6 +2176,11 @@ input {
   font-size: 13px;
   margin: 0;
   padding: 12px;
+}
+
+.detailsDrawerEmpty.compact {
+  font-size: 12px;
+  padding: 8px;
 }
 
 .leadDocumentCardList {
@@ -2179,7 +2323,7 @@ input {
 .documentModal footer {
   display: flex;
   gap: 8px;
-  justify-content: flex-end;
+  justify-content: center;
 }
 
 .documentPreviewActions {
@@ -2331,8 +2475,14 @@ input {
 }
 
 .mobileLeadCard {
+  cursor: pointer;
   gap: 0;
   padding: 8px 10px 9px;
+}
+
+.mobileLeadCard:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
 .mobileLeadCardHeader {
@@ -3675,9 +3825,34 @@ input {
     display: none;
   }
 
-  .detailsFloatingButton,
-  .detailsDrawerBackdrop {
+  .detailsFloatingButton {
     display: none;
+  }
+
+  .detailsDrawerBackdrop {
+    align-items: stretch;
+    padding: 10px;
+  }
+
+  .detailsDrawer {
+    max-height: calc(100vh - 20px);
+    max-width: 100%;
+    padding: 12px;
+    width: 100%;
+  }
+
+  .detailsDrawerBody {
+    grid-template-columns: 1fr;
+    overflow: auto;
+  }
+
+  .detailsDrawerFields {
+    grid-template-columns: 1fr;
+    overflow: visible;
+  }
+
+  .detailsDrawerSections {
+    overflow: visible;
   }
 
   .content {

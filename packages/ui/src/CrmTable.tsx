@@ -188,8 +188,6 @@ type DetailsPanelState = {
   saving: boolean;
 };
 
-type DetailsPanelTab = "details" | "documents";
-
 type DetailsButtonPosition = {
   left: number;
   top: number;
@@ -1128,13 +1126,13 @@ export function CrmTable({
   const [hoveredClientPickerCell, setHoveredClientPickerCell] = useState<Item | null>(null);
   const [clientOptions, setClientOptions] = useState<ClientOption[]>([]);
   const [detailsPanel, setDetailsPanel] = useState<DetailsPanelState | null>(null);
-  const [detailsPanelTab, setDetailsPanelTab] = useState<DetailsPanelTab>("details");
   const [summaryHistoryTarget, setSummaryHistoryTarget] = useState<LeadSummaryHistoryTarget | null>(null);
   const [leadSummaryDraft, setLeadSummaryDraft] = useState<LeadSummaryDraft>({ shortSummary: "", longSummary: "", saving: false });
   const [longTextPreview, setLongTextPreview] = useState<LongTextPreview | null>(null);
   const [archivingSummaryIds, setArchivingSummaryIds] = useState<Set<string>>(() => new Set());
   const [summaryArchiveConfirmId, setSummaryArchiveConfirmId] = useState<string | null>(null);
   const [copiedLeadCode, setCopiedLeadCode] = useState<string | null>(null);
+  const [copiedOfferFieldsRowId, setCopiedOfferFieldsRowId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!showColumnMenu) {
@@ -1343,8 +1341,21 @@ export function CrmTable({
     () => configuredColumns.filter((column) => isMobileEditableColumn(column)),
     [configuredColumns]
   );
+  const detailsModalColumns = useMemo(
+    () =>
+      configuredColumns.filter(
+        (column) =>
+          column.valueKind !== "documents" &&
+          column.valueKind !== "calendar" &&
+          !["summaryShort", "summaryLong", "summaryUpdatedAt", "offerMissingFields"].includes(column.id)
+      ),
+    [configuredColumns]
+  );
   const detailsPanelRow = detailsPanel ? editableRows.find((row) => row.id === detailsPanel.rowId) ?? null : null;
   const detailsPanelDocuments = detailsPanelRow ? sortDocumentsByAdded(cellDocuments(detailsPanelRow.values.documents)) : [];
+  const detailsPanelCalendarItems = detailsPanelRow ? sortCalendarItemsByStart(cellCalendarItems(detailsPanelRow.values.calendar)) : [];
+  const detailsPanelSummary = detailsPanelRow ? mobileLeadSummary(detailsPanelRow) : null;
+  const detailsPanelOfferMissingFields = detailsPanelRow ? offerMissingFieldChips(detailsPanelRow.values.offerMissingFields) : [];
   const selectedColumnIndex = useMemo(() => {
     const indexes = selectedColumnIndexes(gridSelection, configuredColumns.length);
     return indexes.length === 1 ? indexes[0] : null;
@@ -2180,6 +2191,31 @@ export function CrmTable({
     }, 1600);
   }, []);
 
+  const copyOfferMissingFields = useCallback(async (row: CrmTableRow) => {
+    const fields = offerMissingFieldChips(row.values.offerMissingFields);
+    const text =
+      fields.length > 0
+        ? `Missing for offer: ${fields.join(", ")}`
+        : "Missing for offer: no missing fields detected.";
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      const element = document.createElement("textarea");
+      element.value = text;
+      element.setAttribute("readonly", "true");
+      element.style.position = "fixed";
+      element.style.opacity = "0";
+      document.body.appendChild(element);
+      element.select();
+      document.execCommand("copy");
+      document.body.removeChild(element);
+    }
+    setCopiedOfferFieldsRowId(row.id);
+    window.setTimeout(() => {
+      setCopiedOfferFieldsRowId((current) => (current === row.id ? null : current));
+    }, 1600);
+  }, []);
+
   const cancelMobileEdit = useCallback(() => {
     setMobileEditTarget(null);
   }, []);
@@ -2221,7 +2257,6 @@ export function CrmTable({
         return [column.id, value === "n/a" ? "" : String(value)];
       })
     );
-    setDetailsPanelTab("details");
     setDetailsPanel({ rowId: row.id, values, saving: false });
   }, [detailsEditableColumns]);
 
@@ -3094,6 +3129,15 @@ export function CrmTable({
               <article
                 className={`mobileTableRow mobileLeadCard${row.id === flashRowId ? " focused" : ""}`}
                 key={row.id}
+                role="button"
+                tabIndex={0}
+                onClick={() => openDetailsPanel(row)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    openDetailsPanel(row);
+                  }
+                }}
                 ref={(element) => {
                   if (element) {
                     mobileRowRefs.current.set(row.id, element);
@@ -3105,7 +3149,10 @@ export function CrmTable({
                 <button
                   type="button"
                   className="mobileLeadCardHeader"
-                  onClick={() => void copyLeadCode(publicRowCode ?? row.id)}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    void copyLeadCode(publicRowCode ?? row.id);
+                  }}
                   aria-label={`Copy lead number ${publicRowCode ?? row.id}`}
                 >
                   <span className="mobileLeadCardCode">{publicRowCode ?? row.id}</span>
@@ -3149,11 +3196,17 @@ export function CrmTable({
                     <span>Summary</span>
                     <p className="mobileLeadCardSummaryText">{summary.short}</p>
                     {summary.long ? (
-                      <details className="mobileLeadFullSummary">
+                      <details className="mobileLeadFullSummary" onClick={(event) => event.stopPropagation()}>
                         <summary>Full summary</summary>
                         <p>{summary.long}</p>
                         {leadSummariesEndpoint ? (
-                          <button type="button" onClick={() => openLeadSummaryHistory(row)}>
+                          <button
+                            type="button"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              openLeadSummaryHistory(row);
+                            }}
+                          >
                             History
                           </button>
                         ) : null}
@@ -3162,7 +3215,7 @@ export function CrmTable({
                   </section>
                 ) : null}
 
-                <details className="mobileLeadDownloads">
+                <details className="mobileLeadDownloads" onClick={(event) => event.stopPropagation()}>
                   <summary>
                     <span>
                       Downloads: {documents.length} {documents.length === 1 ? "item" : "items"}
@@ -3181,7 +3234,10 @@ export function CrmTable({
                             className="leadDocumentCard mobileLeadDocumentCard"
                             key={document.id}
                             title={`${document.fileName}${document.shortSummary ? `\n${document.shortSummary}` : ""}`}
-                            onClick={() => setPreviewDocument(document)}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              setPreviewDocument(document);
+                            }}
                           >
                             <span
                               className="leadDocumentCardBadge"
@@ -3442,10 +3498,10 @@ export function CrmTable({
       </div>
       {detailsPanel && detailsPanelRow ? (
         <div className="detailsDrawerBackdrop" role="presentation" onMouseDown={() => setDetailsPanel(null)}>
-          <aside className="detailsDrawer" role="dialog" aria-modal="true" onMouseDown={(event) => event.stopPropagation()}>
+          <section className="detailsDrawer" role="dialog" aria-modal="true" onMouseDown={(event) => event.stopPropagation()}>
             <header>
               <div>
-                <span>Lead details</span>
+                <span>Lead card</span>
                 <h2>{String(mobileDisplayValue(detailsPanelRow.values.code) || detailsPanelRow.id)}</h2>
                 <p>{String(mobileDisplayValue(detailsPanelRow.values.projectName) || detailsPanelRow.id)}</p>
               </div>
@@ -3453,107 +3509,162 @@ export function CrmTable({
                 <X size={18} />
               </button>
             </header>
-            <div className="detailsDrawerTabs" role="tablist" aria-label="Lead detail sections">
-              <button
-                type="button"
-                className={detailsPanelTab === "details" ? "active" : ""}
-                role="tab"
-                aria-selected={detailsPanelTab === "details"}
-                onClick={() => setDetailsPanelTab("details")}
-              >
-                Details
-              </button>
-              <button
-                type="button"
-                className={detailsPanelTab === "documents" ? "active" : ""}
-                role="tab"
-                aria-selected={detailsPanelTab === "documents"}
-                onClick={() => setDetailsPanelTab("documents")}
-              >
-                Documents <span>{detailsPanelDocuments.length}</span>
-              </button>
-            </div>
-            {detailsPanelTab === "details" ? (
+
+            <div className="detailsDrawerBody">
               <div className="detailsDrawerFields">
-                {detailsEditableColumns.map((column) => (
-                  <label className={isMobileMultilineColumn(column.id) ? "wide" : ""} key={column.id}>
-                    <span>{column.title}</span>
-                    {isMobileMultilineColumn(column.id) ? (
-                      <textarea
-                        rows={3}
-                        value={detailsPanel.values[column.id] ?? ""}
-                        onChange={(event) =>
-                          setDetailsPanel((current) =>
-                            current ? { ...current, values: { ...current.values, [column.id]: event.target.value } } : current
-                          )
-                        }
-                      />
-                    ) : (
-                      <input
-                        value={detailsPanel.values[column.id] ?? ""}
-                        onChange={(event) =>
-                          setDetailsPanel((current) =>
-                            current ? { ...current, values: { ...current.values, [column.id]: event.target.value } } : current
-                          )
-                        }
-                      />
-                    )}
-                  </label>
-                ))}
+                {detailsModalColumns.map((column) => {
+                  const canEdit = detailsEditableColumns.some((editableColumn) => editableColumn.id === column.id);
+                  const displayValue =
+                    column.valueKind === "area"
+                      ? formatAreaValue(detailsPanelRow.values[column.id])
+                      : mobileDisplayValue(detailsPanelRow.values[column.id]);
+                  if (!canEdit) {
+                    return (
+                      <div className="detailsDrawerField readonly" key={column.id}>
+                        <span>{column.title}</span>
+                        <strong>{displayValue}</strong>
+                      </div>
+                    );
+                  }
+                  return (
+                    <label className={isMobileMultilineColumn(column.id) ? "wide" : ""} key={column.id}>
+                      <span>{column.title}</span>
+                      {isMobileMultilineColumn(column.id) ? (
+                        <textarea
+                          rows={3}
+                          value={detailsPanel.values[column.id] ?? ""}
+                          onChange={(event) =>
+                            setDetailsPanel((current) =>
+                              current ? { ...current, values: { ...current.values, [column.id]: event.target.value } } : current
+                            )
+                          }
+                        />
+                      ) : (
+                        <input
+                          value={detailsPanel.values[column.id] ?? ""}
+                          onChange={(event) =>
+                            setDetailsPanel((current) =>
+                              current ? { ...current, values: { ...current.values, [column.id]: event.target.value } } : current
+                            )
+                          }
+                        />
+                      )}
+                    </label>
+                  );
+                })}
               </div>
-            ) : (
-              <div className="detailsDrawerDocuments">
-                {detailsPanelDocuments.length > 0 ? (
-                  <div className="leadDocumentCardList">
-                    {detailsPanelDocuments.map((document, documentIndex) => {
-                      const extension = documentExtensionLabel(document.fileName, document.mimeType);
-                      const createdAt = formatDocumentCreatedAt(document.createdAt);
-                      const displayLabel = documentListDisplayLabel(detailsPanelDocuments, documentIndex);
-                      return (
-                        <button
-                          type="button"
-                          className="leadDocumentCard"
-                          key={document.id}
-                          title={`${document.fileName}${document.shortSummary ? `\n${document.shortSummary}` : ""}`}
-                          onClick={() => setPreviewDocument(document)}
-                        >
-                          <span
-                            className="leadDocumentCardBadge"
-                            style={{ "--document-color": documentBadgeColor(extension) } as ComponentProps<"span">["style"]}
-                          >
-                            {extension.slice(0, 3)}
-                          </span>
-                          <span className="leadDocumentCardMain">
-                            <strong>{displayLabel}</strong>
-                            <span>{createdAt ? `Added ${createdAt}` : "Added date unknown"}</span>
-                          </span>
-                          <span className="leadDocumentCardSummary">{document.shortSummary || "No summary yet"}</span>
-                        </button>
-                      );
-                    })}
+
+              <div className="detailsDrawerSections">
+                <section className="detailsDrawerSection offer">
+                  <div className="detailsDrawerSectionHeader">
+                    <div>
+                      <span>Missing for offer</span>
+                      <strong>
+                        {detailsPanelOfferMissingFields.length > 0
+                          ? `${detailsPanelOfferMissingFields.length} field${detailsPanelOfferMissingFields.length === 1 ? "" : "s"}`
+                          : "Ready"}
+                      </strong>
+                    </div>
+                    <button type="button" onClick={() => void copyOfferMissingFields(detailsPanelRow)}>
+                      {copiedOfferFieldsRowId === detailsPanelRow.id ? "Copied" : "Copy"}
+                    </button>
                   </div>
-                ) : (
-                  <p className="detailsDrawerEmpty">No documents linked to this lead yet.</p>
-                )}
+                  {detailsPanelOfferMissingFields.length > 0 ? (
+                    <div className="mobileLeadMissingChips">
+                      {detailsPanelOfferMissingFields.map((field) => (
+                        <i key={field}>{field}</i>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="detailsDrawerEmpty compact">No missing fields detected.</p>
+                  )}
+                </section>
+
+                {detailsPanelSummary ? (
+                  <section className="detailsDrawerSection">
+                    <span>Summary{detailsPanelSummary.updatedAt ? ` · ${mobileDisplayValue(detailsPanelSummary.updatedAt)}` : ""}</span>
+                    <p className="detailsDrawerSummary">{detailsPanelSummary.short}</p>
+                    {detailsPanelSummary.long ? (
+                      <details className="detailsDrawerDetails">
+                        <summary>Full summary</summary>
+                        <p>{detailsPanelSummary.long}</p>
+                        {leadSummariesEndpoint ? (
+                          <button type="button" onClick={() => openLeadSummaryHistory(detailsPanelRow)}>
+                            History
+                          </button>
+                        ) : null}
+                      </details>
+                    ) : null}
+                  </section>
+                ) : null}
+
+                <details className="detailsDrawerDetails" open>
+                  <summary>
+                    Downloads: {detailsPanelDocuments.length} {detailsPanelDocuments.length === 1 ? "item" : "items"}
+                  </summary>
+                  {detailsPanelDocuments.length > 0 ? (
+                    <div className="leadDocumentCardList">
+                      {detailsPanelDocuments.map((document, documentIndex) => {
+                        const extension = documentExtensionLabel(document.fileName, document.mimeType);
+                        const createdAt = formatDocumentCreatedAt(document.createdAt);
+                        const displayLabel = documentListDisplayLabel(detailsPanelDocuments, documentIndex);
+                        return (
+                          <button
+                            type="button"
+                            className="leadDocumentCard"
+                            key={document.id}
+                            title={`${document.fileName}${document.shortSummary ? `\n${document.shortSummary}` : ""}`}
+                            onClick={() => setPreviewDocument(document)}
+                          >
+                            <span
+                              className="leadDocumentCardBadge"
+                              style={{ "--document-color": documentBadgeColor(extension) } as ComponentProps<"span">["style"]}
+                            >
+                              {extension.slice(0, 3)}
+                            </span>
+                            <span className="leadDocumentCardMain">
+                              <strong>{displayLabel}</strong>
+                              <span>{createdAt ? `Added ${createdAt}` : "Added date unknown"}</span>
+                            </span>
+                            <span className="leadDocumentCardSummary">{document.shortSummary || "No summary yet"}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <p className="detailsDrawerEmpty">No documents linked to this lead yet.</p>
+                  )}
+                </details>
+
+                <details className="detailsDrawerDetails">
+                  <summary>
+                    History: {detailsPanelCalendarItems.length} calendar {detailsPanelCalendarItems.length === 1 ? "item" : "items"}
+                  </summary>
+                  {detailsPanelCalendarItems.length > 0 ? (
+                    <ul className="detailsDrawerTimeline">
+                      {detailsPanelCalendarItems.map((item) => (
+                        <li key={`${item.kind}-${item.id}`}>
+                          <time>{calendarDateLabel(item.startsAt)} {calendarTimeLabel(item.startsAt)}</time>
+                          <strong>{item.title}</strong>
+                          <span>{[item.kind, item.status, item.sourceChannel].filter(Boolean).join(" · ")}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="detailsDrawerEmpty">No calendar history yet.</p>
+                  )}
+                </details>
               </div>
-            )}
+            </div>
             <footer>
-              {detailsPanelTab === "details" ? (
-                <>
-                  <button type="button" onClick={() => setDetailsPanel(null)}>
-                    Cancel
-                  </button>
-                  <button type="button" className="primary" onClick={saveDetailsPanel} disabled={detailsPanel.saving}>
-                    {detailsPanel.saving ? "Saving" : "Save details"}
-                  </button>
-                </>
-              ) : (
-                <button type="button" onClick={() => setDetailsPanel(null)}>
-                  Close
-                </button>
-              )}
+              <button type="button" onClick={() => setDetailsPanel(null)}>
+                Cancel
+              </button>
+              <button type="button" className="primary" onClick={saveDetailsPanel} disabled={detailsPanel.saving}>
+                {detailsPanel.saving ? "Saving" : "Save details"}
+              </button>
             </footer>
-          </aside>
+          </section>
         </div>
       ) : null}
       {bulkActionDialog === "merge" ? (

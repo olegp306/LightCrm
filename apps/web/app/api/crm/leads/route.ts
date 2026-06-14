@@ -123,6 +123,7 @@ export async function GET(request: Request) {
         const description = readNoteField(lead.notes, leadNoteFields.description);
         const address = readNoteField(lead.notes, leadNoteFields.address);
         const todo = readNoteField(lead.notes, leadNoteFields.todo);
+        const budgetEur = readNoteField(lead.notes, leadNoteFields.budgetEur);
         const storedSummary = latestSummaryByLeadId.get(lead.id);
         const notesSummary = readLatestLeadSummary(lead.notes);
         const offerReadiness = evaluateCommercialOfferReadiness(
@@ -131,7 +132,8 @@ export async function GET(request: Request) {
             projectName: project,
             projectAddress: address,
             projectType: projectTypeFromLead(project, description),
-            bgf: readNumber(area)
+            bgf: readNumber(area),
+            manualTotalGross: readNumber(budgetEur)
           },
           feeRows
         );
@@ -156,7 +158,7 @@ export async function GET(request: Request) {
           address,
           messenger: lead.whatsapp ?? client?.whatsapp ?? null,
           clientProjects: readNoteField(lead.notes, leadNoteFields.clientProjects),
-          budgetEur: readNoteField(lead.notes, leadNoteFields.budgetEur),
+          budgetEur,
           rawInput: readNoteField(lead.notes, leadNoteFields.rawInput),
           offerStatus: offerReadiness.status,
           offerMissingFields: offerReadiness.missingFields.join(", "),

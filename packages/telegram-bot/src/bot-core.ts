@@ -1598,14 +1598,22 @@ function telegramLeadDownloadsReplyMarkup(documents: TelegramLeadDocument[]): Te
   };
 }
 
-function formatOfferCallbackError(error: unknown): string {
+function formatOfferCallbackError(error: unknown, leadId?: string | null): string {
   const message = error instanceof Error ? error.message : String(error);
   const normalized = message.toLocaleLowerCase();
   if (normalized.includes("template")) {
     return "offer template is missing. add an offer template in CRM settings.";
   }
   if (normalized.includes("numbers are not ready") || normalized.includes("active fee table") || normalized.includes("missing fields")) {
-    return `offer numbers are not ready. ${compactLine(message, 220)}`;
+    return [
+      "offer price is not ready.",
+      leadId ? `Lead ID: ${leadId}` : null,
+      "please add one of: BGF / area + project type, or manual gross price.",
+      "also useful before sending: client name, project name, project address.",
+      "reply here with something like: manual gross price: 12.500 EUR."
+    ]
+      .filter((line): line is string => Boolean(line))
+      .join("\n");
   }
   return `offer generation failed. ${compactLine(message, 180)}`;
 }
@@ -1620,8 +1628,27 @@ function leadCardFieldsFromFacts(result: CrmOrchestrationResult): Partial<Telegr
     project: result.facts.projectName ?? result.facts.projectType,
     area: result.facts.areaM2 === null || result.facts.areaM2 === undefined ? null : String(result.facts.areaM2),
     address: result.facts.location,
-    messenger: result.facts.phone
+    messenger: result.facts.phone,
+    offerMissingFields: offerMissingFieldsFromFacts(result)
   };
+}
+
+function offerMissingFieldsFromFacts(result: CrmOrchestrationResult): string | null {
+  const missing: string[] = [];
+  const hasManualPrice = result.facts.budgetEur !== null && result.facts.budgetEur !== undefined;
+  if (!hasManualPrice && (!result.facts.areaM2 || !result.facts.projectType)) {
+    missing.push("BGF / area + project type, or manual gross price");
+  }
+  if (!result.facts.contactName) {
+    missing.push("client name");
+  }
+  if (!result.facts.projectName) {
+    missing.push("project name");
+  }
+  if (!result.facts.location) {
+    missing.push("project address");
+  }
+  return missing.length > 0 ? missing.join(", ") : null;
 }
 
 function leadSearchQuery(text: string, result: CrmOrchestrationResult): string {
@@ -2171,7 +2198,7 @@ export async function handleTelegramCallback(update: TelegramUpdate, deps: Teleg
       const document = await deps.generateOffer(offerLeadId);
       await deps.sendDocument(chatId, document);
     } catch (error) {
-      await deps.sendMessage(chatId, formatOfferCallbackError(error));
+      await deps.sendMessage(chatId, formatOfferCallbackError(error, offerLeadId));
     }
     return { handled: true, lead: null };
   }

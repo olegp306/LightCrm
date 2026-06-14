@@ -300,6 +300,9 @@ type GenerateOfferResponse = {
   offerVersion?: number;
   readiness?: {
     missingFields?: string[];
+    priceMissingFields?: string[];
+    documentMissingFields?: string[];
+    pricingMode?: "auto" | "manual";
     values?: {
       totalGross?: number | null;
     };
@@ -348,6 +351,9 @@ function formatOfferCurrency(value: number | null | undefined): string | null {
 function humanOfferFieldName(value: string): string {
   const labels: Record<string, string> = {
     bgf: "project area / BGF",
+    bgf_or_manual_total_gross: "project area / BGF or manual gross price",
+    project_type_or_manual_total_gross: "project type or manual gross price",
+    manual_total_gross: "manual gross price",
     project_name: "project name",
     project_address: "project address",
     client_name: "client name"
@@ -357,8 +363,10 @@ function humanOfferFieldName(value: string): string {
 
 function formatOfferDocumentCaption(version: number | undefined, readiness: GenerateOfferResponse["readiness"]): string {
   const total = formatOfferCurrency(readiness?.values?.totalGross);
-  const missingFields = readiness?.missingFields?.map(humanOfferFieldName).filter(Boolean) ?? [];
-  const title = `commercial offer${version ? ` v${version}` : ""} ready${total ? `: ${total} EUR gross` : ""}`;
+  const missingFields =
+    (readiness?.documentMissingFields ?? readiness?.missingFields ?? []).map(humanOfferFieldName).filter(Boolean);
+  const mode = readiness?.pricingMode ? ` (${readiness.pricingMode})` : "";
+  const title = `commercial offer${version ? ` v${version}` : ""} ready${total ? `: ${total} EUR gross${mode}` : ""}`;
   if (missingFields.length === 0) {
     return `${title}\nAll key offer fields are filled.`;
   }

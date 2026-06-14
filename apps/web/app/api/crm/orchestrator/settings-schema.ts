@@ -22,6 +22,7 @@ const SemanticIntent = z.enum([
   "create_meeting",
   "attach_document",
   "generate_offer_task",
+  "fill_offer_fields",
   "add_lead_note",
   "system_help",
   "ask_clarification",

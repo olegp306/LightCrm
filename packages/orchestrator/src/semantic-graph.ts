@@ -179,6 +179,7 @@ function offerReadinessPrompt(settings: LangGraphRuntimeSettings): string | null
   return [
     "Commercial offer readiness:",
     "Capture these offer fields whenever the intake, documents, or lead context contain evidence for them.",
+    "Offer numbers can become ready in two ways: automatic pricing from BGF/project type/fee table context, or a manual gross price stated by the director/operator. Treat manualTotalGross as the direct offer price to use when present.",
     settings.offerReadiness.requireEvidenceForOfferFields
       ? "Every offer field must include concrete evidence and source message ids; do not infer unsupported offer values."
       : "Offer fields may use directly implied values when confidence is high.",
@@ -204,14 +205,15 @@ function semanticSystemPrompt(state: SemanticOrchestrationState, nodeInstruction
 const intentJsonContract = [
   "Return exactly this JSON shape:",
   "{",
-  '  "primaryIntent": "create_lead | search_leads | update_lead | create_task | create_reminder | create_meeting | attach_document | generate_offer_task | add_lead_note | system_help | ask_clarification | no_action",',
+  '  "primaryIntent": "create_lead | search_leads | update_lead | create_task | create_reminder | create_meeting | attach_document | generate_offer_task | fill_offer_fields | add_lead_note | system_help | ask_clarification | no_action",',
   '  "secondaryIntents": [],',
   '  "confidence": 0.0,',
   '  "reason": "short explanation",',
   '  "evidence": ["short source quote or observation"]',
   "}",
   "When a message both introduces a new client/project/opportunity and asks for a meeting or reminder, keep both intents: use create_lead plus create_meeting and/or create_reminder in secondaryIntents.",
-  "When a message asks how LightCrm works or how to use leads, reminders, documents, TG/mobile, or commercial offers, use system_help and do not create or update CRM records."
+  "When a message asks how LightCrm works or how to use leads, reminders, documents, TG/mobile, or commercial offers, use system_help and do not create or update CRM records.",
+  "When a message replies to a lead or offer prompt and provides BGF, area, project type, manual gross price, client name, project name, project address, or other commercial-offer fields, use fill_offer_fields."
 ].join("\n");
 
 const targetJsonContract = [
@@ -444,7 +446,7 @@ function compatibilityFacts(state: SemanticOrchestrationState): ExtractedFacts {
     location: stringField("projectAddress", "location"),
     areaM2: numberField("areaM2"),
     phone: stringField("phone"),
-    budgetEur: numberField("budgetEur"),
+    budgetEur: numberField("manualTotalGross", "offerPrice", "budgetEur"),
     dueAt: stringField("reminderDateTime", "meetingDateTime", "dueAt"),
     sourceMessageId: state.input.messageId ?? null,
     evidence: {
@@ -471,6 +473,7 @@ const actionTypeByIntent: Partial<Record<SemanticIntent, PlannedCrmAction["type"
   create_reminder: "create_reminder",
   create_meeting: "create_meeting",
   add_lead_note: "update_lead",
+  fill_offer_fields: "update_lead",
   update_lead: "update_lead"
 };
 

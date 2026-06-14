@@ -1,7 +1,7 @@
 import { evaluateCommercialOfferReadiness } from "@lightcrm/core";
 import { storeCrmFile } from "@lightcrm/storage";
 import { randomUUID } from "node:crypto";
-import type { createCrmService, DocumentFile } from "@lightcrm/core";
+import type { Client, createCrmService, DocumentFile, Lead } from "@lightcrm/core";
 import {
   getCrmRuntimeSettings,
   readActiveOfferTemplate,
@@ -14,13 +14,24 @@ const noteFields = {
   project: "Project",
   area: "Area",
   description: "Description",
-  address: "Address"
+  address: "Address",
+  budgetEur: "Budget EUR"
 } as const;
 
 export type CommercialOfferGenerationResult = {
   document: Awaited<ReturnType<CrmService["upsertDocumentFile"]>>;
   readiness: ReturnType<typeof evaluateCommercialOfferReadiness>;
   offerVersion: number;
+};
+
+export type CommercialOfferReadinessResult = {
+  lead: Lead;
+  client: Client | null;
+  settings: Awaited<ReturnType<typeof getCrmRuntimeSettings>>;
+  project: string;
+  description: string | null;
+  address: string | null;
+  readiness: ReturnType<typeof evaluateCommercialOfferReadiness>;
 };
 
 export type CommercialOfferAutoResult =
@@ -63,6 +74,40 @@ function formatDate(date: Date): string {
   return date.toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "numeric" });
 }
 
+function humanOfferFieldName(value: string): string {
+  const labels: Record<string, string> = {
+    bgf: "BGF / area",
+    bgf_or_manual_total_gross: "BGF / area or manual gross price",
+    project_type_or_manual_total_gross: "project type or manual gross price",
+    manual_total_gross: "manual gross price",
+    project_name: "project name",
+    project_address: "project address",
+    client_name: "client name"
+  };
+  return labels[value] ?? value.replace(/_/g, " ");
+}
+
+function readinessFieldSummary(readiness: ReturnType<typeof evaluateCommercialOfferReadiness>, version: number, createdAt: Date): string {
+  const requiredForPrice =
+    readiness.priceMissingFields.length > 0
+      ? `missing: ${readiness.priceMissingFields.map(humanOfferFieldName).join(", ")}`
+      : `ready: ${formatCurrency(readiness.values.totalGross)} EUR gross (${readiness.pricingMode})`;
+  const documentFields =
+    readiness.documentMissingFields.length > 0
+      ? `missing: ${readiness.documentMissingFields.map(humanOfferFieldName).join(", ")}`
+      : "ready";
+  const summary =
+    readiness.values.totalGross === null
+      ? "Commercial offer cannot be generated until price-critical fields are filled."
+      : `Commercial offer v${version} generated on ${formatDate(createdAt)}. Use this summary to compare what was promised to the client in this version.`;
+  return [
+    `Version: v${version}.`,
+    `Price fields: ${requiredForPrice}.`,
+    `Document fields: ${documentFields}.`,
+    `Summary: ${summary}`
+  ].join("\n");
+}
+
 function projectTypeFromLead(project: string | null, description: string | null): string | null {
   const combined = [project, description].filter(Boolean).join(" ");
   if (!combined) {
@@ -85,11 +130,11 @@ function nextCommercialOfferVersion(documents: DocumentFile[], leadId: string): 
   return activeLeadOffers.length + 1;
 }
 
-export async function generateCommercialOfferForLead(input: {
+export async function evaluateCommercialOfferForLead(input: {
   crm: CrmService;
   workspaceId: string;
   leadId: string;
-}): Promise<CommercialOfferGenerationResult> {
+}): Promise<CommercialOfferReadinessResult> {
   const [leads, clients] = await Promise.all([
     input.crm.listRecords({ entity: "lead", workspaceId: input.workspaceId, includeArchived: true }),
     input.crm.listRecords({ entity: "client", workspaceId: input.workspaceId, includeArchived: true })
@@ -100,29 +145,41 @@ export async function generateCommercialOfferForLead(input: {
   }
   const client = lead.clientId ? clients.find((item) => item.id === lead.clientId) ?? null : null;
   const settings = await getCrmRuntimeSettings();
-  if (!settings.commercialOffers.activeTemplate) {
-    throw new Error("Commercial offer template is not uploaded");
-  }
-
   const project = readNoteField(lead.notes, noteFields.project) ?? lead.company ?? lead.name;
   const area = readNoteField(lead.notes, noteFields.area);
   const description = readNoteField(lead.notes, noteFields.description) ?? lead.notes;
   const address = readNoteField(lead.notes, noteFields.address);
+  const manualTotalGross = readNumber(readNoteField(lead.notes, noteFields.budgetEur));
   const readiness = evaluateCommercialOfferReadiness(
     {
       clientName: client?.name ?? null,
       projectName: project,
       projectAddress: address,
       projectType: projectTypeFromLead(project, description),
-      bgf: readNumber(area)
+      bgf: readNumber(area),
+      manualTotalGross
     },
     settings.commercialOffers.activeFeeTable?.rows ?? []
   );
+  return { lead, client, settings, project, description, address, readiness };
+}
+
+export async function generateCommercialOfferForLead(input: {
+  crm: CrmService;
+  workspaceId: string;
+  leadId: string;
+}): Promise<CommercialOfferGenerationResult> {
+  const { lead, client, settings, project, description, address, readiness } = await evaluateCommercialOfferForLead(input);
 
   if (readiness.values.totalGross === null) {
     const details = [
       ...readiness.reasons,
-      readiness.missingFields.length > 0 ? `Missing fields: ${readiness.missingFields.join(", ")}.` : null,
+      readiness.priceMissingFields.length > 0
+        ? `Missing price fields: ${readiness.priceMissingFields.map(humanOfferFieldName).join(", ")}.`
+        : null,
+      readiness.documentMissingFields.length > 0
+        ? `Missing document fields: ${readiness.documentMissingFields.map(humanOfferFieldName).join(", ")}.`
+        : null,
       settings.commercialOffers.activeFeeTable?.rows.length
         ? null
         : "Active fee table has no rows for automatic pricing."
@@ -134,6 +191,10 @@ export async function generateCommercialOfferForLead(input: {
     );
     (error as Error & { readiness?: typeof readiness }).readiness = readiness;
     throw error;
+  }
+
+  if (!settings.commercialOffers.activeTemplate) {
+    throw new Error("Commercial offer template is not uploaded");
   }
 
   const now = new Date();
@@ -163,6 +224,7 @@ export async function generateCommercialOfferForLead(input: {
     ms1_net: formatCurrency(readiness.values.ms1Net),
     ms2_net: formatCurrency(readiness.values.ms2Net),
     ms3_net: formatCurrency(readiness.values.ms3Net),
+    pricing_mode: readiness.pricingMode,
     offer_valid_until: formatDate(validUntil)
   };
 
@@ -183,10 +245,8 @@ export async function generateCommercialOfferForLead(input: {
     leadId: lead.id,
     clientId: lead.clientId,
     fileName: stored.fileName,
-    shortSummary: `Commercial offer v${offerVersion} ${formatCurrency(readiness.values.totalGross)} EUR gross`,
-    longSummary: `Generated commercial offer v${offerVersion} from active DOCX template. Missing fields: ${
-      readiness.missingFields.join(", ") || "none"
-    }.`,
+    shortSummary: `Commercial offer v${offerVersion} ${formatCurrency(readiness.values.totalGross)} EUR gross (${readiness.pricingMode})`,
+    longSummary: readinessFieldSummary(readiness, offerVersion, now),
     downloadUrl: stored.downloadUrl,
     storageProvider: stored.storageProvider,
     storageBucket: stored.storageBucket,

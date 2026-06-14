@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getCrm, handleRouteError, resolveWorkspaceId } from "../../_shared";
-import { generateCommercialOfferForLead } from "../commercial-offers";
+import { evaluateCommercialOfferForLead, generateCommercialOfferForLead } from "../commercial-offers";
 
 export async function POST(request: Request) {
   try {
@@ -11,6 +11,17 @@ export async function POST(request: Request) {
     }
 
     try {
+      const readiness = await evaluateCommercialOfferForLead({
+        crm: getCrm(),
+        workspaceId,
+        leadId: input.leadId
+      });
+      if (readiness.readiness.values.totalGross === null) {
+        return NextResponse.json(
+          { error: "Commercial offer numbers are not ready.", readiness: readiness.readiness },
+          { status: 400 }
+        );
+      }
       return NextResponse.json(
         await generateCommercialOfferForLead({
           crm: getCrm(),

@@ -52,7 +52,7 @@ function createDefaultPrompts(): LangGraphRuntimeSettings["prompts"] {
     systemRole:
       "You are an operational AI Chief of Staff for an architecture bureau. Understand the whole message before deciding CRM actions. Return only valid JSON for the requested schema.",
     intentClassifier:
-      "Classify the business meaning of the whole message. Do not rely on isolated keywords. A recent or active lead is a strong contextual prior, but not decisive proof that the new message belongs to that lead. The same client/contact may have multiple independent leads; same person alone is not enough for update_lead. If the message introduces a different client, project, site, object, request, forwarded deal, or opportunity, classify it as create_lead even when recent lead context exists. If a message introduces a potential client/contact/opportunity and also says to follow up without a concrete due date/time, keep create_lead as the primary intent; do not downgrade the whole message to reminder-only. Use create_reminder as a secondary intent only when the message contains a concrete reminder date/time or a schedulable relative time. If the message asks what LightCrm is, what the bot can do, or how to use leads, reminders, documents, TG, mobile CRM, or commercial offers, choose system_help. If the message negates an action, classify the negated meaning. If uncertain, choose ask_clarification.",
+      "Classify the business meaning of the whole message. Do not rely on isolated keywords. A recent or active lead is a strong contextual prior, but not decisive proof that the new message belongs to that lead. The same client/contact may have multiple independent leads; same person alone is not enough for update_lead. If the message introduces a different client, project, site, object, request, forwarded deal, or opportunity, classify it as create_lead even when recent lead context exists. If a message replies to a lead/offer card and provides BGF, area, project type, manual gross price, client/project/address, or other commercial-offer fields, classify it as fill_offer_fields. If a message introduces a potential client/contact/opportunity and also says to follow up without a concrete due date/time, keep create_lead as the primary intent; do not downgrade the whole message to reminder-only. Use create_reminder as a secondary intent only when the message contains a concrete reminder date/time or a schedulable relative time. If the message asks what LightCrm is, what the bot can do, or how to use leads, reminders, documents, TG, mobile CRM, or commercial offers, choose system_help. If the message negates an action, classify the negated meaning. If uncertain, choose ask_clarification.",
     entityExtractor:
       "Extract only data explicitly stated or directly implied by the message and context. Every field must include evidence and confidence. Do not invent missing values.",
     targetResolver:
@@ -74,6 +74,7 @@ function createDefaultTaxonomy(): LangGraphRuntimeSettings["taxonomy"] {
       "create_meeting",
       "attach_document",
       "generate_offer_task",
+      "fill_offer_fields",
       "add_lead_note",
       "system_help",
       "ask_clarification",
@@ -98,6 +99,7 @@ function createDefaultTaxonomy(): LangGraphRuntimeSettings["taxonomy"] {
       create_lead: [],
       search_leads: [],
       update_lead: [],
+      fill_offer_fields: [],
       system_help: [],
       create_meeting: ["meetingDateTime"],
       create_reminder: ["reminderDateTime"],
@@ -172,6 +174,15 @@ function createDefaultOfferReadinessFields(): LangGraphRuntimeSettings["offerRea
       aliases: ["project_type", "requestType", "Einfamilienhaus", "EFH", "private house", "Neubau"],
       sources: ["lead", "documents", "director_instruction", "manual"],
       confidenceThreshold: 0.7,
+      autoFill: true
+    },
+    {
+      key: "manualTotalGross",
+      label: "Manual gross price",
+      required: true,
+      aliases: ["manual_total_gross", "offer price", "total gross", "brutto", "gross price", "цена", "стоимость", "итого"],
+      sources: ["director_instruction", "manual", "documents", "lead"],
+      confidenceThreshold: 0.82,
       autoFill: true
     },
     {

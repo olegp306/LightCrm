@@ -2,6 +2,31 @@
 
 All notable LightCrm releases are documented here. Starting with `0.2.0`, every version bump must include a changelog entry.
 
+## 0.3.30 - 2026-06-14
+
+### Added
+
+- Added commercial-offer readiness separation between price-critical fields and document-completion fields, including manual gross price support for offers that cannot be priced automatically.
+- Added LangGraph/TG support for filling offer fields from replies to lead or offer prompts, so operators can add BGF, project type, manual gross price, client/project/address data, and continue toward offer generation without creating a new lead.
+- Added specific generated-offer summaries that preserve offer version, price, pricing mode, missing fields, and a concise promise snapshot for later comparison in lead document history.
+- Replaced the desktop lead Details side drawer with a centered lead-card modal that mirrors the Telegram/mobile card structure, with editable lead fields, missing-offer chips, summary, downloads, and calendar history.
+- Made mobile lead cards open the same lead-card modal for review/editing while preserving local actions for copy, downloads, and document preview.
+
+### Changed
+
+- Offer generation now reports missing price fields before template availability, producing a clearer Telegram prompt when the commercial-offer number is not ready.
+- Lead-card details now use the table field order for the editable/viewable top section and keep document and calendar history under compact sections.
+
+### Verification
+
+- `pnpm --filter @lightcrm/core test`
+- `pnpm --filter @lightcrm/orchestrator test`
+- `pnpm --filter @lightcrm/telegram-bot test`
+- `pnpm --filter @lightcrm/core typecheck`
+- `pnpm --filter @lightcrm/orchestrator typecheck`
+- `pnpm --filter @lightcrm/telegram-bot typecheck`
+- `pnpm --filter @lightcrm/web typecheck`
+
 ## 0.3.28 - 2026-06-13
 
 ### Added
