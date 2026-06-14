@@ -2,6 +2,25 @@
 
 All notable LightCrm releases are documented here. Starting with `0.2.0`, every version bump must include a changelog entry.
 
+## 0.3.32 - 2026-06-14
+
+### Added
+
+- Added a reusable Details popup flow for non-lead tables that have an update endpoint, starting with Clients.
+- Added `/api/crm/clients/update` so client records can be edited from the shared table Details popup.
+
+### Changed
+
+- Generalized table Details saving so each table can choose its record id field instead of assuming `leadId`.
+- Restored the Leads Details popup as a full edit form with all configured fields visible, while keeping compact field omission only for summary-style cards.
+- Simplified non-lead Details popups so they show the editable record form without lead-only offer/download/history sections.
+
+### Verification
+
+- `pnpm --filter @lightcrm/web typecheck`
+- Local smoke: `/clients` returned HTTP 200.
+- Local smoke: `/api/crm/clients/update` returned `404 Client not found` for a missing client id.
+
 ## 0.3.31 - 2026-06-14
 
 ### Changed

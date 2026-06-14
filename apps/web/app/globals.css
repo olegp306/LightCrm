@@ -1987,6 +1987,10 @@ input {
   overflow: hidden;
 }
 
+.detailsDrawerBody.single {
+  grid-template-columns: 1fr;
+}
+
 .detailsDrawerFields {
   align-content: start;
   display: grid;

@@ -10,6 +10,7 @@ export default function LeadsPage() {
       documentUploadEndpoint="/api/crm/lead-intake/upload"
       leadSummariesEndpoint="/api/crm/leads/summaries"
       updateRecordEndpoint="/api/crm/leads/update"
+      updateRecordIdField="leadId"
       offerGenerateEndpoint="/api/crm/leads/generate-offer"
       clientOptionsEndpoint="/api/crm/clients"
     />
