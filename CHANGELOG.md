@@ -2,6 +2,18 @@
 
 All notable LightCrm releases are documented here. Starting with `0.2.0`, every version bump must include a changelog entry.
 
+## 0.3.31 - 2026-06-14
+
+### Changed
+
+- Restored the canonical Leads table column set and order by resetting the saved table preference key to `leads.v6`.
+- Made the lead details popup skip empty fields entirely so blank labels and empty controls do not inflate the card.
+- Moved the mobile backup action into the top sidebar row between `LightCrm` and the light/dark mode toggle, with a muted borderless style.
+
+### Verification
+
+- `pnpm --filter @lightcrm/web typecheck`
+
 ## 0.3.30 - 2026-06-14
 
 ### Added

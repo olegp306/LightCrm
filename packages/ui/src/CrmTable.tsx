@@ -778,6 +778,17 @@ function offerMissingFieldChips(value: CrmTableCellValue | undefined): string[] 
     .filter(Boolean);
 }
 
+function hasDetailsFieldValue(value: CrmTableCellValue | undefined): boolean {
+  if (Array.isArray(value)) {
+    return value.length > 0;
+  }
+  if (value === null || value === undefined) {
+    return false;
+  }
+  const text = String(value).trim();
+  return Boolean(text && text !== "n/a" && text !== "—" && text !== "-");
+}
+
 const mobileReadonlyColumnIds = new Set([
   "code",
   "nextAction",
@@ -3512,7 +3523,10 @@ export function CrmTable({
 
             <div className="detailsDrawerBody">
               <div className="detailsDrawerFields">
-                {detailsModalColumns.map((column) => {
+                {detailsModalColumns.flatMap((column) => {
+                  if (!hasDetailsFieldValue(detailsPanelRow.values[column.id])) {
+                    return [];
+                  }
                   const canEdit = detailsEditableColumns.some((editableColumn) => editableColumn.id === column.id);
                   const displayValue =
                     column.valueKind === "area"

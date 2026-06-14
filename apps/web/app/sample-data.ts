@@ -44,7 +44,7 @@ export const tables: Record<string, TableDefinition> = {
   leads: {
     title: "Leads",
     description: "Potential opportunities, optionally linked to client records.",
-    tableKey: "leads.v5",
+    tableKey: "leads.v6",
     archiveEntity: "lead",
     columns: [
       { id: "code", title: "Lead ID", width: 120, mobilePriority: 1 },
