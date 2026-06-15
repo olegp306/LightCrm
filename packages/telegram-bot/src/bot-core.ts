@@ -137,6 +137,7 @@ export type TelegramBotDeps = {
   createClient?: (input: UpsertClientInput) => Promise<Pick<Client, "id" | "name">>;
   createLead?: (input: UpsertLeadInput) => Promise<Pick<Lead, "id" | "name">>;
   searchLeads?: (input: TelegramLeadSearchInput) => Promise<TelegramLeadSearchResult>;
+  listRecentLeads?: (input: TelegramRecentLeadsInput) => Promise<TelegramLeadSearchResult>;
   updateLead?: (input: TelegramLeadUpdateInput) => Promise<Pick<Lead, "id" | "name">>;
   createReminder?: (input: TelegramReminderInput) => Promise<TelegramReminderResult>;
   createCalendarEvent?: (input: TelegramCalendarEventInput) => Promise<TelegramCalendarEventResult>;
@@ -173,6 +174,11 @@ export type TakePendingClarificationInput = {
 export type TelegramLeadSearchInput = {
   workspaceId: string;
   query: string;
+  limit?: number;
+};
+
+export type TelegramRecentLeadsInput = {
+  workspaceId: string;
   limit?: number;
 };
 
@@ -1026,6 +1032,23 @@ function crmLeadCallbackData(lead: Pick<Lead, "id" | "name"> & Partial<Pick<Lead
   return publicRef === lead.id ? `crm_lead:${lead.id}` : `crm_lead:${lead.id}:${publicRef}`;
 }
 
+function crmHomeReplyMarkup(deps: TelegramBotDeps): TelegramSendMessageOptions | undefined {
+  if (!deps.crmAppBaseUrl) {
+    return undefined;
+  }
+  const url = deps.crmAppBaseUrl.replace(/\/$/, "");
+  const button = isTelegramWebAppUrl(url)
+    ? { text: "CRM", web_app: { url } }
+    : isLocalCrmUrl(url)
+      ? { text: "CRM", callback_data: "crm_home" }
+      : { text: "CRM", url };
+  return {
+    replyMarkup: {
+      inline_keyboard: [[button]]
+    }
+  };
+}
+
 function parseCrmLeadCallbackData(value: string): { id: string; publicRef: string } {
   const [, id = "", publicRef = ""] = value.split(":");
   return { id, publicRef: publicRef || id };
@@ -1431,6 +1454,39 @@ function leadCardTitleLine(lead: TelegramLeadCard): string {
   const leadName = lead.project?.trim() || lead.name;
   const pieces = client === leadName ? [client] : [client, leadName];
   return pieces.map((piece) => escapeHtml(piece)).join("  ");
+}
+
+function telegramRecentLeadsText(leads: TelegramLeadSearchResult["matches"]): string {
+  if (leads.length === 0) {
+    return "No recent leads yet.";
+  }
+  return [
+    "<b>Recent leads</b>",
+    ...leads.map((lead, index) => {
+      const ref = lead.code?.trim() || lead.id;
+      const client = lead.clientName?.trim() || lead.name;
+      const project = lead.project?.trim() || lead.name;
+      const title = client === project ? client : `${client} - ${project}`;
+      return `${index + 1}. <b>${escapeHtml(ref)}</b> ${escapeHtml(compactLine(title, 92))}`;
+    })
+  ].join("\n");
+}
+
+function telegramRecentLeadsReplyMarkup(leads: TelegramLeadSearchResult["matches"]): TelegramSendMessageOptions | undefined {
+  if (leads.length === 0) {
+    return undefined;
+  }
+  const rows = leads.map((lead) => [
+    {
+      text: lead.code?.trim() || compactLine(lead.name, 18),
+      callback_data: `crm_show:${lead.id}`
+    }
+  ]);
+  return {
+    replyMarkup: {
+      inline_keyboard: rows
+    }
+  };
 }
 
 function telegramLeadCardText(lead: TelegramLeadCard): string {
@@ -2122,6 +2178,53 @@ export async function handleTelegramCallback(update: TelegramUpdate, deps: Teleg
     );
     return { handled: true, lead };
   }
+  if (callback.data === "crm_home") {
+    if (!deps.crmAppBaseUrl) {
+      await deps.sendMessage(chatId, "CRM link is not configured yet.");
+      return { handled: true, lead: null };
+    }
+    await deps.sendMessage(chatId, deps.crmAppBaseUrl.replace(/\/$/, ""));
+    return { handled: true, lead: null };
+  }
+  if (callback.data === "crm_search") {
+    if (!deps.listRecentLeads) {
+      await deps.sendMessage(chatId, "Lead search is not connected yet.");
+      return { handled: true, lead: null };
+    }
+    const recent = await deps.listRecentLeads({ workspaceId: deps.workspaceId, limit: 6 });
+    await deps.sendMessage(
+      chatId,
+      telegramRecentLeadsText(recent.matches),
+      telegramRecentLeadsReplyMarkup(recent.matches)
+    );
+    return { handled: true, lead: null };
+  }
+  const crmShowLeadId = callback.data?.startsWith("crm_show:") ? callback.data.slice("crm_show:".length) : null;
+  if (crmShowLeadId) {
+    const searchProvider = deps.searchLeads ?? deps.listRecentLeads;
+    if (!searchProvider) {
+      await deps.sendMessage(chatId, "Lead card is not available yet.");
+      return { handled: true, lead: null };
+    }
+    const result =
+      searchProvider === deps.searchLeads
+        ? await deps.searchLeads({ workspaceId: deps.workspaceId, query: crmShowLeadId, limit: 1 })
+        : await deps.listRecentLeads!({ workspaceId: deps.workspaceId, limit: 20 });
+    const lead = result.matches.find((match) => match.id === crmShowLeadId || match.code === crmShowLeadId) ?? result.matches[0] ?? null;
+    if (!lead) {
+      await deps.sendMessage(chatId, "Lead not found.");
+      return { handled: true, lead: null };
+    }
+    const documents = deps.listLeadDocuments
+      ? (await deps.listLeadDocuments({ workspaceId: deps.workspaceId, leadId: lead.id, limit: 8 })).documents
+      : [];
+    await deps.sendMessage(
+      chatId,
+      telegramLeadCardTextCompact(lead, documents),
+      leadCardMessageOptions(crmLeadReplyMarkup(deps, { ...lead, summaryLong: lead.summaryLong ?? null }))
+    );
+    return { handled: true, lead };
+  }
   const crmLeadRef = callback.data?.startsWith("crm_lead:") ? parseCrmLeadCallbackData(callback.data) : null;
   if (crmLeadRef?.id) {
     if (!deps.crmAppBaseUrl) {
@@ -2229,6 +2332,27 @@ export async function handleTelegramUpdate(
   const attachments = extractTelegramAttachments(message);
   if (text.trim() === "/start" || text.trim() === "/help") {
     await deps.sendMessage(chatId, helpText());
+    return null;
+  }
+  if (text.trim() === "/crm") {
+    await deps.sendMessage(
+      chatId,
+      "Open LightCrm.",
+      leadCardMessageOptions(crmHomeReplyMarkup(deps))
+    );
+    return null;
+  }
+  if (text.trim() === "/search") {
+    if (!deps.listRecentLeads) {
+      await deps.sendMessage(chatId, "Lead search is not connected yet.");
+      return null;
+    }
+    const recent = await deps.listRecentLeads({ workspaceId: deps.workspaceId, limit: 6 });
+    await deps.sendMessage(
+      chatId,
+      telegramRecentLeadsText(recent.matches),
+      telegramRecentLeadsReplyMarkup(recent.matches)
+    );
     return null;
   }
   const orchestrationText = buildOrchestrationText(message, contextualText, attachments);

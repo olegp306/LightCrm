@@ -12,6 +12,7 @@ export default function LeadsPage() {
       updateRecordEndpoint="/api/crm/leads/update"
       updateRecordIdField="leadId"
       offerGenerateEndpoint="/api/crm/leads/generate-offer"
+      sendToTelegramEndpoint="/api/crm/leads/send-to-telegram"
       clientOptionsEndpoint="/api/crm/clients"
     />
   );

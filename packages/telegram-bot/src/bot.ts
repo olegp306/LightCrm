@@ -14,6 +14,7 @@ import {
   type TelegramLeadDocument,
   type TelegramLeadDocumentsInput,
   type TelegramLeadDocumentsResult,
+  type TelegramRecentLeadsInput,
   type TelegramLeadSearchInput,
   type TelegramLeadSearchResult,
   type TelegramLeadUpdateInput,
@@ -229,8 +230,61 @@ async function searchLeads(input: TelegramLeadSearchInput): Promise<TelegramLead
 type CrmLeadWithDocuments = {
   id: string;
   code?: string | null;
+  name: string;
+  status?: string | null;
+  client?: { name?: string | null } | null;
+  project?: string | null;
+  projectName?: string | null;
+  area?: string | null;
+  description?: string | null;
+  interest?: string | null;
+  urgency?: string | null;
+  todo?: string | null;
+  address?: string | null;
+  messenger?: string | null;
+  summaryShort?: string | null;
+  summaryLong?: string | null;
+  summaryUpdatedAt?: string | null;
   documents?: TelegramLeadDocument[];
 };
+
+async function listRecentLeads(input: TelegramRecentLeadsInput): Promise<TelegramLeadSearchResult> {
+  const url = new URL(crmApiUrl("/api/crm/leads"));
+  url.searchParams.set("workspaceId", input.workspaceId);
+  const response = await fetch(url);
+  const payload = (await response.json()) as CrmLeadWithDocuments[] | { error?: string };
+  if (!response.ok || !Array.isArray(payload)) {
+    throw new Error(!Array.isArray(payload) && payload.error ? payload.error : "LightCrm API /api/crm/leads failed");
+  }
+  return {
+    matches: payload.slice(0, input.limit ?? 6).map((lead) => ({
+      id: lead.id,
+      code: lead.code ?? null,
+      name: lead.name,
+      status:
+        lead.status === "contacted" ||
+        lead.status === "qualified" ||
+        lead.status === "lost" ||
+        lead.status === "converted" ||
+        lead.status === "archived"
+          ? lead.status
+          : "new",
+      clientName: lead.client?.name ?? lead.name,
+      project: lead.project ?? lead.projectName ?? lead.name,
+      area: lead.area ?? null,
+      description: lead.description ?? null,
+      interest: lead.interest ?? null,
+      urgency: lead.urgency ?? null,
+      todo: lead.todo ?? null,
+      address: lead.address ?? null,
+      messenger: lead.messenger ?? null,
+      summaryShort: lead.summaryShort ?? null,
+      summaryLong: lead.summaryLong ?? null,
+      summaryUpdatedAt: lead.summaryUpdatedAt ?? null,
+      score: 1
+    }))
+  };
+}
 
 function publicCrmUrl(value: string): string {
   if (/^https?:\/\//i.test(value)) {
@@ -530,6 +584,7 @@ async function runPolling() {
             createClient,
             createLead,
             searchLeads,
+            listRecentLeads,
             updateLead,
             createReminder,
             createCalendarEvent,

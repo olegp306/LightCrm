@@ -15,7 +15,7 @@ import {
   type Item,
   type Theme
 } from "@glideapps/glide-data-grid";
-import { Check, Columns3, Download, FileText, Italic, Merge, Palette, Plus, Search, Trash2, Volume2, VolumeX, X } from "lucide-react";
+import { Check, Columns3, Download, FileText, Italic, Merge, Palette, Plus, Search, Send, Trash2, Volume2, VolumeX, X } from "lucide-react";
 import type { ChangeEvent, ComponentProps, FormEvent } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -119,6 +119,7 @@ export type CrmTableProps = {
   updateRecordEndpoint?: string;
   updateRecordIdField?: string;
   offerGenerateEndpoint?: string;
+  sendToTelegramEndpoint?: string;
   clientOptionsEndpoint?: string;
   archiveEntity?: ArchiveRecordEntity;
   createRecord?: CreateRecordConfig;
@@ -1206,6 +1207,7 @@ export function CrmTable({
   updateRecordEndpoint,
   updateRecordIdField = "leadId",
   offerGenerateEndpoint,
+  sendToTelegramEndpoint,
   clientOptionsEndpoint,
   archiveEntity,
   createRecord
@@ -1256,6 +1258,8 @@ export function CrmTable({
   const [uploadPulse, setUploadPulse] = useState(0);
   const [isUploading, setIsUploading] = useState(false);
   const [isGeneratingOffer, setIsGeneratingOffer] = useState(false);
+  const [isSendingToTelegram, setIsSendingToTelegram] = useState(false);
+  const [telegramSendNotice, setTelegramSendNotice] = useState<string | null>(null);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [createValues, setCreateValues] = useState<Record<string, string>>({});
   const [createError, setCreateError] = useState<string | null>(null);
@@ -3046,6 +3050,47 @@ export function CrmTable({
     }
   }, [isGeneratingOffer, offerGenerateEndpoint, selectedRows]);
 
+  const sendRowsToTelegram = useCallback(
+    async (rowsToSend: CrmTableRow[]) => {
+      if (!sendToTelegramEndpoint || rowsToSend.length === 0 || isSendingToTelegram) {
+        return;
+      }
+      setIsSendingToTelegram(true);
+      setCreateError(null);
+      setTelegramSendNotice(null);
+      try {
+        const searchParams = typeof window === "undefined" ? null : new URLSearchParams(window.location.search);
+        const chatIdValue = searchParams?.get("tgChatId") ?? searchParams?.get("chatId") ?? "";
+        const chatId = Number(chatIdValue);
+        const hasLinkedChat = chatIdValue.trim() !== "" && Number.isSafeInteger(chatId);
+        if (!hasLinkedChat && typeof window !== "undefined" && window.matchMedia("(min-width: 769px)").matches) {
+          const confirmed = window.confirm("No Telegram chat is linked. Send to configured Telegram chat(s)?");
+          if (!confirmed) {
+            return;
+          }
+        }
+        const response = await fetch(sendToTelegramEndpoint, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            leadIds: rowsToSend.map((row) => row.id),
+            ...(hasLinkedChat ? { chatId } : {})
+          })
+        });
+        const payload = (await response.json()) as { sent?: number; error?: string };
+        if (!response.ok) {
+          throw new Error(payload.error ?? "Telegram send failed.");
+        }
+        setTelegramSendNotice(`Sent ${payload.sent ?? rowsToSend.length} to TG.`);
+      } catch (reason) {
+        setCreateError(reason instanceof Error ? reason.message : "Telegram send failed.");
+      } finally {
+        setIsSendingToTelegram(false);
+      }
+    },
+    [isSendingToTelegram, sendToTelegramEndpoint]
+  );
+
   const visibleColumnIds = new Set(configuredColumns.map((column) => column.id));
   const allColumnsByPreference = applyTablePreferences(columns, { ...preferences, hidden: [] });
   const clientPickerOptions = clientPicker
@@ -3081,6 +3126,18 @@ export function CrmTable({
                 {selectedRows.length} {selectedRows.length === 1 ? "record" : "records"} selected
               </span>
               <div>
+                {sendToTelegramEndpoint ? (
+                  <button
+                    type="button"
+                    title="Send to TG"
+                    aria-label="Send selected records to TG"
+                    onClick={() => void sendRowsToTelegram(selectedRows)}
+                    disabled={isSendingToTelegram}
+                  >
+                    <Send size={14} />
+                    {isSendingToTelegram ? "Sending" : "Send to TG"}
+                  </button>
+                ) : null}
                 {selectedRows.length === 1 ? (
                   <>
                     {offerGenerateEndpoint ? (
@@ -3112,6 +3169,7 @@ export function CrmTable({
               </div>
             </div>
           ) : null}
+          {telegramSendNotice ? <div className="tableInlineNotice">{telegramSendNotice}</div> : null}
           <label className={`searchBox ${query.trim() ? "active" : ""}`}>
             <Search size={16} aria-hidden="true" />
             <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search" />
@@ -3481,6 +3539,21 @@ export function CrmTable({
                   }
                 }}
               >
+                {sendToTelegramEndpoint ? (
+                  <button
+                    type="button"
+                    className="mobileLeadSendTelegramButton"
+                    aria-label={`Send ${publicRowCode ?? row.id} to TG`}
+                    title="Send to TG"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      void sendRowsToTelegram([row]);
+                    }}
+                    disabled={isSendingToTelegram}
+                  >
+                    <Send size={14} />
+                  </button>
+                ) : null}
                 <button
                   type="button"
                   className="mobileLeadCardHeader"

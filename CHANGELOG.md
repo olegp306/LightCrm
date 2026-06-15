@@ -2,6 +2,28 @@
 
 All notable LightCrm releases are documented here. Starting with `0.2.0`, every version bump must include a changelog entry.
 
+## 0.3.34 - 2026-06-15
+
+### Added
+
+- Added a separate Telegram `/crm` command that returns a single CRM launcher button without mixing in lead search results.
+- Added a separate Telegram `/search` command that lists the latest six leads and opens the standard Telegram lead card from lead-number buttons.
+- Added a Leads web API and UI action for sending one or more selected lead cards to TG from desktop table selection.
+- Added a compact mobile lead-card send-to-TG button so operators can push the currently viewed lead card back into Telegram.
+
+### Changed
+
+- Reused the existing compact Telegram lead-card structure for searched leads, including CRM, offer, summary, and downloads actions.
+- Normalized recent-lead status mapping before sending Telegram cards, keeping API string values inside the core lead status contract.
+- Converted relative document download URLs to full app URLs when sending lead cards to TG.
+
+### Verification
+
+- `pnpm --filter @lightcrm/telegram-bot test`
+- `pnpm --filter @lightcrm/telegram-bot typecheck`
+- `pnpm --filter @lightcrm/ui typecheck`
+- `pnpm --filter @lightcrm/web typecheck`
+
 ## 0.3.33 - 2026-06-14
 
 ### Added

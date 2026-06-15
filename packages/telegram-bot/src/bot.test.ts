@@ -20,6 +20,131 @@ describe("telegram bot core", () => {
     expect(parseAllowedChatIds("")).toEqual(new Set());
   });
 
+  it("shows only the CRM launcher for /crm", async () => {
+    const sendMessage = vi.fn();
+
+    await handleTelegramUpdate(
+      {
+        update_id: 1,
+        message: {
+          message_id: 11,
+          text: "/crm",
+          chat: { id: 111111 }
+        }
+      },
+      {
+        allowedChatIds: new Set([111111]),
+        workspaceId: "default",
+        crmAppBaseUrl: "https://crm.example.com",
+        sendMessage
+      }
+    );
+
+    expect(sendMessage).toHaveBeenCalledWith(111111, "Open LightCrm.", {
+      replyMarkup: {
+        inline_keyboard: [[{ text: "CRM", web_app: { url: "https://crm.example.com" } }]]
+      }
+    });
+  });
+
+  it("shows six recent leads for /search with lead number buttons", async () => {
+    const sendMessage = vi.fn();
+    const listRecentLeads = vi.fn().mockResolvedValue({
+      matches: [
+        {
+          id: "lead-1",
+          code: "L-2026-001",
+          name: "Northwind Intro",
+          clientName: "Northwind",
+          project: "Architecture intro",
+          status: "new",
+          score: 1
+        }
+      ]
+    });
+
+    await handleTelegramUpdate(
+      {
+        update_id: 2,
+        message: {
+          message_id: 12,
+          text: "/search",
+          chat: { id: 111111 }
+        }
+      },
+      {
+        allowedChatIds: new Set([111111]),
+        workspaceId: "default",
+        sendMessage,
+        listRecentLeads
+      }
+    );
+
+    expect(listRecentLeads).toHaveBeenCalledWith({ workspaceId: "default", limit: 6 });
+    expect(sendMessage).toHaveBeenCalledWith(
+      111111,
+      expect.stringContaining("<b>Recent leads</b>"),
+      expect.objectContaining({
+        replyMarkup: {
+          inline_keyboard: [[{ text: "L-2026-001", callback_data: "crm_show:lead-1" }]]
+        }
+      })
+    );
+  });
+
+  it("opens the standard lead card from a /search lead button", async () => {
+    const sendMessage = vi.fn();
+    const searchLeads = vi.fn().mockResolvedValue({
+      matches: [
+        {
+          id: "lead-1",
+          code: "L-2026-001",
+          name: "Northwind Intro",
+          clientName: "Northwind",
+          project: "Architecture intro",
+          status: "new",
+          summaryShort: "Client asks for an intro offer.",
+          summaryLong: "Client asks for an intro offer with follow-up context.",
+          score: 1
+        }
+      ]
+    });
+    const listLeadDocuments = vi.fn().mockResolvedValue({ documents: [] });
+
+    await handleTelegramUpdate(
+      {
+        update_id: 3,
+        callback_query: {
+          id: "callback-1",
+          data: "crm_show:lead-1",
+          message: {
+            message_id: 13,
+            chat: { id: 111111 }
+          }
+        }
+      },
+      {
+        allowedChatIds: new Set([111111]),
+        workspaceId: "default",
+        crmAppBaseUrl: "https://crm.example.com",
+        sendMessage,
+        searchLeads,
+        listLeadDocuments
+      }
+    );
+
+    expect(searchLeads).toHaveBeenCalledWith({ workspaceId: "default", query: "lead-1", limit: 1 });
+    expect(sendMessage).toHaveBeenCalledWith(
+      111111,
+      expect.stringContaining("<b>L-2026-001</b>"),
+      expect.objectContaining({
+        replyMarkup: expect.objectContaining({
+          inline_keyboard: expect.arrayContaining([expect.arrayContaining([expect.objectContaining({ text: "CRM" })])])
+        })
+      })
+    );
+  });
+
   it("buffers media group updates across polling responses before combining them", () => {
     const buffer = new Map<string, MediaGroupBuffer>();
     const firstReady = collectReadyMediaGroupUpdates(
