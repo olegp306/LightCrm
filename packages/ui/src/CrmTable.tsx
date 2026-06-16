@@ -16,7 +16,7 @@ import {
   type Theme
 } from "@glideapps/glide-data-grid";
 import { Check, Columns3, Download, FileText, Italic, Merge, Palette, Plus, Search, Send, Trash2, Volume2, VolumeX, X } from "lucide-react";
-import type { ChangeEvent, ComponentProps, FormEvent } from "react";
+import type { ChangeEvent, ComponentProps, CSSProperties, FormEvent } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   applyTablePreferences,
@@ -104,6 +104,14 @@ export type ClientOption = {
   phone?: string | null;
   whatsapp?: string | null;
 };
+
+function visibleClientReference(client: ClientOption): string | null {
+  const code = client.code?.trim();
+  if (code && !/^csv-client-/i.test(code)) {
+    return code;
+  }
+  return /^C-\d{4}-\d+/i.test(client.id) ? client.id : null;
+}
 
 export type ArchiveRecordEntity = "client" | "lead" | "coldTarget" | "reminder" | "calendarEvent" | "documentFile" | "leadSummary";
 
@@ -1932,7 +1940,6 @@ export function CrmTable({
         };
       }
       const displayValue = value;
-      const isReadonlyLinkedClientName = column?.id === "client.name" && (!record || !draftRowIds.has(record.id));
       const displayData = Array.isArray(displayValue)
         ? displayValue.every(isCalendarCellItem)
           ? calendarCellDisplayData(displayValue)
@@ -1942,8 +1949,8 @@ export function CrmTable({
         kind: GridCellKind.Text,
         data: displayData,
         displayData,
-        allowOverlay: !isReadonlyLinkedClientName,
-        readonly: isReadonlyLinkedClientName,
+        allowOverlay: true,
+        readonly: false,
         themeOverride: textThemeOverride(activeTableTheme, themeOverride, column?.textStyle),
         contentAlign: column?.id === "interest" ? "center" : undefined
       };
@@ -2386,13 +2393,15 @@ export function CrmTable({
       setEditableRows((current) => updateRowCell(current, row.id, column.id, value.data));
       if (draftRowIds.has(row.id)) {
         void saveDraftRow(nextRow);
+      } else if (column.id.startsWith("client.")) {
+        void persistInlinePatch(row, { [column.id]: String(value.data ?? "").trim() ? String(value.data ?? "") : null }, `Update ${column.title}`);
       } else if (persistInlineNoteField(row, column, String(value.data ?? ""))) {
         return;
       } else if (createRecord?.fields.some((field) => field.id === column.id)) {
         void persistEditedRow(nextRow);
       }
     },
-    [configuredColumns, createRecord, draftRowIds, filteredRows, persistEditedRow, persistInlineNoteField, persistNextAction, saveDraftRow]
+    [configuredColumns, createRecord, draftRowIds, filteredRows, persistEditedRow, persistInlineNoteField, persistInlinePatch, persistNextAction, saveDraftRow]
   );
 
   const openCreateRecord = useCallback(() => {
@@ -4267,7 +4276,7 @@ export function CrmTable({
                         {detailsClientOptions.length > 0 ? (
                           detailsClientOptions.map((client) => (
                             <button type="button" key={client.id} onClick={() => selectClientInDetails(client)}>
-                              <span>{client.code ?? client.id}</span>
+                              {visibleClientReference(client) ? <span>{visibleClientReference(client)}</span> : null}
                               <strong>{client.name ?? "Unnamed client"}</strong>
                               <small>{[client.phone, client.email].filter(Boolean).join(" · ") || client.company || "No contact details"}</small>
                             </button>
@@ -4317,6 +4326,16 @@ export function CrmTable({
                   if (column.valueKind === "handoff") {
                     const side = normalizedHandoffSide(detailsPanel.values[column.id] ?? detailsPanelRow.values[column.id]);
                     const ball = handoffBallLabels[normalizedHandoffBall(preferences.handoffBall)].icon;
+                    const animation = handoffAnimations[detailsPanel.rowId] ?? null;
+                    const from = animation?.from ?? side;
+                    const to = animation?.to ?? side;
+                    const progress = animation?.progress ?? null;
+                    const startX = from === "client" ? 100 : 0;
+                    const endX = to === "client" ? 100 : 0;
+                    const eased = progress === null ? 1 : 1 - Math.pow(1 - progress, 3);
+                    const ballX = progress === null ? (side === "client" ? 100 : 0) : startX + (endX - startX) * eased;
+                    const ballY = progress === null ? 0 : -Math.sin(Math.PI * progress) * 18;
+                    const displaySide = progress === null ? side : to;
                     return (
                       <div className="detailsDrawerField detailsHandoffField" key={column.id}>
                         <span className="detailsFieldLabel">
@@ -4325,13 +4344,21 @@ export function CrmTable({
                         </span>
                         <button
                           type="button"
-                          className={`detailsHandoffControl ${side}`}
+                          className={`detailsHandoffControl ${displaySide}${progress === null ? "" : " animating"}`}
+                          style={
+                            {
+                              "--details-ball-x": `${ballX}%`,
+                              "--details-ball-y": `${ballY}px`
+                            } as CSSProperties
+                          }
                           onClick={toggleDetailsHandoffBall}
                           aria-label={`Ball is on ${side === "us" ? "our" : "client"} side`}
                         >
-                          <span>us</span>
-                          <b aria-hidden="true">{ball}</b>
-                          <span>client</span>
+                          <span className="detailsHandoffSide">us</span>
+                          <span className="detailsHandoffTrack" aria-hidden="true">
+                            <b>{ball}</b>
+                          </span>
+                          <span className="detailsHandoffSide">client</span>
                         </button>
                       </div>
                     );

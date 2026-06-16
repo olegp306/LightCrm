@@ -1479,12 +1479,14 @@ function telegramRecentLeadsReplyMarkup(leads: TelegramLeadSearchResult["matches
   if (leads.length === 0) {
     return undefined;
   }
-  const rows = leads.map((lead) => [
-    {
+  const buttons = leads.map((lead) => ({
       text: lead.code?.trim() || compactLine(lead.name, 18),
       callback_data: `crm_show:${lead.id}`
-    }
-  ]);
+    }));
+  const rows: Array<typeof buttons> = [];
+  for (let index = 0; index < buttons.length; index += 2) {
+    rows.push(buttons.slice(index, index + 2));
+  }
   return {
     replyMarkup: {
       inline_keyboard: rows

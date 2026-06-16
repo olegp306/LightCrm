@@ -2,6 +2,27 @@
 
 All notable LightCrm releases are documented here. Starting with `0.2.0`, every version bump must include a changelog entry.
 
+## 0.3.38 - 2026-06-16
+
+### Added
+
+- Added inline editing for linked lead client fields in the Leads table, including automatic client creation/linking when a lead does not yet have a client record.
+- Added an animated handoff ball control inside the Leads Details popup, matching the table handoff behavior.
+- Added required labels and ordering for the Today calendar add-event form: date, event title, optional lead, optional description.
+
+### Changed
+
+- Changed Telegram `/search` lead buttons from six single-button rows to a compact three-row, two-column layout.
+- Hid technical `csv-client-*` import ids from the Details client picker while preserving real public client codes.
+- Improved Details offer-missing field spacing and client-section styling.
+
+### Verification
+
+- `pnpm --filter @lightcrm/ui typecheck`
+- `pnpm --filter @lightcrm/web typecheck`
+- `pnpm --filter @lightcrm/telegram-bot typecheck`
+- `pnpm --filter @lightcrm/telegram-bot test`
+
 ## 0.3.37 - 2026-06-16
 
 ### Added

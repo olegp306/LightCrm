@@ -445,38 +445,56 @@ export function CrmCalendar({
 
   const createEventForm = (
     <form className="calendarCreateForm" onSubmit={createCalendarEvent}>
-      <input
-        aria-label="Event title"
-        placeholder="Event title"
-        value={createDraft.title}
-        onChange={(event) => setCreateDraft((current) => ({ ...current, title: event.target.value }))}
-      />
-      <input
-        aria-label="Event date and time"
-        type="datetime-local"
-        value={createDraft.startsAt}
-        onChange={(event) => setCreateDraft((current) => ({ ...current, startsAt: event.target.value }))}
-      />
-      <input
-        aria-label="Lead"
-        list="calendar-lead-options"
-        placeholder="Lead"
-        value={createDraft.leadId}
-        disabled={Boolean(leadId)}
-        onChange={(event) => setCreateDraft((current) => ({ ...current, leadId: event.target.value }))}
-      />
+      <label className="calendarCreateField">
+        <span>
+          Date <i aria-hidden="true">*</i>
+        </span>
+        <input
+          aria-label="Event date and time"
+          type="datetime-local"
+          required
+          value={createDraft.startsAt}
+          onChange={(event) => setCreateDraft((current) => ({ ...current, startsAt: event.target.value }))}
+        />
+      </label>
+      <label className="calendarCreateField">
+        <span>
+          Event title <i aria-hidden="true">*</i>
+        </span>
+        <input
+          aria-label="Event title"
+          placeholder="Event title"
+          required
+          value={createDraft.title}
+          onChange={(event) => setCreateDraft((current) => ({ ...current, title: event.target.value }))}
+        />
+      </label>
+      <label className="calendarCreateField">
+        <span>Lead</span>
+        <input
+          aria-label="Lead"
+          list="calendar-lead-options"
+          placeholder="Lead"
+          value={createDraft.leadId}
+          disabled={Boolean(leadId)}
+          onChange={(event) => setCreateDraft((current) => ({ ...current, leadId: event.target.value }))}
+        />
+      </label>
       <datalist id="calendar-lead-options">
         {leadOptions.map((lead) => (
           <option key={lead.id} value={leadOptionValue(lead)} />
         ))}
       </datalist>
-      <input
-        aria-label="Event description"
-        placeholder="Description"
-        value={createDraft.description}
-        onChange={(event) => setCreateDraft((current) => ({ ...current, description: event.target.value }))}
-      />
-      <button type="submit" disabled={createStatus === "saving" || !createDraft.title.trim()}>
+      <label className="calendarCreateField">
+        <span>Description</span>
+        <input
+          aria-label="Event description"
+          placeholder="Description"
+          value={createDraft.description}
+          onChange={(event) => setCreateDraft((current) => ({ ...current, description: event.target.value }))}
+        />
+      </label>
+      <button type="submit" disabled={createStatus === "saving" || !createDraft.title.trim() || !createDraft.startsAt}>
         {createStatus === "saving" ? "Saving" : "Add event"}
       </button>
       {createStatus === "error" ? <span>Could not save event.</span> : null}

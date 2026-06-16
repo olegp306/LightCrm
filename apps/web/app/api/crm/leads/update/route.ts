@@ -82,6 +82,7 @@ export async function POST(request: Request) {
       email: input.patch["client.email"]
     };
     const hasClientPatch = Object.values(clientPatch).some((value) => value !== undefined);
+    const hasClientPatchValue = Object.values(clientPatch).some((value) => typeof value === "string" && value.length > 0);
     if (input.patch.clientId !== undefined) leadPatch.clientId = input.patch.clientId;
     if (input.patch.name !== undefined) leadPatch.name = input.patch.name;
     if (input.patch.email !== undefined) leadPatch.email = input.patch.email;
@@ -103,6 +104,22 @@ export async function POST(request: Request) {
           email: clientPatch.email ?? existingClient.email
         });
       }
+    }
+    if (hasClientPatch && hasClientPatchValue && !nextClientId) {
+      const createdClient = await crm.upsertClient({
+        workspaceId,
+        name: clientPatch.name ?? existing.name,
+        phone: clientPatch.phone ?? existing.phone,
+        email: clientPatch.email ?? existing.email,
+        whatsapp: input.patch.messenger ?? existing.whatsapp,
+        company: input.patch.projectName ?? input.patch.project ?? existing.company,
+        status: "active",
+        notes: "Created automatically from inline lead client edit.",
+        sourceChannel: input.patch.sourceChannel ?? input.source?.channel ?? existing.sourceChannel,
+        externalThreadId: existing.externalThreadId,
+        externalMessageId: input.source?.messageId ?? existing.externalMessageId
+      });
+      nextClientId = createdClient.id;
     }
     const nextNotes = notesWithTabularPatch(existing.notes, input.patch);
     const lead = await crm.upsertLeadWithClientResolution({

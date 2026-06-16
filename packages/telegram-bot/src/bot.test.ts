@@ -75,17 +75,15 @@ describe("telegram bot core", () => {
   it("shows six recent leads for /search with lead number buttons", async () => {
     const sendMessage = vi.fn();
     const listRecentLeads = vi.fn().mockResolvedValue({
-      matches: [
-        {
-          id: "lead-1",
-          code: "L-2026-001",
-          name: "Northwind Intro",
-          clientName: "Northwind",
-          project: "Architecture intro",
-          status: "new",
-          score: 1
-        }
-      ]
+      matches: Array.from({ length: 6 }, (_, index) => ({
+        id: `lead-${index + 1}`,
+        code: `L-2026-00${index + 1}`,
+        name: `Recent lead ${index + 1}`,
+        clientName: `Client ${index + 1}`,
+        project: `Project ${index + 1}`,
+        status: "new",
+        score: 1
+      }))
     });
 
     await handleTelegramUpdate(
@@ -111,7 +109,20 @@ describe("telegram bot core", () => {
       expect.stringContaining("<b>Recent leads</b>"),
       expect.objectContaining({
         replyMarkup: {
-          inline_keyboard: [[{ text: "L-2026-001", callback_data: "crm_show:lead-1" }]]
+          inline_keyboard: [
+            [
+              { text: "L-2026-001", callback_data: "crm_show:lead-1" },
+              { text: "L-2026-002", callback_data: "crm_show:lead-2" }
+            ],
+            [
+              { text: "L-2026-003", callback_data: "crm_show:lead-3" },
+              { text: "L-2026-004", callback_data: "crm_show:lead-4" }
+            ],
+            [
+              { text: "L-2026-005", callback_data: "crm_show:lead-5" },
+              { text: "L-2026-006", callback_data: "crm_show:lead-6" }
+            ]
+          ]
         }
       })
     );
