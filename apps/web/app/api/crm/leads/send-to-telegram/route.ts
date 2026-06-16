@@ -1,7 +1,8 @@
 import { evaluateCommercialOfferReadiness } from "@lightcrm/core";
+import { getPrismaClient } from "@lightcrm/db";
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { defaultWorkspaceId, getCrm, handleRouteError, parseJson, resolveWorkspaceId } from "../../_shared";
+import { defaultWorkspaceId, handleRouteError, parseJson, resolveWorkspaceId } from "../../_shared";
 import { getCrmRuntimeSettings } from "../../settings/crm-settings-store";
 import { leadNoteFields, readNoteField } from "../note-fields";
 
@@ -198,15 +199,40 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "No Telegram chat is configured for outbound messages." }, { status: 400 });
     }
 
-    const crm = getCrm();
-    const [leads, clients, documents, summaries, crmSettings] = await Promise.all([
-      crm.listRecords({ entity: "lead", workspaceId, includeArchived: false }),
-      crm.listRecords({ entity: "client", workspaceId, includeArchived: true }),
-      crm.listRecords({ entity: "documentFile", workspaceId, includeArchived: true }),
-      crm.listRecords({ entity: "leadSummary", workspaceId, includeArchived: true }),
+    const prisma = getPrismaClient();
+    const [selected, crmSettings] = await Promise.all([
+      prisma.lead.findMany({
+        where: {
+          workspaceId,
+          archivedAt: null,
+          OR: [{ id: { in: input.leadIds } }, { code: { in: input.leadIds } }]
+        },
+        orderBy: { updatedAt: "desc" }
+      }),
       getCrmRuntimeSettings()
     ]);
-    const selected = leads.filter((lead) => input.leadIds.includes(lead.id) || (lead.code && input.leadIds.includes(lead.code)));
+
+    const selectedLeadIds = selected.map((lead) => lead.id);
+    const selectedClientIds = selected
+      .map((lead) => lead.clientId)
+      .filter((clientId): clientId is string => Boolean(clientId));
+    const [clients, documents, summaries] = await Promise.all([
+      selectedClientIds.length > 0
+        ? prisma.client.findMany({ where: { workspaceId, id: { in: selectedClientIds } } })
+        : Promise.resolve([]),
+      selectedLeadIds.length > 0
+        ? prisma.documentFile.findMany({
+            where: { workspaceId, leadId: { in: selectedLeadIds }, archivedAt: null },
+            orderBy: { updatedAt: "desc" }
+          })
+        : Promise.resolve([]),
+      selectedLeadIds.length > 0
+        ? prisma.leadSummary.findMany({
+            where: { workspaceId, leadId: { in: selectedLeadIds }, archivedAt: null },
+            orderBy: { createdAt: "desc" }
+          })
+        : Promise.resolve([])
+    ]);
     const clientsById = new Map(clients.map((client) => [client.id, client]));
     const documentsByLeadId = new Map<string, typeof documents>();
     for (const document of documents) {

@@ -1663,7 +1663,7 @@ function humanOfferFieldName(value: string): string {
     bgf_or_manual_total_gross: "project area / BGF or manual gross price",
     project_type_or_manual_total_gross: "project type or manual gross price",
     manual_total_gross: "manual gross price",
-    project_name: "project name",
+    project_name: "lead name",
     project_address: "project address",
     client_name: "client name"
   };
@@ -1687,7 +1687,7 @@ function formatOfferCallbackError(error: unknown, leadId?: string | null): strin
     const optionalLine =
       documentMissingFields.length > 0
         ? documentMissingFields.map(humanOfferFieldName).join(", ")
-        : "client name, project name, project address";
+        : "client name, lead name, project address";
     return [
       "<b>Offer price is not ready</b>",
       leadId ? `Lead ID: ${leadId}` : null,
@@ -1730,7 +1730,7 @@ function offerMissingFieldsFromFacts(result: CrmOrchestrationResult): string | n
     missing.push("client name");
   }
   if (!result.facts.projectName) {
-    missing.push("project name");
+    missing.push("lead name");
   }
   if (!result.facts.location) {
     missing.push("project address");

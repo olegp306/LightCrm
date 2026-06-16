@@ -13,6 +13,9 @@ const LeadPatch = z
     company: optionalText,
     status: z.enum(["new", "contacted", "qualified", "lost", "converted", "archived"]).optional(),
     notes: optionalText,
+    "client.name": optionalText,
+    "client.phone": optionalText,
+    "client.email": optionalText,
     projectName: optionalText,
     project: optionalText,
     area: optionalText,
@@ -73,6 +76,12 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Lead not found" }, { status: 404 });
     }
     const leadPatch: NativeLeadPatch = {};
+    const clientPatch = {
+      name: input.patch["client.name"],
+      phone: input.patch["client.phone"],
+      email: input.patch["client.email"]
+    };
+    const hasClientPatch = Object.values(clientPatch).some((value) => value !== undefined);
     if (input.patch.clientId !== undefined) leadPatch.clientId = input.patch.clientId;
     if (input.patch.name !== undefined) leadPatch.name = input.patch.name;
     if (input.patch.email !== undefined) leadPatch.email = input.patch.email;
@@ -80,12 +89,31 @@ export async function POST(request: Request) {
     if (input.patch.whatsapp !== undefined) leadPatch.whatsapp = input.patch.whatsapp;
     if (input.patch.company !== undefined) leadPatch.company = input.patch.company;
     if (input.patch.status !== undefined) leadPatch.status = input.patch.status;
+    let nextClientId = input.patch.clientId ?? existing.clientId;
+    if (hasClientPatch && existing.clientId) {
+      const clients = await crm.listRecords({ entity: "client", workspaceId, includeArchived: true });
+      const existingClient = clients.find((client) => client.id === existing.clientId && !client.archivedAt);
+      if (existingClient) {
+        await crm.upsertClient({
+          ...existingClient,
+          workspaceId,
+          id: existingClient.id,
+          name: clientPatch.name ?? existingClient.name,
+          phone: clientPatch.phone ?? existingClient.phone,
+          email: clientPatch.email ?? existingClient.email
+        });
+      }
+    }
     const nextNotes = notesWithTabularPatch(existing.notes, input.patch);
     const lead = await crm.upsertLeadWithClientResolution({
       ...existing,
       ...leadPatch,
       workspaceId,
       id: existing.id,
+      clientId: nextClientId,
+      name: clientPatch.name ?? leadPatch.name ?? existing.name,
+      phone: clientPatch.phone ?? leadPatch.phone ?? existing.phone,
+      email: clientPatch.email ?? leadPatch.email ?? existing.email,
       company: input.patch.projectName ?? input.patch.project ?? leadPatch.company ?? existing.company,
       whatsapp: input.patch.messenger ?? leadPatch.whatsapp ?? existing.whatsapp,
       notes:

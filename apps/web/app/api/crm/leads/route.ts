@@ -4,8 +4,8 @@ import { defaultWorkspaceId, getCrm, handleRouteError } from "../_shared";
 import { getCrmRuntimeSettings } from "../settings/crm-settings-store";
 import { leadNoteFields, readNoteField } from "./note-fields";
 
-const leadSummaryShortMax = 120;
-const leadSummaryLongMax = 420;
+const leadSummaryShortMax = 260;
+const leadSummaryLongMax = 900;
 
 function readNumber(value: string | null): number | null {
   if (!value) {

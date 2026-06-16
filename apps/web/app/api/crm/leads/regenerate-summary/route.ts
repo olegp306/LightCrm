@@ -8,8 +8,8 @@ const RegenerateLeadSummaryInput = z.object({
   leadId: z.string().min(1)
 });
 
-const leadSummaryShortMax = 120;
-const leadSummaryLongMax = 420;
+const leadSummaryShortMax = 260;
+const leadSummaryLongMax = 900;
 
 function compactText(value: string | null | undefined, maxLength: number): string {
   const compacted = (value ?? "").replace(/\s+/g, " ").trim();
@@ -69,7 +69,7 @@ export async function POST(request: Request) {
     const shortSummary = compactText(
       sentence([
         client?.name ? `Client: ${client.name}` : "Client not linked yet",
-        project ? `Project: ${project}` : null,
+        project ? `Lead name: ${project}` : null,
         formattedArea ? `Area: ${formattedArea}` : null,
         todo ? `Next: ${todo}` : null
       ]),
@@ -79,7 +79,7 @@ export async function POST(request: Request) {
       [
         sentence([
           client?.name ? `Client: ${client.name}` : "Client is not linked yet",
-          project ? `Project: ${project}` : null,
+          project ? `Lead name: ${project}` : null,
           formattedArea ? `Area: ${formattedArea}` : null,
           interest ? `Interest: ${interest}` : null,
           urgency ? `Urgency: ${urgency}` : null,

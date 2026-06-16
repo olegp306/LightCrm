@@ -45,8 +45,23 @@ function compactText(value: string, maxLength = 240): string {
   return `${compacted.slice(0, Math.max(0, maxLength - 1)).trimEnd()}...`;
 }
 
-const leadSummaryShortMax = 120;
-const leadSummaryLongMax = 420;
+function compactLines(lines: Array<string | null | undefined>, maxLength: number): string {
+  const cleanLines = lines
+    .map((line) => line?.replace(/\s+/g, " ").trim())
+    .filter((line): line is string => Boolean(line));
+  const result: string[] = [];
+  for (const line of cleanLines) {
+    const next = [...result, line].join("\n");
+    if (next.length > maxLength) {
+      break;
+    }
+    result.push(line);
+  }
+  return result.length > 0 ? result.join("\n") : compactText(cleanLines.join(" "), maxLength);
+}
+
+const leadSummaryShortMax = 260;
+const leadSummaryLongMax = 900;
 
 function attachmentKindLabel(kind: LeadIntakeAttachmentInput["kind"]): string {
   const labels: Record<LeadIntakeAttachmentInput["kind"], string> = {
@@ -62,6 +77,15 @@ function attachmentKindLabel(kind: LeadIntakeAttachmentInput["kind"]): string {
 
 function displaySourceChannel(value: string | null | undefined): string {
   return value?.toLocaleLowerCase() === "telegram" ? "TG" : value ?? "intake";
+}
+
+function cleanIntakeText(value: string): string {
+  return value
+    .replace(/^Source:\s*TG(?:\s+thread\s+\S+)?\.\s*/i, "")
+    .replace(/^Source:\s*[^.]+\.\s*/i, "")
+    .replace(/^Text:\s*/i, "")
+    .replace(/\s*Files:\s*no attachments\.?$/i, "")
+    .trim();
 }
 
 function summarizeAttachment(
@@ -98,10 +122,10 @@ export function summarizeLeadIntake(
 ): LeadIntakeSemanticSummary {
   const textItems = input.textItems ?? [];
   const attachments = input.attachments ?? [];
-  const text = textItems
+  const text = cleanIntakeText(textItems
     .map((item) => item.text.trim())
     .filter(Boolean)
-    .join(" ");
+    .join(" "));
   const attachmentAnalyses = attachments.map((attachment) =>
     options.analyzer?.analyzeAttachment?.(attachment, { input, text }) ?? null
   );
@@ -135,19 +159,32 @@ export function summarizeLeadIntake(
   ].filter((signal): signal is string => Boolean(signal));
 
   const kindList = [...new Set(attachments.map((attachment) => attachment.kind))];
-  const shortSummary = compactText([
-    text ? compactText(text, 90) : "No text notes yet",
+  const source = displaySourceChannel(input.sourceChannel);
+  const clientIntent = text || (attachments.length > 0 ? "Review incoming files and extract lead details." : "Lead intake received.");
+  const documentSummary =
     attachments.length > 0
-      ? `${attachments.length} file(s): ${attachments.map((attachment) => attachment.fileName).join(", ")}`
-      : "no files"
-  ].join("; "), leadSummaryShortMax);
-  const longSummary = compactText([
-    `Source: ${displaySourceChannel(input.sourceChannel)}${input.sourceThreadId ? ` thread ${input.sourceThreadId}` : ""}.`,
-    text ? `Text: ${compactText(text)}.` : "Text: no text notes yet.",
-    attachments.length > 0
-      ? `Files: ${attachments.length} attachment(s)${kindList.length > 0 ? ` [${kindList.join(", ")}]` : ""}: ${attachmentSummaries.map((attachment) => `${attachment.fileName} (${attachment.kind}; ${attachment.shortSummary})`).join("; ")}.`
-      : "Files: no attachments."
-  ].join(" "), leadSummaryLongMax);
+      ? `${attachments.length} document(s)${kindList.length > 0 ? ` [${kindList.join(", ")}]` : ""}: ${attachmentSummaries.map((attachment) => `${attachment.kind} - ${attachment.shortSummary}`).join("; ")}`
+      : null;
+  const shortSummary = compactText(
+    [
+      `${source}: ${compactText(clientIntent, 190)}`,
+      documentSummary ? compactText(documentSummary, 80) : null
+    ]
+      .filter(Boolean)
+      .join(" "),
+    leadSummaryShortMax
+  );
+  const longSummary = compactLines(
+    [
+      `${source}: ${clientIntent}`,
+      documentSummary ? `Documents: ${documentSummary}` : null,
+      text ? `Copy: "${compactText(text, 260)}"` : null,
+      attachmentSummaries.length > 0
+        ? `Document notes: ${attachmentSummaries.map((attachment) => `"${attachment.shortSummary}"`).join("; ")}`
+        : null
+    ],
+    leadSummaryLongMax
+  );
 
   return {
     shortSummary,

@@ -213,7 +213,7 @@ const intentJsonContract = [
   "}",
   "When a message both introduces a new client/project/opportunity and asks for a meeting or reminder, keep both intents: use create_lead plus create_meeting and/or create_reminder in secondaryIntents.",
   "When a message asks how LightCrm works or how to use leads, reminders, documents, TG/mobile, or commercial offers, use system_help and do not create or update CRM records.",
-  "When a message replies to a lead or offer prompt and provides BGF, area, project type, manual gross price, client name, project name, project address, or other commercial-offer fields, use fill_offer_fields."
+  "When a message replies to a lead or offer prompt and provides BGF, area, project type, manual gross price, client name, lead name, project address, or other commercial-offer fields, use fill_offer_fields."
 ].join("\n");
 
 const targetJsonContract = [

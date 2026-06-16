@@ -38,10 +38,14 @@ describe("summarizeLeadIntake", () => {
       ]
     });
 
+    expect(summary.shortSummary).toContain("TG:");
     expect(summary.shortSummary).toContain("140 m2 private house");
-    expect(summary.shortSummary).toContain("2 file(s)");
-    expect(summary.longSummary).toContain("Source: TG thread 763604722.");
+    expect(summary.shortSummary).toContain("2 document(s)");
+    expect(summary.longSummary).toContain("TG: Client asks for an offer for a 140 m2 private house.");
+    expect(summary.longSummary).not.toContain("Source:");
+    expect(summary.longSummary).not.toContain("thread 763604722");
     expect(summary.longSummary).toContain("[pdf, voice]");
+    expect(summary.longSummary).toContain("Copy: \"Client asks for an offer for a 140 m2 private house.\"");
     expect(summary.attachments[0]).toMatchObject({
       sourceMessageId: "52",
       kind: "pdf",
@@ -74,7 +78,7 @@ describe("summarizeLeadIntake", () => {
       ]
     });
 
-    expect(summary.shortSummary).toContain("No text notes yet");
+    expect(summary.shortSummary).toContain("Review incoming files");
     expect(summary.attachments[0]?.longSummary).toContain("No semantic file analysis is available yet.");
     expect(summary.missingSignals).toEqual(["text", "file_semantics"]);
   });

@@ -64,6 +64,8 @@ export const tables: Record<string, TableDefinition> = {
       { id: "summaryShort", title: "Summary", width: 240, valueKind: "longText", defaultVisible: false },
       { id: "summaryLong", title: "Full summary", width: 360, valueKind: "longText", defaultVisible: false },
       { id: "summaryUpdatedAt", title: "Summary updated", width: 170, defaultVisible: false },
+      { id: "budgetEur", title: "Budget EUR", width: 140, defaultVisible: false },
+      { id: "offerMissingFields", title: "Missing for offer", width: 240, valueKind: "longText", defaultVisible: false },
       { id: "documents", title: "Documents", width: 300, valueKind: "documents" },
       { id: "calendar", title: "Calendar", width: 260, valueKind: "calendar" }
     ],

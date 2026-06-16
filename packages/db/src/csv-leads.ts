@@ -26,7 +26,7 @@ export function mapLeadCsvRow(row: LeadCsvRow, workspaceId: string, index: numbe
   const leadId = text(row["Lead ID"]) ?? `csv_lead_${index + 1}`;
   const leadName = text(row["Lead name"]) ?? text(row.Project) ?? clientName;
   const notes = [
-    text(row.Project) ? `Project: ${text(row.Project)}` : null,
+    leadName ? `Lead name: ${leadName}` : null,
     text(row.Area) ? `Area: ${text(row.Area)}` : null,
     text(row.Description) ? `Description: ${text(row.Description)}` : null,
     text(row.Interest) ? `Interest: ${text(row.Interest)}` : null,

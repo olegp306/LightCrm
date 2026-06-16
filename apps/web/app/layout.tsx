@@ -20,13 +20,13 @@ type NavItem = {
 const primaryNavItems: NavItem[] = [
   { label: "Today", href: "/today", Icon: CalendarDays },
   { label: "Clients", href: "/clients", Icon: UsersRound },
-  { label: "Leads", href: "/leads", Icon: Folders }
+  { label: "Leads", href: "/leads", Icon: Folders },
+  { label: "Call Target", href: "/cold-targets", Icon: Megaphone }
 ];
 
 const tableNavItems: NavItem[] = [
   { label: "StorageTable", href: "/storage", Icon: FileText },
   { label: "Settings", href: "/settings", Icon: Settings },
-  { label: "CallTargetTable", href: "/cold-targets", Icon: Megaphone },
   { label: "Outreach", href: "/outreach", Icon: Send },
   { label: "CalendarTable", href: "/calendar", Icon: CalendarDays }
 ];

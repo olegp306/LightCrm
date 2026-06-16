@@ -1,5 +1,5 @@
 export const leadNoteFields = {
-  project: "Project",
+  project: "Lead name",
   area: "Area",
   description: "Description",
   interest: "Interest",
@@ -13,8 +13,8 @@ export const leadNoteFields = {
 } as const;
 
 export const tabularLeadNoteFields = {
-  projectName: "Project",
-  project: "Project",
+  projectName: "Lead name",
+  project: "Lead name",
   area: "Area",
   description: "Description",
   interest: "Interest",
@@ -27,6 +27,10 @@ export const tabularLeadNoteFields = {
   rawInput: "Raw input"
 } as const;
 
+const legacyNoteFieldLabels: Record<string, string[]> = {
+  "Lead name": ["Project"]
+};
+
 function escapeRegex(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
@@ -35,15 +39,22 @@ export function readNoteField(notes: string | null, label: string): string | nul
   if (!notes) {
     return null;
   }
-  const escaped = escapeRegex(label);
-  const match = notes.match(new RegExp(`(?:^|\\n+)${escaped}: ([\\s\\S]*?)(?=\\n+(?:[A-Z][A-Za-z0-9 ]+: |Updated from )|$)`));
-  return match?.[1]?.trim() || null;
+  for (const candidate of [label, ...(legacyNoteFieldLabels[label] ?? [])]) {
+    const escaped = escapeRegex(candidate);
+    const match = notes.match(new RegExp(`(?:^|\\n+)${escaped}: ([\\s\\S]*?)(?=\\n+(?:[A-Z][A-Za-z0-9 ]+: |Updated from )|$)`));
+    const value = match?.[1]?.trim();
+    if (value) {
+      return value;
+    }
+  }
+  return null;
 }
 
 export function replaceNoteField(notes: string | null | undefined, label: string, value: string | null | undefined): string | null {
   const currentNotes = notes ?? "";
-  const escaped = escapeRegex(label);
-  const fieldPattern = new RegExp(`(^|\\n\\n+)${escaped}: [\\s\\S]*?(?=\\n\\n+(?:[A-Z][A-Za-z0-9 ]+: |Updated from )|$)`);
+  const labels = [label, ...(legacyNoteFieldLabels[label] ?? [])];
+  const escaped = labels.map(escapeRegex).join("|");
+  const fieldPattern = new RegExp(`(^|\\n\\n+)(?:${escaped}): [\\s\\S]*?(?=\\n\\n+(?:[A-Z][A-Za-z0-9 ]+: |Updated from )|$)`);
   const normalizedValue = typeof value === "string" ? value.trim() : value;
   const nextBlock = normalizedValue ? `${label}: ${normalizedValue}` : "";
   const nextNotes = fieldPattern.test(currentNotes)

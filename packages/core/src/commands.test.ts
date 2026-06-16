@@ -308,16 +308,20 @@ describe("createCrmService", () => {
     });
 
     expect(intake.lead.id).toBe(lead.id);
-    expect(intake.summary).toContain("Source: TG thread 763604722.");
+    expect(intake.summary).toContain("TG:");
+    expect(intake.summary).not.toContain("Source:");
+    expect(intake.summary).not.toContain("thread 763604722");
     expect(intake.summary).toContain("Клиент хочет дом 140 м2");
-    expect(intake.summary).toContain("2 attachment(s)");
+    expect(intake.summary).toContain("2 document(s)");
     expect(intake.summary).toContain("[pdf, voice]");
-    expect(intake.summary).toContain("brief.pdf (pdf; PDF brief with project requirements)");
+    expect(intake.summary).toContain("pdf - PDF brief with project requirements");
     expect(intake.leadSummary).toMatchObject({
       leadId: lead.id,
       source: "telegram"
     });
-    expect(intake.leadSummary.shortSummary).toContain("Source: TG thread 763604722.");
+    expect(intake.leadSummary.shortSummary).toContain("TG:");
+    expect(intake.leadSummary.shortSummary).not.toContain("Source:");
+    expect(intake.leadSummary.longSummary).toContain("Copy:");
     expect(intake.documents).toHaveLength(2);
     expect(intake.documents[0]).toMatchObject({
       leadId: lead.id,
@@ -459,11 +463,11 @@ describe("createCrmService", () => {
       ]
     });
 
-    expect(second.summary).toContain("2 attachment(s)");
-    expect(second.summary).toContain("concept.jpg (image; Concept image with a compact house.)");
-    expect(second.summary).toContain("plans.pdf (pdf; Planning PDF with room schedule.)");
-    expect(second.leadSummary.longSummary).toContain("2 attachment(s)");
-    expect(second.leadSummary.longSummary).toContain("concept.jpg");
-    expect(second.leadSummary.longSummary).toContain("plans.pdf");
+    expect(second.summary).toContain("2 document(s)");
+    expect(second.summary).toContain("image - Concept image with a compact house.");
+    expect(second.summary).toContain("pdf - Planning PDF with room schedule.");
+    expect(second.leadSummary.longSummary).toContain("2 document(s)");
+    expect(second.leadSummary.longSummary).toContain("Concept image with a compact house.");
+    expect(second.leadSummary.longSummary).toContain("Planning PDF with room schedule.");
   });
 });

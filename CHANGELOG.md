@@ -2,6 +2,30 @@
 
 All notable LightCrm releases are documented here. Starting with `0.2.0`, every version bump must include a changelog entry.
 
+## 0.3.37 - 2026-06-16
+
+### Added
+
+- Added a richer Leads details editor with an editable linked-client section, client picker, inline field help, handoff ball control, and direct inputs for missing commercial-offer fields.
+- Added lead field guide metadata to the table UI so operators can understand which fields are manual, automatic, linked, document-backed, or technical.
+- Added a test CRM CSV import utility for loading client/lead CSV exports into the local test workspace.
+
+### Changed
+
+- Standardized user-facing lead naming around `Lead name` instead of `Project name`, while keeping technical `project_name` mappings compatible for offer templates and older imports.
+- Updated lead summaries to store cleaner semantic `Summary` and `Full summary` text without noisy TG thread/source boilerplate.
+- Moved `Call Target` into the primary navigation after `Today`, `Clients`, and `Leads`, and removed the `Table` suffix.
+- Optimized web `Send to TG` so it loads only selected leads, related clients, documents, and summaries instead of scanning full CRM tables.
+- Added a default Prisma `connection_limit` guard to reduce database connection pressure on small test/prod Postgres instances.
+
+### Verification
+
+- `pnpm --filter @lightcrm/db test`
+- `pnpm --filter @lightcrm/web typecheck`
+- `pnpm --filter @lightcrm/ui typecheck`
+- `pnpm --filter @lightcrm/telegram-bot test`
+- `pnpm --filter @lightcrm/orchestrator test`
+
 ## 0.3.36 - 2026-06-16
 
 ### Added

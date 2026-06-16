@@ -207,11 +207,39 @@ function compactText(value: string, maxLength = 240): string {
   return `${compacted.slice(0, Math.max(0, maxLength - 1)).trimEnd()}...`;
 }
 
-const leadSummaryShortMax = 120;
-const leadSummaryLongMax = 420;
+function compactMultilineText(value: string, maxLength = 900): string {
+  const lines = value
+    .split(/\n+/)
+    .map((line) => line.replace(/\s+/g, " ").trim())
+    .filter(Boolean);
+  const result: string[] = [];
+  for (const line of lines) {
+    const next = [...result, line].join("\n");
+    if (next.length > maxLength) {
+      break;
+    }
+    result.push(line);
+  }
+  if (result.length > 0) {
+    return result.join("\n");
+  }
+  return compactText(value, maxLength);
+}
+
+const leadSummaryShortMax = 260;
+const leadSummaryLongMax = 900;
 
 function displaySourceChannel(value: string | null | undefined): string {
   return value?.toLocaleLowerCase() === "telegram" ? "TG" : value ?? "intake";
+}
+
+function cleanIntakeText(value: string): string {
+  return value
+    .replace(/^Source:\s*TG(?:\s+thread\s+\S+)?\.\s*/i, "")
+    .replace(/^Source:\s*[^.]+\.\s*/i, "")
+    .replace(/^Text:\s*/i, "")
+    .replace(/\s*Files:\s*no attachments\.?$/i, "")
+    .trim();
 }
 
 function attachmentSummary(attachment: LeadIntakeAttachmentInput): string {
@@ -272,7 +300,11 @@ function documentToAttachmentInput(
   };
 }
 
-function buildLeadIntakeSummary(input: IngestLeadIntakeInput): { summary: string; originalTakes: string[] } {
+function buildLeadIntakeSummary(input: IngestLeadIntakeInput): {
+  shortSummary: string;
+  longSummary: string;
+  originalTakes: string[];
+} {
   const textItems = input.textItems ?? [];
   const attachments = input.attachments ?? [];
   const originalTakes = [
@@ -286,25 +318,45 @@ function buildLeadIntakeSummary(input: IngestLeadIntakeInput): { summary: string
     })
   ].filter((value) => trimText(value)) as string[];
 
-  const textSummary = textItems
+  const textSummary = cleanIntakeText(textItems
     .map((item) => item.text.trim())
     .filter(Boolean)
-    .join(" ");
+    .join(" "));
   const attachmentCount = attachments.length;
   const attachmentKinds = [...new Set(attachments.map((attachment) => attachment.kind))];
   const attachmentDetails = attachments
-    .map((attachment) => `${attachment.fileName} (${attachment.kind}; ${attachmentSummary(attachment)})`)
+    .map((attachment) => `${attachment.kind} - ${attachmentSummary(attachment)}`)
     .join("; ");
-  const parts = [
-    `Source: ${displaySourceChannel(input.sourceChannel)}${input.sourceThreadId ? ` thread ${input.sourceThreadId}` : ""}.`,
-    textSummary ? `Text: ${compactText(textSummary)}.` : "Text: no text notes yet.",
+  const source = displaySourceChannel(input.sourceChannel);
+  const clientIntent =
+    textSummary || (attachmentCount > 0 ? "Review incoming files and extract lead details." : "Lead intake received.");
+  const documentSummary =
     attachmentCount > 0
-      ? `Files: ${attachmentCount} attachment(s)${attachmentKinds.length > 0 ? ` [${attachmentKinds.join(", ")}]` : ""}: ${attachmentDetails}.`
-      : "Files: no attachments."
-  ];
+      ? `${attachmentCount} document(s)${attachmentKinds.length > 0 ? ` [${attachmentKinds.join(", ")}]` : ""}: ${attachmentDetails}`
+      : null;
+  const shortSummary = compactText(
+    [`${source}: ${compactText(clientIntent, 190)}`, documentSummary ? compactText(documentSummary, 80) : null]
+      .filter(Boolean)
+      .join(" "),
+    leadSummaryShortMax
+  );
+  const longSummary = compactMultilineText(
+    [
+      `${source}: ${clientIntent}`,
+      documentSummary ? `Documents: ${documentSummary}` : null,
+      textSummary ? `Copy: "${compactText(textSummary, 260)}"` : null,
+      attachmentCount > 0
+        ? `Document notes: ${attachments.map((attachment) => `"${attachmentSummary(attachment)}"`).join("; ")}`
+        : null
+    ]
+      .filter(Boolean)
+      .join("\n"),
+    leadSummaryLongMax
+  );
 
   return {
-    summary: parts.join(" "),
+    shortSummary,
+    longSummary,
     originalTakes
   };
 }
@@ -715,7 +767,7 @@ export function createCrmService(repository: CrmRepository) {
       workspaceId: input.workspaceId,
       leadId: input.leadId,
       shortSummary: compactText(input.shortSummary, leadSummaryShortMax),
-      longSummary: nullable(input.longSummary ? compactText(input.longSummary, leadSummaryLongMax) : null),
+      longSummary: nullable(input.longSummary ? compactMultilineText(input.longSummary, leadSummaryLongMax) : null),
       source: nullable(input.source),
       createdAt: timestamp,
       updatedAt: timestamp,
@@ -778,14 +830,14 @@ export function createCrmService(repository: CrmRepository) {
         )
       )
     };
-    const { summary, originalTakes } = buildLeadIntakeSummary(aggregateInput);
+    const { shortSummary, longSummary, originalTakes } = buildLeadIntakeSummary(aggregateInput);
 
     const updatedLead: Lead = {
       ...lead,
       sourceChannel: nullable(input.sourceChannel ?? lead.sourceChannel),
       externalThreadId: nullable(input.sourceThreadId ?? lead.externalThreadId),
       externalMessageId: nullable(input.sourceMessageId ?? lead.externalMessageId),
-      notes: appendIntakeNotes(lead.notes, summary, originalTakes),
+      notes: appendIntakeNotes(lead.notes, longSummary, originalTakes),
       updatedAt: now()
     };
     await repository.save("lead", updatedLead);
@@ -807,12 +859,12 @@ export function createCrmService(repository: CrmRepository) {
     const leadSummary = await createLeadSummary({
       workspaceId: input.workspaceId,
       leadId: lead.id,
-      shortSummary: summary,
-      longSummary: summary,
+      shortSummary,
+      longSummary,
       source: input.sourceChannel ?? "intake"
     });
 
-    return { lead: updatedLead, documents, leadSummary, summary, originalTakes };
+    return { lead: updatedLead, documents, leadSummary, summary: longSummary, originalTakes };
   }
 
   async function undoLeadIntake(input: UndoLeadIntakeInput): Promise<UndoLeadIntakeResult> {

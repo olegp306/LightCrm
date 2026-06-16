@@ -1086,6 +1086,109 @@ input {
   margin: 0;
 }
 
+.leadFieldGuide {
+  border-top: 1px solid color-mix(in srgb, var(--line) 72%, transparent);
+  color: var(--ink-soft);
+  padding-top: 2px;
+}
+
+.leadFieldGuide summary {
+  align-items: baseline;
+  color: var(--muted);
+  cursor: pointer;
+  display: flex;
+  gap: 10px;
+  list-style: none;
+  min-height: 28px;
+  padding: 4px 2px;
+}
+
+.leadFieldGuide summary::-webkit-details-marker {
+  display: none;
+}
+
+.leadFieldGuide summary::before {
+  color: var(--muted);
+  content: "›";
+  display: inline-block;
+  font-size: 15px;
+  line-height: 1;
+  transform: translateY(1px);
+  transition: transform 140ms ease;
+}
+
+.leadFieldGuide[open] summary::before {
+  transform: rotate(90deg) translateX(1px);
+}
+
+.leadFieldGuide summary span {
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.leadFieldGuide summary strong {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.leadFieldGuideGrid {
+  border: 1px solid color-mix(in srgb, var(--line) 72%, transparent);
+  border-radius: 8px;
+  display: grid;
+  margin-top: 6px;
+  overflow: hidden;
+}
+
+.leadFieldGuideHeader,
+.leadFieldGuideRow {
+  display: grid;
+  grid-template-columns: minmax(120px, 0.9fr) minmax(120px, 0.8fr) minmax(260px, 2.4fr);
+}
+
+.leadFieldGuideHeader {
+  background: color-mix(in srgb, var(--panel-muted) 66%, transparent);
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.leadFieldGuideHeader span,
+.leadFieldGuideRow strong,
+.leadFieldGuideRow span,
+.leadFieldGuideRow p {
+  border-right: 1px solid color-mix(in srgb, var(--line) 64%, transparent);
+  margin: 0;
+  padding: 8px 10px;
+}
+
+.leadFieldGuideHeader span:last-child,
+.leadFieldGuideRow p {
+  border-right: 0;
+}
+
+.leadFieldGuideRow {
+  border-top: 1px solid color-mix(in srgb, var(--line) 64%, transparent);
+  font-size: 12px;
+}
+
+.leadFieldGuideRow strong {
+  color: var(--ink);
+  font-weight: 650;
+}
+
+.leadFieldGuideRow span {
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.leadFieldGuideRow p {
+  color: var(--ink-soft);
+  line-height: 1.35;
+}
+
 .toolbar {
   align-items: center;
   display: flex;
@@ -3998,6 +4101,43 @@ input {
 
   .tableColorControl {
     display: none;
+  }
+
+  .leadFieldGuide summary {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 3px;
+    padding: 5px 2px;
+  }
+
+  .leadFieldGuide summary::before {
+    display: none;
+  }
+
+  .leadFieldGuideGrid {
+    border-radius: 7px;
+  }
+
+  .leadFieldGuideHeader {
+    display: none;
+  }
+
+  .leadFieldGuideRow {
+    display: grid;
+    gap: 3px;
+    grid-template-columns: 1fr;
+    padding: 9px 10px;
+  }
+
+  .leadFieldGuideRow strong,
+  .leadFieldGuideRow span,
+  .leadFieldGuideRow p {
+    border-right: 0;
+    padding: 0;
+  }
+
+  .leadFieldGuideRow span {
+    font-size: 11px;
   }
 
   .handoffBallControl {

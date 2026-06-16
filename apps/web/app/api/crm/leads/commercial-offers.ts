@@ -80,7 +80,7 @@ function humanOfferFieldName(value: string): string {
     bgf_or_manual_total_gross: "BGF / area or manual gross price",
     project_type_or_manual_total_gross: "project type or manual gross price",
     manual_total_gross: "manual gross price",
-    project_name: "project name",
+    project_name: "lead name",
     project_address: "project address",
     client_name: "client name"
   };
