@@ -1522,21 +1522,21 @@ describe("telegram bot core", () => {
     const offerDownloads = await runWithDocuments([
       {
         id: "offer-2",
-        fileName: "L-2026-003-commercial-offer-v2.docx",
-        shortSummary: "Commercial offer v2 59.500 EUR gross",
+        fileName: "L-2026-003-commercial-offer-V2d.docx",
+        shortSummary: "Commercial offer V2d draft 59.500 EUR gross",
         downloadUrl: "https://crm.example.com/offer-v2.docx",
         mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
       },
       {
         id: "offer-1",
-        fileName: "L-2026-003-commercial-offer-v1.docx",
-        shortSummary: "Commercial offer v1 58.000 EUR gross",
+        fileName: "L-2026-003-commercial-offer-V1d.docx",
+        shortSummary: "Commercial offer V1d draft 58.000 EUR gross",
         downloadUrl: "https://crm.example.com/offer-v1.docx",
         mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
       }
     ]);
-    expect(offerDownloads).toHaveBeenCalledWith(111111, expect.stringContaining('<a href="https://crm.example.com/offer-v2.docx">V2</a>'), expect.anything());
-    expect(offerDownloads).toHaveBeenCalledWith(111111, expect.stringContaining('<a href="https://crm.example.com/offer-v1.docx">V1</a>'), expect.anything());
+    expect(offerDownloads).toHaveBeenCalledWith(111111, expect.stringContaining('<a href="https://crm.example.com/offer-v2.docx">V2d</a>'), expect.anything());
+    expect(offerDownloads).toHaveBeenCalledWith(111111, expect.stringContaining('<a href="https://crm.example.com/offer-v1.docx">V1d</a>'), expect.anything());
   });
 
   it("archives a created lead from the undo callback button", async () => {
@@ -1657,9 +1657,9 @@ describe("telegram bot core", () => {
       documents: [
         {
           id: "doc-3",
-          fileName: "L-2026-404-commercial-offer-v2.docx",
-          shortSummary: "Commercial offer v2 59.500 EUR gross",
-          longSummary: "Generated commercial offer v2.",
+          fileName: "L-2026-404-commercial-offer-V2d.docx",
+          shortSummary: "Commercial offer V2d draft 59.500 EUR gross",
+          longSummary: "Generated commercial offer V2d draft.",
           downloadUrl: "https://crm.example.com/api/crm/storage/local/doc-3",
           mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
           createdAt: "2026-06-12T06:10:00.000Z"
@@ -1704,11 +1704,11 @@ describe("telegram bot core", () => {
     expect(listLeadDocuments).toHaveBeenCalledWith({ workspaceId: "default", leadId: "lead-404", limit: 8 });
     expect(sendMessage).toHaveBeenCalledWith(
       111111,
-      expect.stringContaining('<b><a href="https://crm.example.com/api/crm/storage/local/doc-3">V2</a></b>'),
+      expect.stringContaining('<b><a href="https://crm.example.com/api/crm/storage/local/doc-3">V2d</a></b>'),
       {
         replyMarkup: {
           inline_keyboard: [
-            [{ text: "V2", url: "https://crm.example.com/api/crm/storage/local/doc-3" }],
+            [{ text: "V2d", url: "https://crm.example.com/api/crm/storage/local/doc-3" }],
             [{ text: "picture", url: "https://crm.example.com/api/crm/storage/local/doc-2" }],
             [{ text: "PDF", url: "https://crm.example.com/api/crm/storage/local/doc-1" }],
           ]
@@ -1790,9 +1790,14 @@ describe("telegram bot core", () => {
   it("asks for offer price fields when numbers are not ready", async () => {
     const sendMessage = vi.fn();
     const sendDocument = vi.fn();
-    const generateOffer = vi.fn().mockRejectedValue(
-      new Error("Commercial offer numbers are not ready. Missing price fields: BGF / area or manual gross price.")
-    );
+    const offerError = new Error("Commercial offer numbers are not ready. Missing price fields: BGF / area or manual gross price.");
+    (offerError as Error & { payload?: unknown }).payload = {
+      readiness: {
+        priceMissingFields: ["bgf_or_manual_total_gross", "project_type_or_manual_total_gross"],
+        documentMissingFields: ["client_name", "project_address"]
+      }
+    };
+    const generateOffer = vi.fn().mockRejectedValue(offerError);
 
     await handleTelegramUpdate(
       {
@@ -1816,11 +1821,11 @@ describe("telegram bot core", () => {
     expect(sendMessage).toHaveBeenCalledWith(
       111111,
       [
-        "offer price is not ready.",
+        "<b>Offer price is not ready</b>",
         "Lead ID: lead-303",
-        "please add one of: BGF / area + project type, or manual gross price.",
-        "also useful before sending: client name, project name, project address.",
-        "reply here with something like: manual gross price: 12.500 EUR."
+        "<b>Need for price:</b> project area / BGF or manual gross price, project type or manual gross price.",
+        "<b>Optional for document:</b> client name, project address.",
+        "Reply here, for example: <code>manual gross price: 12.500 EUR</code>"
       ].join("\n")
     );
     expect(sendDocument).not.toHaveBeenCalled();
@@ -1947,7 +1952,12 @@ describe("telegram bot core", () => {
           from: { first_name: "Katya" },
           reply_to_message: {
             message_id: 904,
-            text: "offer price is not ready.\nLead ID: lead-303\nplease add one of: BGF / area + project type, or manual gross price."
+            text: [
+              "<b>Offer price is not ready</b>",
+              "Lead ID: lead-303",
+              "<b>Need for price:</b> project area / BGF or manual gross price, project type or manual gross price.",
+              "Reply here, for example: <code>manual gross price: 12.500 EUR</code>"
+            ].join("\n")
           }
         }
       },

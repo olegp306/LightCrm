@@ -137,7 +137,9 @@ async function crmGet<T>(path: string): Promise<T> {
   const response = await fetch(crmApiUrl(path));
   const payload = await response.json();
   if (!response.ok) {
-    throw new Error(typeof payload?.error === "string" ? payload.error : `LightCrm API ${path} failed`);
+    const error = new Error(typeof payload?.error === "string" ? payload.error : `LightCrm API ${path} failed`);
+    (error as Error & { payload?: unknown }).payload = payload;
+    throw error;
   }
   return payload as T;
 }
@@ -420,7 +422,7 @@ function formatOfferDocumentCaption(version: number | undefined, readiness: Gene
   const missingFields =
     (readiness?.documentMissingFields ?? readiness?.missingFields ?? []).map(humanOfferFieldName).filter(Boolean);
   const mode = readiness?.pricingMode ? ` (${readiness.pricingMode})` : "";
-  const title = `commercial offer${version ? ` v${version}` : ""} ready${total ? `: ${total} EUR gross${mode}` : ""}`;
+  const title = `commercial offer${version ? ` V${version}d draft` : ""} ready${total ? `: ${total} EUR gross${mode}` : ""}`;
   if (missingFields.length === 0) {
     return `${title}\nAll key offer fields are filled.`;
   }

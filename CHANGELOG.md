@@ -2,6 +2,22 @@
 
 All notable LightCrm releases are documented here. Starting with `0.2.0`, every version bump must include a changelog entry.
 
+## 0.3.35 - 2026-06-16
+
+### Changed
+
+- Clarified commercial-offer readiness around the main price stage: if offer numbers are not ready, Telegram and web now show which price-critical fields are missing.
+- Updated Telegram offer prompts with compact bold sections for `Need for price` and `Optional for document`, while keeping `Lead ID` reply targeting intact.
+- Marked generated commercial offers as draft versions in storage and lead downloads using `V1d`, `V2d`, and matching `commercial-offer-V1d.docx` file names.
+- Updated generated-offer summaries so lead history clearly distinguishes generated draft offers from returned/signed commercial offer documents.
+
+### Verification
+
+- `pnpm --filter @lightcrm/telegram-bot test`
+- `pnpm --filter @lightcrm/telegram-bot typecheck`
+- `pnpm --filter @lightcrm/ui typecheck`
+- `pnpm --filter @lightcrm/web typecheck`
+
 ## 0.3.34 - 2026-06-15
 
 ### Added

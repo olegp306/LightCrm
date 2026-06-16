@@ -99,9 +99,9 @@ function readinessFieldSummary(readiness: ReturnType<typeof evaluateCommercialOf
   const summary =
     readiness.values.totalGross === null
       ? "Commercial offer cannot be generated until price-critical fields are filled."
-      : `Commercial offer v${version} generated on ${formatDate(createdAt)}. Use this summary to compare what was promised to the client in this version.`;
+      : `Commercial offer V${version}d generated draft on ${formatDate(createdAt)}. Use this summary to compare what was promised to the client in this draft version.`;
   return [
-    `Version: v${version}.`,
+    `Version: V${version}d (generated draft).`,
     `Price fields: ${requiredForPrice}.`,
     `Document fields: ${documentFields}.`,
     `Summary: ${summary}`
@@ -230,7 +230,7 @@ export async function generateCommercialOfferForLead(input: {
 
   const template = await readActiveOfferTemplate();
   const rendered = renderDocxTemplate(template, values);
-  const fileName = `${lead.code ?? lead.id}-commercial-offer-v${offerVersion}.docx`;
+  const fileName = `${lead.code ?? lead.id}-commercial-offer-V${offerVersion}d.docx`;
   const stored = await storeCrmFile({
     bytes: new Uint8Array(rendered),
     fileName,
@@ -245,7 +245,7 @@ export async function generateCommercialOfferForLead(input: {
     leadId: lead.id,
     clientId: lead.clientId,
     fileName: stored.fileName,
-    shortSummary: `Commercial offer v${offerVersion} ${formatCurrency(readiness.values.totalGross)} EUR gross (${readiness.pricingMode})`,
+    shortSummary: `Commercial offer V${offerVersion}d draft ${formatCurrency(readiness.values.totalGross)} EUR gross (${readiness.pricingMode})`,
     longSummary: readinessFieldSummary(readiness, offerVersion, now),
     downloadUrl: stored.downloadUrl,
     storageProvider: stored.storageProvider,

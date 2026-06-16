@@ -821,6 +821,37 @@ function offerMissingFieldChips(value: CrmTableCellValue | undefined): string[] 
     .filter(Boolean);
 }
 
+function humanOfferFieldName(value: string): string {
+  const labels: Record<string, string> = {
+    bgf: "project area / BGF",
+    bgf_or_manual_total_gross: "project area / BGF or manual gross price",
+    project_type_or_manual_total_gross: "project type or manual gross price",
+    manual_total_gross: "manual gross price",
+    project_name: "project name",
+    project_address: "project address",
+    client_name: "client name"
+  };
+  return labels[value] ?? value.replace(/_/g, " ");
+}
+
+function offerGenerationErrorMessage(payload: {
+  error?: string;
+  readiness?: { priceMissingFields?: string[]; documentMissingFields?: string[] };
+}): string {
+  const priceMissing = payload.readiness?.priceMissingFields ?? [];
+  const documentMissing = payload.readiness?.documentMissingFields ?? [];
+  if (priceMissing.length > 0) {
+    return [
+      "Offer price is not ready.",
+      `Need for price: ${priceMissing.map(humanOfferFieldName).join(", ")}.`,
+      documentMissing.length > 0 ? `Optional for document: ${documentMissing.map(humanOfferFieldName).join(", ")}.` : null
+    ]
+      .filter((line): line is string => Boolean(line))
+      .join(" ");
+  }
+  return payload.error ?? "Commercial offer generation failed.";
+}
+
 const mobileReadonlyColumnIds = new Set([
   "code",
   "nextAction",
@@ -3025,9 +3056,13 @@ export function CrmTable({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ leadId: row.id })
       });
-      const payload = (await response.json()) as { document?: DocumentCellItem; error?: string };
+      const payload = (await response.json()) as {
+        document?: DocumentCellItem;
+        error?: string;
+        readiness?: { priceMissingFields?: string[]; documentMissingFields?: string[] };
+      };
       if (!response.ok || !payload.document) {
-        throw new Error(payload.error ?? "Commercial offer generation failed.");
+        throw new Error(offerGenerationErrorMessage(payload));
       }
       const document = payload.document;
       setEditableRows((current) =>

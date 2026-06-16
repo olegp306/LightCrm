@@ -117,6 +117,10 @@ function readNumber(value: string | null): number | null {
 function documentKindLabel(document: { fileName: string; mimeType?: string | null }): string {
   const fileName = document.fileName.toLocaleLowerCase();
   const mimeType = document.mimeType?.toLocaleLowerCase() ?? "";
+  if (fileName.includes("commercial-offer")) {
+    const version = fileName.match(/commercial-offer-v(\d+)d?/i);
+    return version?.[1] ? `V${version[1]}${/\bv\d+d\b/i.test(document.fileName) ? "d" : ""}` : "offer";
+  }
   if (mimeType.startsWith("image/") || /\.(png|jpe?g|gif|webp|heic|heif|bmp|tiff?)$/i.test(fileName)) {
     return "picture";
   }

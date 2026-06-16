@@ -450,7 +450,7 @@ function helpResponse(topic: HelpTopic): string {
     offer: [
       "Commercial offers",
       "Tap offer on a lead card. I use the active DOCX template and fee table from CRM settings.",
-      "If the price is ready, I send back a DOCX like commercial-offer-v1.",
+      "If the price is ready, I send back a DOCX like commercial-offer-V1d.",
       "If fields are missing, I will say what to add before sending, for example: client name, project address."
     ].join("\n"),
     files: [
@@ -1361,11 +1361,12 @@ function commercialOfferVersionLabel(document: Pick<TelegramLeadDocument, "fileN
   if (!combined.includes("commercial offer")) {
     return null;
   }
+  const draftSuffix = /\bv\d+d\b|\bdraft\b/.test(combined) ? "d" : "";
   const versionMatch =
-    combined.match(/commercial-offer-v(\d+)/) ??
+    combined.match(/commercial-offer-v(\d+)d?/) ??
     combined.match(/\bcommercial offer v(\d+)\b/) ??
     combined.match(/\boffer v(\d+)\b/);
-  return versionMatch?.[1] ? `V${versionMatch[1]}` : "offer";
+  return versionMatch?.[1] ? `V${versionMatch[1]}${draftSuffix}` : draftSuffix ? "offer draft" : "offer";
 }
 
 function labelTelegramDocuments(documents: Array<Pick<TelegramLeadDocument, "fileName" | "mimeType" | "shortSummary">>): string[] {
@@ -1654,19 +1655,43 @@ function telegramLeadDownloadsReplyMarkup(documents: TelegramLeadDocument[]): Te
   };
 }
 
+function humanOfferFieldName(value: string): string {
+  const labels: Record<string, string> = {
+    bgf: "project area / BGF",
+    bgf_or_manual_total_gross: "project area / BGF or manual gross price",
+    project_type_or_manual_total_gross: "project type or manual gross price",
+    manual_total_gross: "manual gross price",
+    project_name: "project name",
+    project_address: "project address",
+    client_name: "client name"
+  };
+  return labels[value] ?? value.replace(/_/g, " ");
+}
+
 function formatOfferCallbackError(error: unknown, leadId?: string | null): string {
   const message = error instanceof Error ? error.message : String(error);
+  const payload = error instanceof Error ? (error as Error & { payload?: { readiness?: { priceMissingFields?: string[]; documentMissingFields?: string[] } } }).payload : null;
+  const priceMissingFields = payload?.readiness?.priceMissingFields ?? [];
+  const documentMissingFields = payload?.readiness?.documentMissingFields ?? [];
   const normalized = message.toLocaleLowerCase();
   if (normalized.includes("template")) {
     return "offer template is missing. add an offer template in CRM settings.";
   }
   if (normalized.includes("numbers are not ready") || normalized.includes("active fee table") || normalized.includes("missing fields")) {
+    const priceLine =
+      priceMissingFields.length > 0
+        ? priceMissingFields.map(humanOfferFieldName).join(", ")
+        : "BGF / area + project type, or manual gross price";
+    const optionalLine =
+      documentMissingFields.length > 0
+        ? documentMissingFields.map(humanOfferFieldName).join(", ")
+        : "client name, project name, project address";
     return [
-      "offer price is not ready.",
+      "<b>Offer price is not ready</b>",
       leadId ? `Lead ID: ${leadId}` : null,
-      "please add one of: BGF / area + project type, or manual gross price.",
-      "also useful before sending: client name, project name, project address.",
-      "reply here with something like: manual gross price: 12.500 EUR."
+      `<b>Need for price:</b> ${priceLine}.`,
+      `<b>Optional for document:</b> ${optionalLine}.`,
+      "Reply here, for example: <code>manual gross price: 12.500 EUR</code>"
     ]
       .filter((line): line is string => Boolean(line))
       .join("\n");
