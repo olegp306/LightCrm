@@ -1725,6 +1725,7 @@ export function CrmTable({
         };
       }
       const displayValue = value;
+      const isReadonlyLinkedClientName = column?.id === "client.name" && (!record || !draftRowIds.has(record.id));
       const displayData = Array.isArray(displayValue)
         ? displayValue.every(isCalendarCellItem)
           ? calendarCellDisplayData(displayValue)
@@ -1734,8 +1735,8 @@ export function CrmTable({
         kind: GridCellKind.Text,
         data: displayData,
         displayData,
-        allowOverlay: true,
-        readonly: false,
+        allowOverlay: !isReadonlyLinkedClientName,
+        readonly: isReadonlyLinkedClientName,
         themeOverride: textThemeOverride(activeTableTheme, themeOverride, column?.textStyle),
         contentAlign: column?.id === "interest" ? "center" : undefined
       };

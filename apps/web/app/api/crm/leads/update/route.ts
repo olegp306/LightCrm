@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getCrm, handleRouteError, optionalText, parseJson, resolveWorkspaceId } from "../../_shared";
-import { maybeAutoGenerateCommercialOfferForLead } from "../commercial-offers";
 import { notesWithTabularPatch } from "../note-fields";
 
 const LeadPatch = z
@@ -99,8 +98,7 @@ export async function POST(request: Request) {
       sourceChannel: input.patch.sourceChannel ?? input.source?.channel ?? existing.sourceChannel,
       externalMessageId: input.source?.messageId ?? existing.externalMessageId
     });
-    const autoOffer = await maybeAutoGenerateCommercialOfferForLead({ crm, workspaceId, leadId: lead.id });
-    return NextResponse.json({ lead, autoOffer });
+    return NextResponse.json({ lead });
   } catch (error) {
     return handleRouteError(error);
   }

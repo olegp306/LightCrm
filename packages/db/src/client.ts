@@ -6,8 +6,6 @@ const globalForPrisma = globalThis as unknown as {
 
 export function getPrismaClient() {
   const prisma = globalForPrisma.lightCrmPrisma ?? new PrismaClient();
-  if (process.env.NODE_ENV !== "production") {
-    globalForPrisma.lightCrmPrisma = prisma;
-  }
+  globalForPrisma.lightCrmPrisma = prisma;
   return prisma;
 }
