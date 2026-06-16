@@ -47,6 +47,31 @@ describe("telegram bot core", () => {
     });
   });
 
+  it("starts explicit new lead mode from /newlead", async () => {
+    const sendMessage = vi.fn();
+    const startNewLeadMode = vi.fn();
+
+    await handleTelegramUpdate(
+      {
+        update_id: 4,
+        message: {
+          message_id: 14,
+          text: "/newlead@TestLightCrmBot",
+          chat: { id: 111111 }
+        }
+      },
+      {
+        allowedChatIds: new Set([111111]),
+        workspaceId: "default",
+        sendMessage,
+        startNewLeadMode
+      }
+    );
+
+    expect(startNewLeadMode).toHaveBeenCalledWith(111111);
+    expect(sendMessage).toHaveBeenCalledWith(111111, "new lead mode: send text, files, or a batch now.");
+  });
+
   it("shows six recent leads for /search with lead number buttons", async () => {
     const sendMessage = vi.fn();
     const listRecentLeads = vi.fn().mockResolvedValue({
@@ -260,6 +285,39 @@ describe("telegram bot core", () => {
       expect.objectContaining({ kind: "pdf", fileName: "offer.pdf" }),
       expect.objectContaining({ kind: "audio", fileName: "voice.mp3" })
     ]);
+  });
+
+  it("does not combine bot commands with the following chat intake", () => {
+    const buffer = new Map<string, ChatIntakeBuffer>();
+    const firstReady = collectReadyChatIntakeUpdates(
+      [
+        {
+          update_id: 30,
+          message: {
+            message_id: 230,
+            text: "/newlead",
+            chat: { id: 111111 }
+          }
+        },
+        {
+          update_id: 31,
+          message: {
+            message_id: 231,
+            text: "Anastasia asks for an offer for a house in Munich",
+            chat: { id: 111111 }
+          }
+        }
+      ],
+      buffer,
+      3500,
+      1000
+    );
+    const flushed = collectReadyChatIntakeUpdates([], buffer, 3500, 5000);
+
+    expect(firstReady).toHaveLength(1);
+    expect(firstReady[0]?.message?.text).toBe("/newlead");
+    expect(flushed).toHaveLength(1);
+    expect(flushed[0]?.message?.text).toBe("Anastasia asks for an offer for a house in Munich");
   });
 
   it("answers simple greeting and capability questions through graph help intent", async () => {
@@ -1834,6 +1892,7 @@ describe("telegram bot core", () => {
   it("uses replied lead cards as the target for Telegram lead updates", async () => {
     const sendMessage = vi.fn();
     const updateLead = vi.fn().mockResolvedValue({ id: "lead-303", name: "Maria" });
+    const ingestLeadIntake = vi.fn();
     const orchestrate = vi.fn().mockResolvedValue({
       workspaceId: "default",
       normalizedText: "phone is +491234567",
@@ -1879,7 +1938,8 @@ describe("telegram bot core", () => {
         crmAppBaseUrl: "http://localhost:4900",
         sendMessage,
         orchestrate,
-        updateLead
+        updateLead,
+        ingestLeadIntake
       }
     );
 
@@ -1910,11 +1970,13 @@ describe("telegram bot core", () => {
         })
       })
     );
+    expect(ingestLeadIntake).not.toHaveBeenCalled();
   });
 
   it("updates offer fields from a reply to an offer prompt", async () => {
     const sendMessage = vi.fn();
     const updateLead = vi.fn().mockResolvedValue({ id: "lead-303", name: "Maria Haus" });
+    const ingestLeadIntake = vi.fn();
     const orchestrate = vi.fn().mockResolvedValue({
       workspaceId: "default",
       normalizedText: "manual gross price: 12.500 EUR",
@@ -1966,7 +2028,8 @@ describe("telegram bot core", () => {
         workspaceId: "default",
         sendMessage,
         orchestrate,
-        updateLead
+        updateLead,
+        ingestLeadIntake
       }
     );
 
@@ -1982,6 +2045,7 @@ describe("telegram bot core", () => {
         source: { channel: "telegram", messageId: "305" }
       })
     );
+    expect(ingestLeadIntake).not.toHaveBeenCalled();
   });
 
   it("executes semantic lead search and returns replyable lead cards", async () => {
@@ -3106,6 +3170,80 @@ describe("telegram bot core", () => {
         replyMarkup: expect.any(Object)
       })
     );
+  });
+
+  it("forces new lead creation after explicit /newlead mode even with an active lead", async () => {
+    const sendMessage = vi.fn();
+    const createLead = vi.fn().mockResolvedValue({ id: "lead-new", name: "New Munich house" });
+    const updateLead = vi.fn();
+    const ingestLeadIntake = vi.fn().mockResolvedValue({ summary: "New request from Anastasia for a house in Munich." });
+    const orchestrate = vi.fn().mockResolvedValue({
+      workspaceId: "default",
+      normalizedText: "Anastasia asks for an offer for a house in Munich",
+      intent: "update_lead",
+      risk: "auto",
+      explanations: ["The model would otherwise treat this as an active lead update."],
+      settings: DEFAULT_LANGGRAPH_SETTINGS,
+      facts: {
+        contactName: "Anastasia",
+        projectName: "New Munich house",
+        projectType: "house",
+        location: "Munich",
+        areaM2: null,
+        phone: null,
+        budgetEur: null,
+        dueAt: null,
+        sourceMessageId: "412",
+        evidence: {
+          sourceMessageId: "412",
+          author: "Katya",
+          sourceChannel: "telegram",
+          textSnippet: "Anastasia asks for an offer for a house in Munich"
+        }
+      },
+      actions: [
+        {
+          type: "update_lead",
+          risk: "auto",
+          reason: "Incorrect active continuation.",
+          payload: { targetId: "lead-active" }
+        }
+      ]
+    });
+
+    const lead = await handleTelegramUpdate(
+      {
+        update_id: 22,
+        message: {
+          message_id: 412,
+          text: "Anastasia asks for an offer for a house in Munich",
+          chat: { id: 111111 },
+          from: { first_name: "Katya" }
+        }
+      },
+      {
+        allowedChatIds: new Set([111111]),
+        workspaceId: "default",
+        crmAppBaseUrl: "http://localhost:4900",
+        activeLead: { id: "lead-active", name: "Active lead" },
+        forceCreateNewLead: true,
+        sendMessage,
+        orchestrate,
+        createLead,
+        updateLead,
+        ingestLeadIntake
+      }
+    );
+
+    expect(lead).toEqual({ id: "lead-new", name: "New Munich house" });
+    expect(orchestrate).toHaveBeenCalledWith(
+      expect.not.objectContaining({
+        recentLeads: expect.anything()
+      })
+    );
+    expect(updateLead).not.toHaveBeenCalled();
+    expect(createLead).toHaveBeenCalledWith(expect.objectContaining({ name: "Anastasia", company: "New Munich house" }));
+    expect(ingestLeadIntake).toHaveBeenCalledWith(expect.objectContaining({ leadId: "lead-new" }));
   });
 
   it("allows text-only updates when the message explicitly names the lead code", async () => {

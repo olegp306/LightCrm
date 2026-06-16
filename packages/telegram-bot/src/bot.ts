@@ -54,6 +54,7 @@ const pollIntervalMs = Number(process.env.TELEGRAM_POLL_INTERVAL_MS ?? 2500);
 const mediaGroupFlushMs = 1400;
 const chatIntakeFlushMs = Number(process.env.TELEGRAM_INTAKE_FLUSH_MS ?? 3500);
 const activeLeadTtlMs = Number(process.env.TELEGRAM_ACTIVE_LEAD_TTL_MS ?? 30 * 60 * 1000);
+const pendingNewLeadTtlMs = Number(process.env.TELEGRAM_PENDING_NEW_LEAD_TTL_MS ?? 10 * 60 * 1000);
 const pendingAttachmentDecisionTtlMs = Number(
   process.env.TELEGRAM_PENDING_ATTACHMENT_DECISION_TTL_MS ?? 10 * 60 * 1000
 );
@@ -481,12 +482,29 @@ async function notifyServerError(chatId: number) {
   }
 }
 
+async function registerBotCommands() {
+  await telegramCall("setMyCommands", {
+    commands: [
+      { command: "crm", description: "Open CRM" },
+      { command: "search", description: "Show recent leads" },
+      { command: "newlead", description: "Start a new lead intake" },
+      { command: "help", description: "How to use LightCrm" }
+    ]
+  });
+}
+
 async function runPolling() {
   console.log(`LightCrm TG bot polling started. Allowed chats: ${allowedChatIds.size || "all"}.`);
+  try {
+    await registerBotCommands();
+  } catch (error) {
+    console.warn("Failed to register TG bot commands", error);
+  }
   let offset: number | undefined;
   const mediaGroups = new Map<string, MediaGroupBuffer>();
   const chatIntakes = new Map<string, ChatIntakeBuffer>();
   const activeLeads = new Map<string, { lead: { id: string; name: string }; updatedAt: number }>();
+  const pendingNewLeadChats = new Map<string, { createdAt: number }>();
   const pendingAttachmentDecisions = new Map<string, PendingAttachmentDecision & { createdAt: number }>();
   const pendingClarifications = new Map<string, PendingClarification & { id: string; createdAt: number }>();
   let pendingAttachmentDecisionCounter = 0;
@@ -498,12 +516,34 @@ async function runPolling() {
       }
     }
   };
+  const cleanupPendingNewLeads = (now: number) => {
+    for (const [chatId, pending] of pendingNewLeadChats) {
+      if (now - pending.createdAt > pendingNewLeadTtlMs) {
+        pendingNewLeadChats.delete(chatId);
+      }
+    }
+  };
   const cleanupPendingClarifications = (now: number) => {
     for (const [id, pending] of pendingClarifications) {
       if (now - pending.createdAt > pendingClarificationTtlMs) {
         pendingClarifications.delete(id);
       }
     }
+  };
+  const startNewLeadMode = (chatId: number) => {
+    const key = String(chatId);
+    activeLeads.delete(key);
+    pendingNewLeadChats.set(key, { createdAt: Date.now() });
+  };
+  const takePendingNewLeadMode = (chatId: number, now = Date.now()) => {
+    cleanupPendingNewLeads(now);
+    const key = String(chatId);
+    const pending = pendingNewLeadChats.get(key);
+    if (!pending) {
+      return false;
+    }
+    pendingNewLeadChats.delete(key);
+    return now - pending.createdAt <= pendingNewLeadTtlMs;
   };
   const createPendingAttachmentDecision = (input: PendingAttachmentDecision) => {
     cleanupPendingAttachmentDecisions(Date.now());
@@ -563,6 +603,7 @@ async function runPolling() {
       }
       const now = Date.now();
       cleanupPendingAttachmentDecisions(now);
+      cleanupPendingNewLeads(now);
       cleanupPendingClarifications(now);
       const nextOffset =
         updates.length > 0 ? Math.max(...updates.map((update) => update.update_id)) + 1 : offset;
@@ -572,7 +613,8 @@ async function runPolling() {
         const message = update.message;
         const callbackChatId = update.callback_query?.message?.chat.id;
         console.log("TG update ready", updateLogContext(update));
-        const active = message ? activeLeads.get(String(message.chat.id)) : null;
+        const forceCreateNewLead = message ? takePendingNewLeadMode(message.chat.id, now) : false;
+        const active = message && !forceCreateNewLead ? activeLeads.get(String(message.chat.id)) : null;
         const activeLead =
           active && now - active.updatedAt <= activeLeadTtlMs ? active.lead : null;
         try {
@@ -581,6 +623,7 @@ async function runPolling() {
             workspaceId,
             crmAppBaseUrl,
             activeLead,
+            forceCreateNewLead,
             sendMessage,
             orchestrate,
             createClient,
@@ -597,6 +640,7 @@ async function runPolling() {
             generateOffer,
             archiveLead,
             undoLeadIntake,
+            startNewLeadMode,
             createPendingAttachmentDecision,
             takePendingAttachmentDecision,
             createPendingClarification,

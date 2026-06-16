@@ -16,7 +16,8 @@ function messageText(update: TelegramUpdate): string {
 
 function isCommand(update: TelegramUpdate): boolean {
   const text = messageText(update).trim();
-  return text === "/start" || text === "/help";
+  const command = text.match(/^\/([a-zA-Z_]+)(?:@[A-Za-z0-9_]+)?(?:\s|$)/)?.[1]?.toLowerCase() ?? "";
+  return ["start", "help", "crm", "search", "newlead", "new_lead"].includes(command);
 }
 
 export function combineMediaGroup(updates: TelegramUpdate[]): TelegramUpdate | null {

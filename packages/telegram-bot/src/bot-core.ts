@@ -146,6 +146,7 @@ export type TelegramBotDeps = {
   listLeadDocuments?: (input: TelegramLeadDocumentsInput) => Promise<TelegramLeadDocumentsResult>;
   archiveLead?: (input: TelegramArchiveLeadInput) => Promise<unknown>;
   undoLeadIntake?: (input: TelegramUndoLeadIntakeInput) => Promise<TelegramUndoLeadIntakeResult>;
+  startNewLeadMode?: (chatId: number) => void;
   createPendingAttachmentDecision?: (input: PendingAttachmentDecision) => string;
   takePendingAttachmentDecision?: (id: string) => PendingAttachmentDecision | null;
   createPendingClarification?: (input: PendingClarification) => string;
@@ -429,6 +430,7 @@ function helpResponse(topic: HelpTopic): string {
     ].join("\n"),
     general: [
       "LightCrm help",
+      "Commands: /crm opens the CRM, /search shows recent leads, /newlead starts a clean new lead intake.",
       "1. New lead: send the request, files, screenshots, or voice notes. I can create a draft lead when some details are still missing.",
       "2. Update lead: reply to a lead card and write what changed.",
       "3. Reminder: write: remind me in two weeks to call the client.",
@@ -1703,6 +1705,10 @@ function leadCardMessageOptions(options: TelegramSendMessageOptions | undefined)
   return options ?? {};
 }
 
+function telegramCommandName(text: string): string | null {
+  return text.trim().match(/^\/([a-zA-Z_]+)(?:@[A-Za-z0-9_]+)?(?:\s|$)/)?.[1]?.toLowerCase() ?? null;
+}
+
 function leadCardFieldsFromFacts(result: CrmOrchestrationResult): Partial<TelegramLeadCard> {
   return {
     clientName: result.facts.contactName,
@@ -2355,11 +2361,12 @@ export async function handleTelegramUpdate(
   const text = message.text ?? message.caption ?? "";
   const contextualText = appendReplyContext(text, message.reply_to_message);
   const attachments = extractTelegramAttachments(message);
-  if (text.trim() === "/start" || text.trim() === "/help") {
+  const command = telegramCommandName(text);
+  if (command === "start" || command === "help") {
     await deps.sendMessage(chatId, helpText());
     return null;
   }
-  if (text.trim() === "/crm") {
+  if (command === "crm") {
     await deps.sendMessage(
       chatId,
       "Open LightCrm.",
@@ -2367,7 +2374,7 @@ export async function handleTelegramUpdate(
     );
     return null;
   }
-  if (text.trim() === "/search") {
+  if (command === "search") {
     if (!deps.listRecentLeads) {
       await deps.sendMessage(chatId, "Lead search is not connected yet.");
       return null;
@@ -2378,6 +2385,11 @@ export async function handleTelegramUpdate(
       telegramRecentLeadsText(recent.matches),
       telegramRecentLeadsReplyMarkup(recent.matches)
     );
+    return null;
+  }
+  if (command === "newlead" || command === "new_lead") {
+    deps.startNewLeadMode?.(chatId);
+    await deps.sendMessage(chatId, "new lead mode: send text, files, or a batch now.");
     return null;
   }
   const orchestrationText = buildOrchestrationText(message, contextualText, attachments);
@@ -2517,16 +2529,17 @@ export async function handleTelegramUpdate(
     const replyDocuments = deps.listLeadDocuments
       ? (await deps.listLeadDocuments({ workspaceId: deps.workspaceId, leadId: replyLead.id, limit: 8 })).documents
       : [];
+    const shouldCreateTextOnlySummary = Boolean(createdLead);
     const intake =
-      preparedAttachments.length === 0 && deps.ingestLeadIntake
+      shouldCreateTextOnlySummary && preparedAttachments.length === 0 && deps.ingestLeadIntake
         ? await deps.ingestLeadIntake({
-        workspaceId: deps.workspaceId,
-        leadId: lead.id,
-        sourceChannel: "telegram",
-        sourceThreadId: String(message.chat.id),
-        sourceMessageId: String(message.message_id),
-        textItems: [{ sourceMessageId: String(message.message_id), author, text: orchestrationText }],
-        attachments: []
+            workspaceId: deps.workspaceId,
+            leadId: lead.id,
+            sourceChannel: "telegram",
+            sourceThreadId: String(message.chat.id),
+            sourceMessageId: String(message.message_id),
+            textItems: [{ sourceMessageId: String(message.message_id), author, text: orchestrationText }],
+            attachments: []
           })
         : null;
     await deps.sendMessage(

@@ -61,6 +61,9 @@ export const tables: Record<string, TableDefinition> = {
       { id: "client.email", title: "Email", width: 230, group: "Client" },
       { id: "messenger", title: "Messenger", width: 150 },
       { id: "sourceChannel", title: "Source", width: 140 },
+      { id: "summaryShort", title: "Summary", width: 240, valueKind: "longText", defaultVisible: false },
+      { id: "summaryLong", title: "Full summary", width: 360, valueKind: "longText", defaultVisible: false },
+      { id: "summaryUpdatedAt", title: "Summary updated", width: 170, defaultVisible: false },
       { id: "documents", title: "Documents", width: 300, valueKind: "documents" },
       { id: "calendar", title: "Calendar", width: 260, valueKind: "calendar" }
     ],

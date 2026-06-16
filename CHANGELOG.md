@@ -2,6 +2,27 @@
 
 All notable LightCrm releases are documented here. Starting with `0.2.0`, every version bump must include a changelog entry.
 
+## 0.3.36 - 2026-06-16
+
+### Added
+
+- Added a Telegram `/newlead` command that explicitly starts a clean new-lead intake, resets the active lead context for that chat, and applies to the next text/file batch.
+- Registered Telegram bot commands for `/crm`, `/search`, `/newlead`, and `/help`, while keeping polling alive if Telegram command registration is temporarily unavailable.
+- Added selectable Leads table columns for `Summary`, `Full summary`, and `Summary updated`, hidden by default so operators can inspect summary history fields without expanding the standard table.
+
+### Changed
+
+- Updated Telegram command parsing so commands with bot-name suffixes, such as `/newlead@TestLightCrmBot`, work correctly.
+- Prevented Telegram commands from being merged into the following buffered intake batch.
+- Changed lead summary policy so ordinary text-only lead updates no longer create a fresh `LeadSummary` from the latest short message; primary summaries are still created for new leads, attachment/document intake, explicit regeneration, and future approved important offer/lead fact updates.
+
+### Verification
+
+- `pnpm --filter @lightcrm/telegram-bot test`
+- `pnpm --filter @lightcrm/telegram-bot typecheck`
+- `pnpm --filter @lightcrm/ui typecheck`
+- `pnpm --filter @lightcrm/web typecheck`
+
 ## 0.3.35 - 2026-06-16
 
 ### Changed
