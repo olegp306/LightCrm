@@ -2,6 +2,24 @@
 
 All notable LightCrm releases are documented here. Starting with `0.2.0`, every version bump must include a changelog entry.
 
+## 0.3.39 - 2026-06-16
+
+### Added
+
+- Added LangGraph CRM audit documentation and supporting diagrams under `docs/audits/` so future orchestration work has a shared reference inside the repository.
+
+### Changed
+
+- Updated Telegram CRM links to carry the originating `tgChatId`, allowing the web app to know which chat should receive Send to TG actions after opening CRM from Telegram.
+- Improved web Send to TG error handling so unreachable TG chats are skipped and reported clearly instead of failing the whole batch with a raw Telegram error.
+- Fixed the mobile header navigation so `More` stays on the same horizontal row as `Today`, `Clients`, `Leads`, and `Call Target`, then scrolls to the right instead of overlapping.
+
+### Verification
+
+- `pnpm --filter @lightcrm/telegram-bot test`
+- `pnpm --filter @lightcrm/telegram-bot typecheck`
+- `pnpm --filter @lightcrm/web typecheck`
+
 ## 0.3.38 - 2026-06-16
 
 ### Added

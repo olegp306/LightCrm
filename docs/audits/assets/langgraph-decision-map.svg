@@ -1,0 +1,94 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="820" viewBox="0 0 1400 820" role="img" aria-labelledby="title desc">
+  <title id="title">LightCrm decision map</title>
+  <desc id="desc">Decision map for auto, review, and blocked outcomes in semantic CRM orchestration.</desc>
+  <defs>
+    <marker id="arrow3" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto">
+      <path d="M0,0 L10,5 L0,10 Z" fill="#334155"/>
+    </marker>
+    <style>
+      .bg { fill: #f8fafc; }
+      .node { fill: #ffffff; stroke: #334155; stroke-width: 2; rx: 14; }
+      .ask { fill: #eef6ff; stroke: #3b82f6; stroke-width: 2; rx: 14; }
+      .auto { fill: #ecfdf5; stroke: #10b981; stroke-width: 2; rx: 14; }
+      .review { fill: #fff7ed; stroke: #f97316; stroke-width: 2; rx: 14; }
+      .block { fill: #fef2f2; stroke: #ef4444; stroke-width: 2; rx: 14; }
+      .title { font-family: Arial, sans-serif; font-size: 30px; font-weight: 700; fill: #0f172a; }
+      .text { font-family: Arial, sans-serif; font-size: 18px; fill: #0f172a; font-weight: 700; }
+      .small { font-family: Arial, sans-serif; font-size: 14px; fill: #475569; }
+      .tiny { font-family: Arial, sans-serif; font-size: 12px; fill: #64748b; }
+      .arrow { stroke: #334155; stroke-width: 2.3; marker-end: url(#arrow3); fill: none; }
+    </style>
+  </defs>
+  <rect class="bg" width="1400" height="820"/>
+  <text class="title" x="50" y="55">Decision map: how LightCrm reaches auto, review, or blocked</text>
+  <text class="small" x="50" y="84">The scores are LLM confidence and candidate score signals, not probabilistic graph transitions.</text>
+
+  <rect class="ask" x="80" y="135" width="260" height="140"/>
+  <text class="text" x="112" y="173">Intent classification</text>
+  <text class="small" x="112" y="203">primaryIntent</text>
+  <text class="small" x="112" y="228">secondaryIntents</text>
+  <text class="tiny" x="112" y="252">confidence >= autoExecute?</text>
+
+  <rect class="ask" x="420" y="135" width="260" height="140"/>
+  <text class="text" x="452" y="173">Target resolution</text>
+  <text class="small" x="452" y="203">targetId or null</text>
+  <text class="small" x="452" y="228">candidate scores</text>
+  <text class="tiny" x="452" y="252">duplicate >= duplicateCandidate?</text>
+
+  <rect class="ask" x="760" y="135" width="260" height="140"/>
+  <text class="text" x="792" y="173">Entity evidence</text>
+  <text class="small" x="792" y="203">field value</text>
+  <text class="small" x="792" y="228">evidence text</text>
+  <text class="tiny" x="792" y="252">sourceMessageIds present?</text>
+
+  <rect class="ask" x="1100" y="135" width="220" height="140"/>
+  <text class="text" x="1130" y="173">Validation</text>
+  <text class="small" x="1130" y="203">approved</text>
+  <text class="small" x="1130" y="228">riskLevel</text>
+  <text class="tiny" x="1130" y="252">needsHumanConfirmation</text>
+
+  <path class="arrow" d="M340 205 H420"/>
+  <path class="arrow" d="M680 205 H760"/>
+  <path class="arrow" d="M1020 205 H1100"/>
+
+  <rect class="block" x="100" y="390" width="280" height="150"/>
+  <text class="text" x="132" y="428">Blocked/review path</text>
+  <text class="small" x="132" y="458">validation riskLevel = high</text>
+  <text class="small" x="132" y="483">missing evidence</text>
+  <text class="small" x="132" y="508">ambiguous target</text>
+
+  <rect class="review" x="450" y="390" width="300" height="150"/>
+  <text class="text" x="482" y="428">Human review path</text>
+  <text class="small" x="482" y="458">request_review action</text>
+  <text class="small" x="482" y="483">confirmation required</text>
+  <text class="small" x="482" y="508">action not mapped</text>
+
+  <rect class="auto" x="820" y="390" width="300" height="150"/>
+  <text class="text" x="852" y="428">Auto path</text>
+  <text class="small" x="852" y="458">approved + low risk</text>
+  <text class="small" x="852" y="483">confidence >= autoExecute</text>
+  <text class="small" x="852" y="508">policy allows write</text>
+
+  <path class="arrow" d="M1210 275 C1190 350 1030 360 970 390"/>
+  <path class="arrow" d="M1210 275 C1160 360 660 360 600 390"/>
+  <path class="arrow" d="M890 275 C740 330 300 340 240 390"/>
+
+  <rect class="node" x="190" y="645" width="280" height="95"/>
+  <text class="text" x="222" y="682">Draft lead exception</text>
+  <text class="small" x="222" y="710">create_lead/generate_offer_task</text>
+  <text class="tiny" x="222" y="732">can auto-create needs-data lead</text>
+
+  <rect class="node" x="560" y="645" width="280" height="95"/>
+  <text class="text" x="592" y="682">Duplicate guard</text>
+  <text class="small" x="592" y="710">candidate score threshold</text>
+  <text class="tiny" x="592" y="732">should force review/clarification</text>
+
+  <rect class="node" x="930" y="645" width="280" height="95"/>
+  <text class="text" x="962" y="682">Final write gate</text>
+  <text class="small" x="962" y="710">requireConfirmationForWrites</text>
+  <text class="tiny" x="962" y="732">turns write into review</text>
+
+  <path class="arrow" d="M970 540 C950 620 780 635 700 645"/>
+  <path class="arrow" d="M970 540 C940 610 1050 620 1070 645"/>
+  <path class="arrow" d="M970 540 C840 620 430 620 330 645"/>
+</svg>

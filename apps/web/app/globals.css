@@ -4210,7 +4210,7 @@ input {
   .navPrimary {
     border-bottom: 0;
     display: flex;
-    flex: 0 1 auto;
+    flex: 0 0 auto;
     gap: 6px;
     min-width: 0;
     padding-bottom: 0;
@@ -4236,13 +4236,17 @@ input {
   }
 
   .navSecondary {
+    align-items: center;
+    display: flex;
+    gap: 6px;
     flex: 0 0 auto;
-    margin-left: auto;
-    max-width: calc(100vw - 28px);
+    margin-left: 0;
+    max-width: none;
   }
 
   .navSecondary summary {
     display: inline-flex;
+    flex: 0 0 auto;
     padding: 7px 8px;
     width: max-content;
   }
@@ -4250,10 +4254,11 @@ input {
   .navSecondary > div {
     border-left: 0;
     display: flex;
+    flex: 0 0 auto;
     gap: 6px;
-    margin: 4px 0 0;
-    overflow-x: auto;
-    padding: 0 0 2px;
+    margin: 0;
+    overflow: visible;
+    padding: 0;
   }
 
   .themeToggle {

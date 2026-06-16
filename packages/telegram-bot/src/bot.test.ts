@@ -42,7 +42,7 @@ describe("telegram bot core", () => {
 
     expect(sendMessage).toHaveBeenCalledWith(111111, "Open LightCrm.", {
       replyMarkup: {
-        inline_keyboard: [[{ text: "CRM", web_app: { url: "https://crm.example.com" } }]]
+        inline_keyboard: [[{ text: "CRM", web_app: { url: "https://crm.example.com/?tgChatId=111111" } }]]
       }
     });
   });
@@ -1240,7 +1240,7 @@ describe("telegram bot core", () => {
             [
               { text: "undo", callback_data: "undo_lead:lead-301" },
               { text: "offer", callback_data: "offer_lead:lead-301" },
-              { text: "CRM", web_app: { url: "https://crm.example.com/leads?leadId=L-2026-301" } }
+              { text: "CRM", web_app: { url: "https://crm.example.com/leads?leadId=L-2026-301&tgChatId=111111" } }
             ]
           ]
         }
@@ -1426,7 +1426,7 @@ describe("telegram bot core", () => {
             [
               { text: "undo", callback_data: "undo_lead:lead-304" },
               { text: "offer", callback_data: "offer_lead:lead-304" },
-              { text: "CRM", url: "http://204.168.163.99:3004/leads?leadId=L-2026-304" }
+              { text: "CRM", url: "http://204.168.163.99:3004/leads?leadId=L-2026-304&tgChatId=111111" }
             ]
           ]
         }
@@ -1460,7 +1460,7 @@ describe("telegram bot core", () => {
 
     expect(sendMessage).toHaveBeenCalledWith(
       111111,
-      "http://localhost:4900/leads?leadId=L-2026-303"
+      "http://localhost:4900/leads?leadId=L-2026-303&tgChatId=111111"
     );
   });
 

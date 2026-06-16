@@ -190,6 +190,10 @@ async function telegramSendMessage(chatId: number, text: string, buttons: Telegr
   }
 }
 
+function telegramErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : "Telegram send failed.";
+}
+
 export async function POST(request: Request) {
   try {
     const input = await parseJson(request, SendToTelegramInput);
@@ -252,6 +256,10 @@ export async function POST(request: Request) {
       }
     }
 
+    const reachableChatIds = new Set(chatIds);
+    const failedChats = new Map<number, string>();
+    const sentLeadIds = new Set<string>();
+
     for (const lead of selected) {
       const client = lead.clientId ? clientsById.get(lead.clientId) ?? null : null;
       const project = readNoteField(lead.notes, leadNoteFields.project) ?? lead.company ?? lead.name;
@@ -291,12 +299,37 @@ export async function POST(request: Request) {
         .join("\n");
       const url = leadUrl(lead);
       const buttons = url ? [telegramCrmButton(url)] : [];
-      for (const chatId of chatIds) {
-        await telegramSendMessage(chatId, text, buttons);
+      let sentThisLead = false;
+      for (const chatId of [...reachableChatIds]) {
+        try {
+          await telegramSendMessage(chatId, text, buttons);
+          sentThisLead = true;
+        } catch (error) {
+          failedChats.set(chatId, telegramErrorMessage(error));
+          reachableChatIds.delete(chatId);
+        }
+      }
+      if (sentThisLead) {
+        sentLeadIds.add(lead.id);
       }
     }
 
-    return NextResponse.json({ sent: selected.length, chatIds: chatIds.length });
+    if (sentLeadIds.size === 0) {
+      return NextResponse.json(
+        {
+          error:
+            "No reachable TG chat found. Open CRM from the bot button again or configure TELEGRAM_OUTBOUND_CHAT_IDS with a chat where the bot is active.",
+          failedChats: [...failedChats.entries()].map(([chatId, error]) => ({ chatId, error }))
+        },
+        { status: 400 }
+      );
+    }
+
+    return NextResponse.json({
+      sent: sentLeadIds.size,
+      chatIds: reachableChatIds.size,
+      failedChats: [...failedChats.entries()].map(([chatId, error]) => ({ chatId, error }))
+    });
   } catch (error) {
     return handleRouteError(error);
   }

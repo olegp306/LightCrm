@@ -1,0 +1,76 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="820" viewBox="0 0 1400 820" role="img" aria-labelledby="title desc">
+  <title id="title">LightCrm settings map</title>
+  <desc id="desc">Map of settings available without code changes and code-only boundaries.</desc>
+  <defs>
+    <marker id="arrow2" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto">
+      <path d="M0,0 L10,5 L0,10 Z" fill="#475569"/>
+    </marker>
+    <style>
+      .bg { fill: #f8fafc; }
+      .card { fill: #ffffff; stroke: #334155; stroke-width: 2; rx: 14; }
+      .soft { fill: #eef6ff; stroke: #3b82f6; stroke-width: 2; rx: 14; }
+      .good { fill: #ecfdf5; stroke: #10b981; stroke-width: 2; rx: 14; }
+      .warn { fill: #fff7ed; stroke: #f97316; stroke-width: 2; rx: 14; }
+      .code { fill: #fef2f2; stroke: #ef4444; stroke-width: 2; rx: 14; }
+      .title { font-family: Arial, sans-serif; font-size: 30px; font-weight: 700; fill: #0f172a; }
+      .text { font-family: Arial, sans-serif; font-size: 18px; fill: #0f172a; font-weight: 700; }
+      .small { font-family: Arial, sans-serif; font-size: 14px; fill: #475569; }
+      .tiny { font-family: Arial, sans-serif; font-size: 12px; fill: #64748b; }
+      .arrow { stroke: #475569; stroke-width: 2.3; marker-end: url(#arrow2); fill: none; }
+    </style>
+  </defs>
+  <rect class="bg" width="1400" height="820"/>
+  <text class="title" x="50" y="55">Settings surface: what can be tuned without touching code</text>
+  <text class="small" x="50" y="84">Main storage is .local-storage/*.json; default fallback comes from packages/orchestrator/src/settings.ts.</text>
+
+  <rect class="soft" x="70" y="135" width="270" height="175"/>
+  <text class="text" x="98" y="173">UI /settings</text>
+  <text class="small" x="98" y="202">LangGraph Settings tab</text>
+  <text class="small" x="98" y="226">CRM Settings tab</text>
+  <text class="tiny" x="98" y="257">Trace Chat dry-run</text>
+  <text class="tiny" x="98" y="278">Auto-save after edits</text>
+
+  <rect class="good" x="410" y="110" width="330" height="230"/>
+  <text class="text" x="438" y="148">LangGraph runtime</text>
+  <text class="small" x="438" y="178">prompts, model, temperature</text>
+  <text class="small" x="438" y="203">thresholds and confirmation policy</text>
+  <text class="small" x="438" y="228">TG intake policy</text>
+  <text class="small" x="438" y="253">offer readiness fields</text>
+  <text class="small" x="438" y="278">project people and taxonomy</text>
+  <text class="tiny" x="438" y="312">API: /api/crm/orchestrator/settings</text>
+
+  <rect class="good" x="810" y="110" width="330" height="230"/>
+  <text class="text" x="838" y="148">CRM offer settings</text>
+  <text class="small" x="838" y="178">active DOCX offer template</text>
+  <text class="small" x="838" y="203">Honorartabelle fee table</text>
+  <text class="small" x="838" y="228">offer validity days</text>
+  <text class="small" x="838" y="253">autoGenerateWhenReady</text>
+  <text class="tiny" x="838" y="312">API: /api/crm/settings</text>
+
+  <rect class="card" x="410" y="410" width="330" height="170"/>
+  <text class="text" x="438" y="448">Storage and fallback</text>
+  <text class="small" x="438" y="478">.local-storage/langgraph-settings.json</text>
+  <text class="small" x="438" y="503">.local-storage/crm-settings.json</text>
+  <text class="small" x="438" y="528">globalThis runtime cache</text>
+  <text class="tiny" x="438" y="555">If missing/unreadable: leadHunter defaults</text>
+
+  <rect class="warn" x="810" y="410" width="330" height="170"/>
+  <text class="text" x="838" y="448">Partly declarative today</text>
+  <text class="small" x="838" y="478">enabledNodes do not alter semantic topology</text>
+  <text class="small" x="838" y="503">confidenceThreshold partly legacy</text>
+  <text class="small" x="838" y="528">forceReviewIntents are legacy enum</text>
+  <text class="tiny" x="838" y="555">Use thresholds/confirmationPolicy for real gates</text>
+
+  <rect class="code" x="410" y="650" width="730" height="115"/>
+  <text class="text" x="438" y="688">Requires code change</text>
+  <text class="small" x="438" y="718">New preset ids, new semantic intent enum values, graph topology, JSON contracts, action mapping, storage paths, fee parser behavior.</text>
+  <text class="tiny" x="438" y="745">These are product/platform decisions, not per-client settings yet.</text>
+
+  <path class="arrow" d="M340 222 H410"/>
+  <path class="arrow" d="M340 248 C420 365 480 390 540 410"/>
+  <path class="arrow" d="M740 225 H810"/>
+  <path class="arrow" d="M575 340 V410"/>
+  <path class="arrow" d="M975 340 V410"/>
+  <path class="arrow" d="M975 580 C970 620 880 640 840 650"/>
+  <path class="arrow" d="M575 580 C580 625 650 640 700 650"/>
+</svg>

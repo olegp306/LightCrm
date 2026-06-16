@@ -1,0 +1,104 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="760" viewBox="0 0 1400 760" role="img" aria-labelledby="title desc">
+  <title id="title">LightCrm semantic LangGraph flow</title>
+  <desc id="desc">Semantic CRM orchestration route from Telegram or API input to CRM action decision.</desc>
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto">
+      <path d="M0,0 L10,5 L0,10 Z" fill="#334155"/>
+    </marker>
+    <style>
+      .bg { fill: #f8fafc; }
+      .lane { fill: #eef6ff; stroke: #bfdbfe; stroke-width: 2; }
+      .node { fill: #ffffff; stroke: #334155; stroke-width: 2; rx: 12; }
+      .llm { fill: #fff7ed; stroke: #f97316; stroke-width: 2; rx: 12; }
+      .gate { fill: #fef2f2; stroke: #ef4444; stroke-width: 2; rx: 12; }
+      .out { fill: #ecfdf5; stroke: #10b981; stroke-width: 2; rx: 12; }
+      .text { font-family: Arial, sans-serif; font-size: 18px; fill: #0f172a; }
+      .small { font-family: Arial, sans-serif; font-size: 14px; fill: #475569; }
+      .tiny { font-family: Arial, sans-serif; font-size: 12px; fill: #64748b; }
+      .title { font-family: Arial, sans-serif; font-size: 30px; font-weight: 700; fill: #0f172a; }
+      .arrow { stroke: #334155; stroke-width: 2.4; marker-end: url(#arrow); fill: none; }
+      .dash { stroke: #64748b; stroke-width: 2; stroke-dasharray: 7 6; marker-end: url(#arrow); fill: none; }
+    </style>
+  </defs>
+
+  <rect class="bg" width="1400" height="760"/>
+  <text class="title" x="50" y="55">LightCrm semantic LangGraph: current execution route</text>
+  <text class="small" x="50" y="84">The graph topology is linear. Branching is implemented inside validation, planning, thresholds, and Telegram execution gates.</text>
+
+  <rect class="lane" x="40" y="120" width="1320" height="470" rx="18"/>
+  <text class="small" x="66" y="152">packages/orchestrator/src/semantic-graph.ts</text>
+
+  <rect class="node" x="70" y="200" width="150" height="90"/>
+  <text class="text" x="92" y="236">collectInput</text>
+  <text class="tiny" x="92" y="260">trim, normalize</text>
+
+  <rect class="node" x="250" y="200" width="160" height="90"/>
+  <text class="text" x="278" y="236">buildContext</text>
+  <text class="tiny" x="278" y="260">recent leads</text>
+
+  <rect class="llm" x="440" y="190" width="170" height="110"/>
+  <text class="text" x="462" y="226">classifyIntent</text>
+  <text class="tiny" x="462" y="250">intent + confidence</text>
+  <text class="tiny" x="462" y="270">secondary intents</text>
+
+  <rect class="llm" x="640" y="190" width="170" height="110"/>
+  <text class="text" x="666" y="226">resolveTarget</text>
+  <text class="tiny" x="666" y="250">targetId</text>
+  <text class="tiny" x="666" y="270">candidate scores</text>
+
+  <rect class="llm" x="840" y="190" width="170" height="110"/>
+  <text class="text" x="862" y="226">extractEntities</text>
+  <text class="tiny" x="862" y="250">fields + evidence</text>
+  <text class="tiny" x="862" y="270">missing data</text>
+
+  <rect class="llm" x="1040" y="190" width="170" height="110"/>
+  <text class="text" x="1062" y="226">validateAction</text>
+  <text class="tiny" x="1062" y="250">approved?</text>
+  <text class="tiny" x="1062" y="270">low / medium / high</text>
+
+  <rect class="gate" x="430" y="390" width="230" height="100"/>
+  <text class="text" x="458" y="427">planAction</text>
+  <text class="tiny" x="458" y="451">intent -> CRM action</text>
+  <text class="tiny" x="458" y="471">draft lead heuristics</text>
+
+  <rect class="gate" x="700" y="390" width="230" height="100"/>
+  <text class="text" x="728" y="427">executionGate</text>
+  <text class="tiny" x="728" y="451">require confirmation?</text>
+  <text class="tiny" x="728" y="471">writes -> review</text>
+
+  <rect class="out" x="990" y="375" width="260" height="130"/>
+  <text class="text" x="1022" y="413">CrmOrchestrationResult</text>
+  <text class="tiny" x="1022" y="440">risk: auto / review / blocked</text>
+  <text class="tiny" x="1022" y="462">actions: create/update/search...</text>
+  <text class="tiny" x="1022" y="484">trace for UI dry-run</text>
+
+  <path class="arrow" d="M220 245 H250"/>
+  <path class="arrow" d="M410 245 H440"/>
+  <path class="arrow" d="M610 245 H640"/>
+  <path class="arrow" d="M810 245 H840"/>
+  <path class="arrow" d="M1010 245 H1040"/>
+  <path class="arrow" d="M1125 300 C1125 350 545 340 545 390"/>
+  <path class="arrow" d="M660 440 H700"/>
+  <path class="arrow" d="M930 440 H990"/>
+
+  <rect class="node" x="80" y="625" width="260" height="85"/>
+  <text class="text" x="105" y="660">Default prompts</text>
+  <text class="tiny" x="105" y="684">settings.ts: createDefaultPrompts()</text>
+
+  <rect class="node" x="390" y="625" width="260" height="85"/>
+  <text class="text" x="415" y="660">Runtime settings</text>
+  <text class="tiny" x="415" y="684">model, thresholds, policies</text>
+
+  <rect class="node" x="700" y="625" width="260" height="85"/>
+  <text class="text" x="725" y="660">Context payload</text>
+  <text class="tiny" x="725" y="684">message, recent leads, hints</text>
+
+  <rect class="node" x="1010" y="625" width="260" height="85"/>
+  <text class="text" x="1035" y="660">Telegram executor</text>
+  <text class="tiny" x="1035" y="684">creates lead/reminder/meeting</text>
+
+  <path class="dash" d="M210 625 C250 560 485 350 525 300"/>
+  <path class="dash" d="M520 625 C570 560 850 345 925 300"/>
+  <path class="dash" d="M830 625 C835 560 730 350 725 300"/>
+  <path class="dash" d="M1140 625 C1135 570 1130 525 1120 505"/>
+</svg>

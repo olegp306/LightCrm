@@ -1021,12 +1021,21 @@ function leadPublicRef(lead: Pick<Lead, "id" | "name"> & Partial<Pick<Lead, "cod
   return lead.code?.trim() || lead.id;
 }
 
-function crmLeadUrl(deps: TelegramBotDeps, lead: Pick<Lead, "id" | "name"> & Partial<Pick<Lead, "code">>): string | null {
+function crmLeadUrl(
+  deps: TelegramBotDeps,
+  lead: Pick<Lead, "id" | "name"> & Partial<Pick<Lead, "code">>,
+  chatId?: number
+): string | null {
   if (!deps.crmAppBaseUrl) {
     return null;
   }
   const baseUrl = deps.crmAppBaseUrl.replace(/\/$/, "");
-  return `${baseUrl}/leads?leadId=${encodeURIComponent(leadPublicRef(lead))}`;
+  const url = new URL(`${baseUrl}/leads`);
+  url.searchParams.set("leadId", leadPublicRef(lead));
+  if (typeof chatId === "number" && Number.isSafeInteger(chatId)) {
+    url.searchParams.set("tgChatId", String(chatId));
+  }
+  return url.toString();
 }
 
 function crmLeadCallbackData(lead: Pick<Lead, "id" | "name"> & Partial<Pick<Lead, "code">>): string {
@@ -1034,16 +1043,20 @@ function crmLeadCallbackData(lead: Pick<Lead, "id" | "name"> & Partial<Pick<Lead
   return publicRef === lead.id ? `crm_lead:${lead.id}` : `crm_lead:${lead.id}:${publicRef}`;
 }
 
-function crmHomeReplyMarkup(deps: TelegramBotDeps): TelegramSendMessageOptions | undefined {
+function crmHomeReplyMarkup(deps: TelegramBotDeps, chatId?: number): TelegramSendMessageOptions | undefined {
   if (!deps.crmAppBaseUrl) {
     return undefined;
   }
-  const url = deps.crmAppBaseUrl.replace(/\/$/, "");
-  const button = isTelegramWebAppUrl(url)
-    ? { text: "CRM", web_app: { url } }
-    : isLocalCrmUrl(url)
+  const url = new URL(deps.crmAppBaseUrl.replace(/\/$/, ""));
+  if (typeof chatId === "number" && Number.isSafeInteger(chatId)) {
+    url.searchParams.set("tgChatId", String(chatId));
+  }
+  const href = url.toString();
+  const button = isTelegramWebAppUrl(href)
+    ? { text: "CRM", web_app: { url: href } }
+    : isLocalCrmUrl(href)
       ? { text: "CRM", callback_data: "crm_home" }
-      : { text: "CRM", url };
+      : { text: "CRM", url: href };
   return {
     replyMarkup: {
       inline_keyboard: [[button]]
@@ -1081,9 +1094,9 @@ type TelegramLeadReplyCard = Pick<Lead, "id" | "name"> & {
 function crmLeadReplyMarkup(
   deps: TelegramBotDeps,
   lead: TelegramLeadReplyCard,
-  options: { includeUndo?: boolean; undoMode?: "archive" | "write"; undoSourceMessageId?: string | null } = {}
+  options: { includeUndo?: boolean; undoMode?: "archive" | "write"; undoSourceMessageId?: string | null; chatId?: number } = {}
 ): TelegramSendMessageOptions | undefined {
-  const url = crmLeadUrl(deps, lead);
+  const url = crmLeadUrl(deps, lead, options.chatId);
   const undoCallback =
     options.undoMode === "write"
       ? ["undo_write", lead.id, options.undoSourceMessageId].filter(Boolean).join(":")
@@ -2254,7 +2267,7 @@ export async function handleTelegramCallback(update: TelegramUpdate, deps: Teleg
     await deps.sendMessage(
       chatId,
       telegramLeadCardTextCompact(lead, documents),
-      leadCardMessageOptions(crmLeadReplyMarkup(deps, { ...lead, summaryLong: lead.summaryLong ?? null }))
+      leadCardMessageOptions(crmLeadReplyMarkup(deps, { ...lead, summaryLong: lead.summaryLong ?? null }, { chatId }))
     );
     return { handled: true, lead };
   }
@@ -2263,7 +2276,10 @@ export async function handleTelegramCallback(update: TelegramUpdate, deps: Teleg
     if (!deps.crmAppBaseUrl) {
       return { handled: false, lead: null };
     }
-    const url = `${deps.crmAppBaseUrl.replace(/\/$/, "")}/leads?leadId=${encodeURIComponent(crmLeadRef.publicRef)}`;
+    const url = crmLeadUrl(deps, { id: crmLeadRef.id, name: crmLeadRef.publicRef, code: crmLeadRef.publicRef }, chatId);
+    if (!url) {
+      return { handled: false, lead: null };
+    }
     await deps.sendMessage(chatId, url);
     return { handled: true, lead: null };
   }
@@ -2303,7 +2319,7 @@ export async function handleTelegramCallback(update: TelegramUpdate, deps: Teleg
     await deps.sendMessage(
       chatId,
       telegramLeadFullSummaryTextCompact(lead),
-      leadCardMessageOptions(crmLeadReplyMarkup(deps, { ...lead, summaryLong: null }))
+      leadCardMessageOptions(crmLeadReplyMarkup(deps, { ...lead, summaryLong: null }, { chatId }))
     );
     return { handled: true, lead: null };
   }
@@ -2372,7 +2388,7 @@ export async function handleTelegramUpdate(
     await deps.sendMessage(
       chatId,
       "Open LightCrm.",
-      leadCardMessageOptions(crmHomeReplyMarkup(deps))
+      leadCardMessageOptions(crmHomeReplyMarkup(deps, chatId))
     );
     return null;
   }
@@ -2562,10 +2578,11 @@ export async function handleTelegramUpdate(
         crmLeadReplyMarkup(deps, replyLead, {
           includeUndo: Boolean(createdLead || updatedLead || enrichment.result),
           undoMode: createdLead ? "archive" : "write",
-          undoSourceMessageId: String(message.message_id)
+          undoSourceMessageId: String(message.message_id),
+          chatId
         })
           ? null
-          : crmLeadUrl(deps, replyLead)
+          : crmLeadUrl(deps, replyLead, chatId)
       ]
         .filter((line): line is string => Boolean(line))
         .join("\n")
@@ -2574,7 +2591,8 @@ export async function handleTelegramUpdate(
         crmLeadReplyMarkup(deps, replyLead, {
           includeUndo: Boolean(createdLead || updatedLead || enrichment.result),
           undoMode: createdLead ? "archive" : "write",
-          undoSourceMessageId: String(message.message_id)
+          undoSourceMessageId: String(message.message_id),
+          chatId
         })
       )
     );
