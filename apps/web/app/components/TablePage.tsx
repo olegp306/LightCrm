@@ -4,7 +4,7 @@ import type { CrmTableProps, CrmTableRow } from "@lightcrm/ui";
 import { recordsToRows, type ApiRecord } from "@lightcrm/ui";
 import dynamic from "next/dynamic";
 import { useSearchParams } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 
 const CrmTable = dynamic(() => import("@lightcrm/ui").then((module) => module.CrmTable), {
   ssr: false,
@@ -80,7 +80,11 @@ function calendarRelatedEntity(archiveEntity: CrmTableProps["archiveEntity"]): C
   return "lead";
 }
 
-export function TablePage({ endpoint, rows: _sampleRows, columns, calendarFeedEndpoint, ...props }: LiveTablePageProps) {
+function TablePageLoading() {
+  return <div className="gridFrame" aria-busy="true" />;
+}
+
+function LiveTablePage({ endpoint, rows: _sampleRows, columns, calendarFeedEndpoint, ...props }: LiveTablePageProps) {
   const [liveRows, setLiveRows] = useState<CrmTableRow[] | null>(null);
   const [offerTemplateFields, setOfferTemplateFields] = useState<string[]>([]);
   const [outreachCampaigns, setOutreachCampaigns] = useState<CrmTableProps["outreachCampaigns"]>([]);
@@ -198,5 +202,13 @@ export function TablePage({ endpoint, rows: _sampleRows, columns, calendarFeedEn
       offerTemplateFields={offerTemplateFields}
       outreachCampaigns={outreachCampaigns}
     />
+  );
+}
+
+export function TablePage(props: LiveTablePageProps) {
+  return (
+    <Suspense fallback={<TablePageLoading />}>
+      <LiveTablePage {...props} />
+    </Suspense>
   );
 }
