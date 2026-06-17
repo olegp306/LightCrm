@@ -1,7 +1,7 @@
 ﻿"use client";
 
-import type { FormEvent } from "react";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import type { FormEvent, ReactNode } from "react";
+import { ChevronLeft, ChevronRight, Mail, Send } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
 type CalendarViewMode = "month" | "week" | "day" | "agenda";
@@ -21,6 +21,18 @@ type CalendarFeedItem = {
     label: string | null;
     href: string | null;
   };
+  outreach?: {
+    campaignId: string;
+    campaignName: string;
+    touchId: string | null;
+    touchNumber: number | null;
+    touchTitle: string | null;
+    action: string | null;
+    channel: string | null;
+    subject: string | null;
+    body: string | null;
+    email: string | null;
+  } | null;
 };
 
 type CrmCalendarProps = {
@@ -38,6 +50,14 @@ type LeadOption = {
   name?: string | null;
   projectName?: string | null;
   client?: { name?: string | null } | null;
+};
+
+type EmailDraftEdit = {
+  subject: string;
+  body: string;
+  saveStatus?: "idle" | "saving" | "saved" | "error";
+  sendStatus?: "idle" | "sending" | "sent" | "auth" | "error";
+  message?: string | null;
 };
 
 const dayFormatter = new Intl.DateTimeFormat("en", { weekday: "short" });
@@ -171,11 +191,57 @@ function leadIdFromInput(value: string): string {
   return value.split("|")[0]?.trim() ?? value.trim();
 }
 
-function CalendarChip({ item, compact = false }: { item: CalendarFeedItem; compact?: boolean }) {
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+function emailParagraphs(body: string): string[] {
+  return body
+    .split(/\n{2,}/)
+    .map((paragraph) => paragraph.trim())
+    .filter(Boolean);
+}
+
+function styledEmailBody(body: string): string {
+  const paragraphs = emailParagraphs(body);
+  return paragraphs
+    .map((paragraph, index) => {
+      const escaped = escapeHtml(paragraph).replace(/\n/g, "<br>");
+      if (index === 0) {
+        return `<p><strong>${escaped}</strong></p>`;
+      }
+      if (index === paragraphs.length - 1) {
+        return `<p><em>${escaped}</em></p>`;
+      }
+      return `<p>${escaped}</p>`;
+    })
+    .join("");
+}
+
+function gmailComposeUrl(email: string, subject: string, body: string): string {
+  const params = new URLSearchParams({
+    view: "cm",
+    fs: "1",
+    to: email,
+    su: subject,
+    body
+  });
+  return `https://mail.google.com/mail/?${params.toString()}`;
+}
+
+function CalendarChip({ item, compact = false, activeCampaignId }: { item: CalendarFeedItem; compact?: boolean; activeCampaignId?: string }) {
   const meta = itemMeta(item);
-  const tooltip = [item.title, item.description, itemTimeLabel(item), meta].filter(Boolean).join("\n");
+  const isActiveOutreach = activeCampaignId && item.outreach?.campaignId === activeCampaignId;
   return (
-    <article className={`calendarChip ${item.kind === "reminder" ? "calendarChipReminder" : "calendarChipEvent"}`} title={tooltip}>
+    <article
+      className={`calendarChip ${item.kind === "reminder" ? "calendarChipReminder" : "calendarChipEvent"} ${
+        item.outreach ? "calendarChipOutreach" : ""
+      } ${isActiveOutreach ? "activeOutreach" : ""}`}
+    >
       <div>
         <span className="calendarChipTime">{itemTimeLabel(item)}</span>
         <strong>{item.title}</strong>
@@ -185,45 +251,210 @@ function CalendarChip({ item, compact = false }: { item: CalendarFeedItem; compa
   );
 }
 
-function CalendarInspector({ selectedDate, items }: { selectedDate: Date; items: CalendarFeedItem[] }) {
+function OutreachEmailPreview({
+  item,
+  styled,
+  onToggleStyled,
+  draft,
+  onDraftChange,
+  onSaveDraft
+}: {
+  item: CalendarFeedItem;
+  styled: boolean;
+  onToggleStyled: () => void;
+  draft: EmailDraftEdit;
+  onDraftChange: (patch: Partial<EmailDraftEdit>) => void;
+  onSaveDraft: (patch?: Partial<EmailDraftEdit>) => void;
+}) {
+  const subject = draft.subject;
+  const body = draft.body;
+  return (
+    <details className="calendarEmailDetails">
+      <summary>
+        <span className="calendarEmailSummaryShow">Email</span>
+        <span className="calendarEmailSummaryHide">Email</span>
+      </summary>
+      <div className="calendarEmailPreview">
+        <div className="calendarEmailSubjectRow">
+          <label>
+            <span>Subject</span>
+            <input
+              value={subject}
+              placeholder="No subject prepared"
+              onBlur={() => onSaveDraft()}
+              onChange={(event) => onDraftChange({ subject: event.target.value })}
+            />
+          </label>
+          <button type="button" aria-pressed={styled} onClick={onToggleStyled}>
+            {styled ? "Styled" : "Plain"}
+          </button>
+        </div>
+        <div className="calendarEmailBody">
+          <span>Email</span>
+          {styled ? (
+            <div
+              className="calendarEmailStyledBody editable"
+              contentEditable
+              role="textbox"
+              aria-label="Email body"
+              suppressContentEditableWarning
+              onBlur={(event) => {
+                const body = event.currentTarget.innerText.trim();
+                onDraftChange({ body });
+                onSaveDraft({ body });
+              }}
+            >
+              {emailParagraphs(body).map((paragraph, index, paragraphs) => (
+                <p
+                  className={index === 0 ? "lead" : index === paragraphs.length - 1 ? "closing" : undefined}
+                  key={`${paragraph}-${index}`}
+                >
+                  {paragraph}
+                </p>
+              ))}
+            </div>
+          ) : (
+            <textarea
+              value={body}
+              placeholder="No draft prepared"
+              onBlur={() => onSaveDraft()}
+              onChange={(event) => onDraftChange({ body: event.target.value })}
+            />
+          )}
+        </div>
+        <div className="calendarEmailActions">
+          <button type="button" onClick={() => onSaveDraft()} disabled={draft.saveStatus === "saving"}>
+            {draft.saveStatus === "saving" ? "Saving" : "Save draft"}
+          </button>
+          {draft.message ? <span className="calendarEmailStatus">{draft.message}</span> : null}
+        </div>
+      </div>
+    </details>
+  );
+}
+
+function CalendarInspector({
+  selectedDate,
+  items,
+  styledEmailItems,
+  emailDrafts,
+  onToggleStyledEmail,
+  onDraftChange,
+  onSaveDraft,
+  onSendEmail,
+  onOpenGmail,
+  onMarkSent,
+  headerActions
+}: {
+  selectedDate: Date;
+  items: CalendarFeedItem[];
+  styledEmailItems: Record<string, boolean>;
+  emailDrafts: Record<string, EmailDraftEdit>;
+  onToggleStyledEmail: (item: CalendarFeedItem) => void;
+  onDraftChange: (item: CalendarFeedItem, patch: Partial<EmailDraftEdit>) => void;
+  onSaveDraft: (item: CalendarFeedItem, patch?: Partial<EmailDraftEdit>) => void;
+  onSendEmail: (item: CalendarFeedItem) => void;
+  onOpenGmail: (item: CalendarFeedItem) => void;
+  onMarkSent: (item: CalendarFeedItem) => void;
+  headerActions?: ReactNode;
+}) {
   const sortedItems = sortItemsByStart(items);
   return (
     <aside className="calendarInspector" aria-label="Selected day events">
       <header>
-        <span>{dayFormatter.format(selectedDate)}</span>
-        <strong>{fullDateFormatter.format(selectedDate)}</strong>
+        <div>
+          <span>{dayFormatter.format(selectedDate)}</span>
+          <strong>{fullDateFormatter.format(selectedDate)}</strong>
+        </div>
+        {headerActions ? <div className="calendarInspectorHeaderActions">{headerActions}</div> : null}
       </header>
       {sortedItems.length > 0 ? (
         <div className="calendarTimeline">
           {sortedItems.map((item) => {
             const meta = itemMeta(item);
+            const draft =
+              emailDrafts[item.id] ?? {
+                subject: item.outreach?.subject ?? "",
+                body: item.outreach?.body ?? "",
+                saveStatus: "idle",
+                sendStatus: "idle"
+              };
+            const canSendOutreachEmail =
+              Boolean(item.outreach?.email && draft.subject.trim() && draft.body.trim()) && item.status !== "done";
             return (
               <article className="calendarTimelineItem" key={`${item.kind}-${item.id}`}>
                 <div className="calendarTimelineRail">
                   <span />
                 </div>
-                <div className="calendarTimelineCard" title={[item.title, item.description, itemTimeLabel(item), meta].filter(Boolean).join("\n")}>
+                <div className="calendarTimelineCard">
                   <div className="calendarTimelineTopline">
                     <span>{itemTimeLabel(item)}</span>
                     <b>{item.kind}</b>
                   </div>
                   <strong>{item.title}</strong>
-                  {item.description ? <p>{item.description}</p> : null}
-                  {meta ? <small>{meta}</small> : null}
+                  {item.outreach ? (
+                    <p className="calendarTimelineOutreachLine">
+                      {[item.outreach.campaignName, item.outreach.action].filter(Boolean).join(" ")}
+                    </p>
+                  ) : item.description ? (
+                    <p>{item.description}</p>
+                  ) : null}
+                  {item.outreach?.subject || item.outreach?.body ? (
+                    <OutreachEmailPreview
+                      item={item}
+                      styled={styledEmailItems[item.id] ?? true}
+                      draft={draft}
+                      onToggleStyled={() => onToggleStyledEmail(item)}
+                      onDraftChange={(patch) => onDraftChange(item, patch)}
+                      onSaveDraft={(patch) => void onSaveDraft(item, patch)}
+                    />
+                  ) : null}
+                  {meta && !item.outreach ? <small>{meta}</small> : null}
                   <div className="calendarTimelineActions">
-                    {item.related.href ? (
-                      <a href={item.related.href}>Open</a>
-                    ) : (
-                      <button type="button" onClick={() => window.alert("No linked CRM record for this item yet.")}>
-                        Open
+                    <div className="calendarTimelineActionsLeft">
+                      {item.related.href ? (
+                        <a href={item.related.href}>Open</a>
+                      ) : (
+                        <button type="button" onClick={() => window.alert("No linked CRM record for this item yet.")}>
+                          Open
+                        </button>
+                      )}
+                      <button type="button" disabled={item.status === "done"} onClick={() => onMarkSent(item)}>
+                        {item.status === "done" ? "Done" : item.outreach ? "Mark sent" : "Done"}
                       </button>
-                    )}
-                    <button type="button" onClick={() => window.alert("Calendar item completion is not implemented yet.")}>
-                      Done
-                    </button>
-                    <button type="button" onClick={() => window.alert("Calendar rescheduling is not implemented yet.")}>
-                      Move
-                    </button>
+                      <button type="button" onClick={() => window.alert("Calendar rescheduling is not implemented yet.")}>
+                        Move
+                      </button>
+                    </div>
+                    {item.outreach ? (
+                      <div className="calendarTimelineActionsRight">
+                        <button
+                          className={`calendarEmailSendButton ${draft.sendStatus === "sent" ? "sent" : ""}`}
+                          type="button"
+                          disabled={
+                            !canSendOutreachEmail ||
+                            draft.sendStatus === "sending" ||
+                            draft.sendStatus === "sent"
+                          }
+                          onClick={() => onSendEmail(item)}
+                        >
+                          <Send className="calendarEmailSendIcon" aria-hidden="true" size={14} strokeWidth={2.2} />
+                          <span>
+                            {draft.sendStatus === "sending" ? "Sending" : item.status === "done" || draft.sendStatus === "sent" ? "Sent" : "Send email"}
+                          </span>
+                        </button>
+                        <button
+                          className="calendarEmailGmailButton"
+                          type="button"
+                          disabled={!canSendOutreachEmail}
+                          onClick={() => onOpenGmail(item)}
+                        >
+                          <Mail aria-hidden="true" size={14} strokeWidth={2.1} />
+                          <span>Send Gmail</span>
+                        </button>
+                        {draft.sendStatus === "sent" ? <span className="calendarEmailCelebration">Success</span> : null}
+                      </div>
+                    ) : null}
                   </div>
                 </div>
               </article>
@@ -262,6 +493,10 @@ export function CrmCalendar({
   const [selectedDate, setSelectedDate] = useState(() => startOfDay(new Date()));
   const [items, setItems] = useState<CalendarFeedItem[]>([]);
   const [leadOptions, setLeadOptions] = useState<LeadOption[]>([]);
+  const [selectedOutreachCampaignId, setSelectedOutreachCampaignId] = useState("all");
+  const [styledEmailItems, setStyledEmailItems] = useState<Record<string, boolean>>({});
+  const [emailDrafts, setEmailDrafts] = useState<Record<string, EmailDraftEdit>>({});
+  const [refreshToken, setRefreshToken] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [failed, setFailed] = useState(false);
   const [createDraft, setCreateDraft] = useState({
@@ -280,11 +515,31 @@ export function CrmCalendar({
   }, [mode, range.from]);
   const itemsByDay = useMemo(() => {
     const grouped = new Map<string, CalendarFeedItem[]>();
-    for (const item of items) {
+    const visibleItems =
+      selectedOutreachCampaignId === "all"
+        ? items
+        : items.filter((item) => item.outreach?.campaignId === selectedOutreachCampaignId);
+    for (const item of visibleItems) {
       const key = dateKey(itemDate(item));
       grouped.set(key, [...(grouped.get(key) ?? []), item]);
     }
     return grouped;
+  }, [items, selectedOutreachCampaignId]);
+  const filteredItems = useMemo(
+    () =>
+      selectedOutreachCampaignId === "all"
+        ? items
+        : items.filter((item) => item.outreach?.campaignId === selectedOutreachCampaignId),
+    [items, selectedOutreachCampaignId]
+  );
+  const outreachCampaignOptions = useMemo(() => {
+    const byId = new Map<string, string>();
+    for (const item of items) {
+      if (item.outreach?.campaignId) {
+        byId.set(item.outreach.campaignId, item.outreach.campaignName);
+      }
+    }
+    return [...byId.entries()].map(([id, name]) => ({ id, name }));
   }, [items]);
   const headerLabel = useMemo(() => {
     if (mode === "day") {
@@ -339,7 +594,7 @@ export function CrmCalendar({
       })
       .finally(() => setIsLoading(false));
     return () => controller.abort();
-  }, [clientId, coldTargetId, endpoint, range.from, range.to, resolvedLeadId]);
+  }, [clientId, coldTargetId, endpoint, range.from, range.to, refreshToken, resolvedLeadId]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -386,8 +641,165 @@ export function CrmCalendar({
     setAnchorDate(next);
     setSelectedDate(next);
   };
-  const visibleItemCount = items.length;
+  const visibleItemCount = filteredItems.length;
   const selectedItems = itemsByDay.get(dateKey(selectedDate)) ?? [];
+
+  function toggleStyledEmail(item: CalendarFeedItem) {
+    setStyledEmailItems((current) => ({ ...current, [item.id]: !(current[item.id] ?? true) }));
+  }
+
+  function emailDraftForItem(item: CalendarFeedItem): EmailDraftEdit {
+    return (
+      emailDrafts[item.id] ?? {
+        subject: item.outreach?.subject ?? "",
+        body: item.outreach?.body ?? "",
+        saveStatus: "idle",
+        sendStatus: "idle",
+        message: null
+      }
+    );
+  }
+
+  function updateEmailDraft(item: CalendarFeedItem, patch: Partial<EmailDraftEdit>) {
+    setEmailDrafts((current) => ({
+      ...current,
+      [item.id]: {
+        saveStatus: "idle",
+        sendStatus: "idle",
+        message: null,
+        ...current[item.id],
+        subject: current[item.id]?.subject ?? item.outreach?.subject ?? "",
+        body: current[item.id]?.body ?? item.outreach?.body ?? "",
+        ...patch
+      }
+    }));
+  }
+
+  async function saveEmailDraft(item: CalendarFeedItem, patch?: Partial<EmailDraftEdit>): Promise<EmailDraftEdit | null> {
+    if (!item.outreach || item.related.entity !== "coldTarget" || !item.related.id) {
+      return null;
+    }
+    const draft = { ...emailDraftForItem(item), ...patch };
+    const originalSubject = item.outreach.subject ?? "";
+    const originalBody = item.outreach.body ?? "";
+    if (draft.subject === originalSubject && draft.body === originalBody && draft.saveStatus !== "error") {
+      return draft;
+    }
+    updateEmailDraft(item, { saveStatus: "saving", message: null });
+    try {
+      const response = await fetch("/api/crm/outreach-campaigns/draft/update", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          workspaceId: "default",
+          reminderId: item.id,
+          coldTargetId: item.related.id,
+          campaignId: item.outreach.campaignId,
+          subject: draft.subject,
+          body: draft.body
+        })
+      });
+      const payload = (await response.json()) as { error?: string };
+      if (!response.ok) {
+        throw new Error(payload.error ?? "Draft save failed");
+      }
+      setItems((current) =>
+        current.map((candidate) =>
+          candidate.id === item.id
+            ? {
+                ...candidate,
+                description: [
+                  item.outreach?.campaignName,
+                  item.outreach?.action,
+                  draft.subject ? `Subject: ${draft.subject}` : null,
+                  draft.body ? `Draft:\n${draft.body}` : null
+                ]
+                  .filter(Boolean)
+                  .join("\n\n"),
+                outreach: candidate.outreach ? { ...candidate.outreach, subject: draft.subject, body: draft.body } : candidate.outreach
+              }
+            : candidate
+        )
+      );
+      const saved = { ...draft, saveStatus: "saved" as const, message: "saved" };
+      updateEmailDraft(item, saved);
+      return saved;
+    } catch (error) {
+      updateEmailDraft(item, { saveStatus: "error", message: error instanceof Error ? error.message : "Draft save failed" });
+      return null;
+    }
+  }
+
+  async function sendEmailDraft(item: CalendarFeedItem) {
+    if (!item.outreach?.email || item.related.entity !== "coldTarget") {
+      updateEmailDraft(item, { sendStatus: "error", message: "No email address." });
+      return;
+    }
+    updateEmailDraft(item, { sendStatus: "sending", message: null });
+    const savedDraft = await saveEmailDraft(item);
+    const draft = savedDraft ?? emailDraftForItem(item);
+    try {
+      const response = await fetch("/api/crm/outreach-campaigns/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: item.outreach.email,
+          subject: draft.subject,
+          body: draft.body,
+          htmlBody: (styledEmailItems[item.id] ?? true) ? styledEmailBody(draft.body) : null,
+          returnTo: `${window.location.pathname}${window.location.search}`
+        })
+      });
+      const payload = (await response.json()) as { sent?: boolean; authRequired?: boolean; authUrl?: string; error?: string };
+      if (payload.authRequired && payload.authUrl) {
+        updateEmailDraft(item, { sendStatus: "auth", message: payload.error ?? "authorize Gmail, then press Send again" });
+        window.open(payload.authUrl, "_blank", "noopener,noreferrer");
+        return;
+      }
+      if (!response.ok || !payload.sent) {
+        throw new Error(payload.error ?? "Gmail send failed");
+      }
+      updateEmailDraft(item, { sendStatus: "sent", message: "sent" });
+      await markCalendarItemDone(item);
+    } catch (error) {
+      updateEmailDraft(item, { sendStatus: "error", message: error instanceof Error ? error.message : "Gmail send failed" });
+    }
+  }
+
+  function openGmailDraft(item: CalendarFeedItem) {
+    if (!item.outreach?.email) {
+      updateEmailDraft(item, { message: "No email address." });
+      return;
+    }
+    const draft = emailDraftForItem(item);
+    window.open(gmailComposeUrl(item.outreach.email, draft.subject, draft.body), "_blank", "noopener,noreferrer");
+  }
+
+  async function markCalendarItemDone(item: CalendarFeedItem) {
+    if (!item.outreach || item.related.entity !== "coldTarget" || !item.related.id) {
+      window.alert("Calendar item completion is not implemented yet.");
+      return;
+    }
+    try {
+      const response = await fetch("/api/crm/outreach-campaigns/advance", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          workspaceId: "default",
+          coldTargetId: item.related.id,
+          campaignId: item.outreach.campaignId,
+          action: "mark_sent"
+        })
+      });
+      const payload = (await response.json()) as { error?: string };
+      if (!response.ok) {
+        throw new Error(payload.error ?? "Could not mark touch sent");
+      }
+      setRefreshToken((value) => value + 1);
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : "Could not mark touch sent");
+    }
+  }
 
   async function createCalendarEvent(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -500,6 +912,53 @@ export function CrmCalendar({
       {createStatus === "error" ? <span>Could not save event.</span> : null}
     </form>
   );
+  const scheduledCountLabel = isLoading ? "Loading schedule" : `${visibleItemCount} scheduled item${visibleItemCount === 1 ? "" : "s"}`;
+  const monthControls = (
+    <div className="calendarMonthControls" aria-label="Month navigation">
+      <button type="button" onClick={() => move(-1)} aria-label="Previous month">
+        <ChevronLeft aria-hidden="true" size={14} strokeWidth={2} />
+      </button>
+      <select
+        aria-label="Month"
+        value={anchorDate.getMonth()}
+        onChange={(event) => setVisibleMonth(Number(event.target.value))}
+      >
+        {monthOptions.map((month) => (
+          <option key={month.value} value={month.value}>
+            {month.label}
+          </option>
+        ))}
+      </select>
+      <select
+        aria-label="Year"
+        value={anchorDate.getFullYear()}
+        onChange={(event) => setVisibleMonth(anchorDate.getMonth(), Number(event.target.value))}
+      >
+        {yearOptions.map((year) => (
+          <option key={year} value={year}>
+            {year}
+          </option>
+        ))}
+      </select>
+      <button type="button" onClick={() => move(1)} aria-label="Next month">
+        <ChevronRight aria-hidden="true" size={14} strokeWidth={2} />
+      </button>
+    </div>
+  );
+  const touchFilterControl =
+    outreachCampaignOptions.length > 0 ? (
+      <label className="calendarTouchFilter">
+        <span>Touch filter</span>
+        <select value={selectedOutreachCampaignId} onChange={(event) => setSelectedOutreachCampaignId(event.target.value)}>
+          <option value="all">All scheduled work</option>
+          {outreachCampaignOptions.map((campaign) => (
+            <option key={campaign.id} value={campaign.id}>
+              {campaign.name}
+            </option>
+          ))}
+        </select>
+      </label>
+    ) : null;
 
   return (
     <section className="calendarPage">
@@ -536,44 +995,15 @@ export function CrmCalendar({
           </div>
         </div>
       </header>
-      <div className="calendarSummary">
-        <div className="calendarSummaryTitle">
-          <strong>{headerLabel}</strong>
-          {mode === "month" ? (
-            <div className="calendarMonthControls" aria-label="Month navigation">
-              <button type="button" onClick={() => move(-1)} aria-label="Previous month">
-                <ChevronLeft aria-hidden="true" size={14} strokeWidth={2} />
-              </button>
-              <select
-                aria-label="Month"
-                value={anchorDate.getMonth()}
-                onChange={(event) => setVisibleMonth(Number(event.target.value))}
-              >
-                {monthOptions.map((month) => (
-                  <option key={month.value} value={month.value}>
-                    {month.label}
-                  </option>
-                ))}
-              </select>
-              <select
-                aria-label="Year"
-                value={anchorDate.getFullYear()}
-                onChange={(event) => setVisibleMonth(anchorDate.getMonth(), Number(event.target.value))}
-              >
-                {yearOptions.map((year) => (
-                  <option key={year} value={year}>
-                    {year}
-                  </option>
-                ))}
-              </select>
-              <button type="button" onClick={() => move(1)} aria-label="Next month">
-                <ChevronRight aria-hidden="true" size={14} strokeWidth={2} />
-              </button>
-            </div>
-          ) : null}
+      {mode === "month" ? null : (
+        <div className="calendarSummary">
+          <div className="calendarSummaryTitle">
+            <strong>{headerLabel}</strong>
+            {touchFilterControl}
+          </div>
+          <span>{scheduledCountLabel}</span>
         </div>
-        <span>{isLoading ? "Loading schedule" : `${visibleItemCount} scheduled item${visibleItemCount === 1 ? "" : "s"}`}</span>
-      </div>
+      )}
       {mode === "agenda" ? (
         <div className="calendarAgenda">
           {visibleDays.map((day) => {
@@ -589,7 +1019,7 @@ export function CrmCalendar({
                 </h2>
                 <div>
                   {dayItems.map((item) => (
-                    <CalendarChip item={item} key={`${item.kind}-${item.id}`} />
+                    <CalendarChip item={item} key={`${item.kind}-${item.id}`} activeCampaignId={selectedOutreachCampaignId} />
                   ))}
                 </div>
               </section>
@@ -620,7 +1050,7 @@ export function CrmCalendar({
                     </header>
                     <div className="calendarDayItems">
                       {dayItems.slice(0, 3).map((item) => (
-                        <CalendarChip item={item} key={`${item.kind}-${item.id}`} compact />
+                        <CalendarChip item={item} key={`${item.kind}-${item.id}`} compact activeCampaignId={selectedOutreachCampaignId} />
                       ))}
                       {dayItems.length > 3 ? <span className="calendarMore">+{dayItems.length - 3} more</span> : null}
                     </div>
@@ -630,7 +1060,25 @@ export function CrmCalendar({
             </div>
             {createEventForm}
           </div>
-          <CalendarInspector selectedDate={selectedDate} items={selectedItems} />
+          <CalendarInspector
+            selectedDate={selectedDate}
+            items={selectedItems}
+            styledEmailItems={styledEmailItems}
+            emailDrafts={emailDrafts}
+            onToggleStyledEmail={toggleStyledEmail}
+            onDraftChange={updateEmailDraft}
+            onSaveDraft={saveEmailDraft}
+            onSendEmail={sendEmailDraft}
+            onOpenGmail={openGmailDraft}
+            onMarkSent={markCalendarItemDone}
+            headerActions={
+              <>
+                <span className="calendarInspectorCount">{scheduledCountLabel}</span>
+                {monthControls}
+                {touchFilterControl}
+              </>
+            }
+          />
         </div>
       ) : (
         <div className={`calendarGrid calendarGrid${mode[0].toUpperCase()}${mode.slice(1)}`}>
@@ -647,7 +1095,7 @@ export function CrmCalendar({
                 </header>
                 <div className="calendarDayItems">
                   {dayItems.slice(0, 12).map((item) => (
-                    <CalendarChip item={item} key={`${item.kind}-${item.id}`} />
+                    <CalendarChip item={item} key={`${item.kind}-${item.id}`} activeCampaignId={selectedOutreachCampaignId} />
                   ))}
                 </div>
               </section>

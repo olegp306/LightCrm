@@ -496,6 +496,7 @@ export function createCrmService(repository: CrmRepository) {
     const record: ColdTarget = {
       id: existing?.id ?? input.id ?? createId("coldTarget"),
       workspaceId: input.workspaceId,
+      code: nullable(input.code ?? existing?.code),
       name: input.name,
       company: nullable(input.company ?? existing?.company),
       role: nullable(input.role ?? existing?.role),
@@ -505,6 +506,8 @@ export function createCrmService(repository: CrmRepository) {
       website: nullable(input.website ?? existing?.website),
       status: input.status ?? existing?.status ?? "new",
       source: nullable(input.source ?? existing?.source),
+      notesResearch: nullable(input.notesResearch ?? existing?.notesResearch),
+      archivedLetters: nullable(input.archivedLetters ?? existing?.archivedLetters),
       notes: nullable(input.notes ?? existing?.notes),
       createdAt: existing?.createdAt ?? timestamp,
       updatedAt: timestamp,

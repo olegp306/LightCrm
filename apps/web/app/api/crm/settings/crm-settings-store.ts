@@ -18,6 +18,33 @@ export type FeeTableSettings = {
   source: "parsed" | "fallback";
 };
 
+export type OutreachCampaignTouchpoint = {
+  id: string;
+  touchNumber: number;
+  dayOffset: number;
+  channel: "email" | "linkedin" | "phone";
+  title: string;
+  action: string;
+  templateId?: string;
+};
+
+export type OutreachCampaignTemplate = {
+  id: string;
+  subject: string;
+  body: string;
+};
+
+export type OutreachCampaignSettings = {
+  id: string;
+  name: string;
+  status: "active" | "draft" | "archived";
+  summary: string;
+  goal: string;
+  prompt: string;
+  touchpoints: OutreachCampaignTouchpoint[];
+  templates: OutreachCampaignTemplate[];
+};
+
 export type CrmRuntimeSettings = {
   commercialOffers: {
     activeTemplate: OfferTemplateSettings | null;
@@ -25,6 +52,9 @@ export type CrmRuntimeSettings = {
     vatRate: number;
     offerValidityDays: number;
     autoGenerateWhenReady: boolean;
+  };
+  outreachCampaigns: {
+    campaigns: OutreachCampaignSettings[];
   };
 };
 
@@ -84,8 +114,240 @@ const defaultCrmSettings: CrmRuntimeSettings = {
     vatRate: 0.19,
     offerValidityDays: 90,
     autoGenerateWhenReady: true
+  },
+  outreachCampaigns: {
+    campaigns: [
+      {
+        id: "c01-bautraeger-cold",
+        name: "C01 Bautraeger Cold Outreach",
+        status: "active",
+        goal:
+          "Warm up cold Bautraeger contacts over 6 weeks and move interested replies into Clients and Leads.",
+        summary:
+          "8 touches over 42 days: intro email, follow-up, LinkedIn connect, planning insight, short call, coffee invite, Honorartabelle email, breakup email.",
+        prompt: [
+          "Role: outreach execution agent for Reyzbikh Architekten.",
+          "Use the Cold Target record, especially Node Research, to prepare exactly the next planned touch.",
+          "The system follows approved templates. Do not rewrite the structure, CTA, subject logic, or sequence.",
+          "AI may only add a persona_hook: 1-2 factual, specific sentences based on Node Research. No praise, no generic flattery.",
+          "Tone: German business Sie, calm, precise, and architectural.",
+          "Stop the cadence if the target replies with interested, later, existing architect, remove me, or no response after all 8 touches.",
+          "Manual execution remains expected: operator reviews personalization, sends email manually, makes LinkedIn/phone actions, then marks touch sent."
+        ].join("\n"),
+        touchpoints: [
+          {
+            id: "touch-1-intro-email",
+            touchNumber: 1,
+            dayOffset: 0,
+            channel: "email",
+            title: "Email intro",
+            action: "Prepare intro email with persona_hook and ask for short meeting.",
+            templateId: "t1"
+          },
+          {
+            id: "touch-2-follow-up",
+            touchNumber: 2,
+            dayOffset: 3,
+            channel: "email",
+            title: "Email follow-up",
+            action: "Briefly follow up on the intro and repeat the low-friction meeting CTA.",
+            templateId: "t2"
+          },
+          {
+            id: "touch-3-linkedin-connect",
+            touchNumber: 3,
+            dayOffset: 7,
+            channel: "linkedin",
+            title: "LinkedIn connection",
+            action: "Send connection request without message."
+          },
+          {
+            id: "touch-4-planning-insight",
+            touchNumber: 4,
+            dayOffset: 12,
+            channel: "email",
+            title: "Planning insight",
+            action: "Send planning insight email with one factual hook from research.",
+            templateId: "t4"
+          },
+          {
+            id: "touch-5-phone",
+            touchNumber: 5,
+            dayOffset: 17,
+            channel: "phone",
+            title: "60 sec phone intro",
+            action: "Call using the short script and record the outcome."
+          },
+          {
+            id: "touch-6-coffee",
+            touchNumber: 6,
+            dayOffset: 24,
+            channel: "email",
+            title: "Coffee meeting",
+            action: "Invite to a short coffee meeting or project-fit call.",
+            templateId: "t6"
+          },
+          {
+            id: "touch-7-honorartabelle",
+            touchNumber: 7,
+            dayOffset: 31,
+            channel: "email",
+            title: "Honorartabelle",
+            action: "Send Honorartabelle angle and offer to clarify planning service scope.",
+            templateId: "t7"
+          },
+          {
+            id: "touch-8-breakup",
+            touchNumber: 8,
+            dayOffset: 42,
+            channel: "email",
+            title: "Breakup email",
+            action: "Close the loop politely and mark silent after no response.",
+            templateId: "t8"
+          }
+        ],
+        templates: [
+          {
+            id: "t1",
+            subject: "Architektenplanung fuer Ihre Projekte",
+            body:
+              "Guten Tag {{salutation}},\n\n{{persona_hook}}\n\nWir unterstuetzen Bautraeger als externer Planungspartner fuer LP 1-4, wenn intern gerade Kapazitaeten fehlen oder ein Projekt schnell sauber vorbereitet werden soll.\n\nWaere ein kurzer Austausch in den naechsten Tagen sinnvoll?"
+          },
+          {
+            id: "t2",
+            subject: "Kurze Nachfrage zur Architektenplanung",
+            body:
+              "Guten Tag {{salutation}},\n\nich wollte kurz nachfassen, ob externe Unterstuetzung in LP 1-4 fuer aktuelle oder kommende Projekte bei Ihnen grundsaetzlich interessant ist.\n\nFalls ja, schlage ich gern einen kurzen Termin vor."
+          },
+          {
+            id: "t4",
+            subject: "Planungskapazitaet fuer Bautraegerprojekte",
+            body:
+              "Guten Tag {{salutation}},\n\n{{persona_hook}}\n\nGerade bei fruehen Projektphasen kann eine externe LP 1-4-Unterstuetzung helfen, Varianten, Flaechen und Genehmigungsgrundlagen schneller belastbar zu machen.\n\nSollen wir kurz pruefen, ob das fuer Sie passt?"
+          },
+          {
+            id: "t6",
+            subject: "Kurzer Kaffee oder Projektabgleich?",
+            body:
+              "Guten Tag {{salutation}},\n\nfalls es aktuell kein konkretes Projekt gibt, waere vielleicht ein kurzer Kennenlerntermin sinnvoll. Dann ist klar, wo wir bei Bedarf als Planungspartner helfen koennen.\n\nPasst ein kurzer Kaffee oder Call?"
+          },
+          {
+            id: "t7",
+            subject: "Honorartabelle und Planungsumfang LP 1-4",
+            body:
+              "Guten Tag {{salutation}},\n\nwir arbeiten mit transparenten Leistungsphasen und koennen den Umfang fuer LP 1-4 projektbezogen schnell einordnen.\n\nWenn Sie moechten, schicken wir Ihnen einen kurzen Ansatz zur Orientierung."
+          },
+          {
+            id: "t8",
+            subject: "Soll ich das Thema schliessen?",
+            body:
+              "Guten Tag {{salutation}},\n\nich moechte Sie nicht weiter stoeren. Wenn externe Architektenplanung fuer Ihre Projekte aktuell kein Thema ist, schliesse ich den Vorgang gern.\n\nFalls es spaeter relevant wird, melden Sie sich jederzeit."
+          }
+        ]
+      },
+      {
+        id: "c02-dormant-lead-reactivation",
+        name: "C02 Dormant Lead Re-Activation",
+        status: "draft",
+        goal:
+          "Re-activate quiet warm contacts over two months and learn whether there is still a real project, a timing issue, or no current need.",
+        summary:
+          "5 touches over 60 days: soft check-in, concrete project question, value note, short call attempt, polite close-loop email.",
+        prompt: [
+          "Role: reactivation agent for quiet warm architecture contacts.",
+          "Use the Cold Target record and Node Research to reconnect without sounding like a mass campaign.",
+          "The goal is to clarify current project status, timing, and whether Reyzbikh Architekten should stay in touch.",
+          "AI may add one short persona_hook based on factual research or prior context. Keep it specific, calm, and useful.",
+          "Tone: German business Sie, respectful, concise, no pressure, no artificial urgency.",
+          "Do not invent active projects. If research is weak, ask a clean status question instead.",
+          "Stop the cadence when the target replies, asks to reconnect later, says there is no need, or after the final close-loop touch.",
+          "Manual execution remains expected: operator reviews each email, sends it manually, and marks the touch sent."
+        ].join("\n"),
+        touchpoints: [
+          {
+            id: "touch-1-soft-check-in",
+            touchNumber: 1,
+            dayOffset: 0,
+            channel: "email",
+            title: "Soft check-in",
+            action: "Ask whether the earlier topic or a similar planning need is still relevant.",
+            templateId: "t1"
+          },
+          {
+            id: "touch-2-project-status",
+            touchNumber: 2,
+            dayOffset: 10,
+            channel: "email",
+            title: "Project status question",
+            action: "Ask one concrete question about current project timing, scope, or decision status.",
+            templateId: "t2"
+          },
+          {
+            id: "touch-3-value-note",
+            touchNumber: 3,
+            dayOffset: 24,
+            channel: "email",
+            title: "Value note",
+            action: "Send a short planning-capacity angle and offer a low-friction review call.",
+            templateId: "t3"
+          },
+          {
+            id: "touch-4-short-call",
+            touchNumber: 4,
+            dayOffset: 42,
+            channel: "phone",
+            title: "Short call attempt",
+            action: "Try a short phone check-in and record whether the opportunity is alive, later, or closed."
+          },
+          {
+            id: "touch-5-close-loop",
+            touchNumber: 5,
+            dayOffset: 60,
+            channel: "email",
+            title: "Close loop",
+            action: "Close the loop politely and offer to reconnect when planning support becomes relevant.",
+            templateId: "t5"
+          }
+        ],
+        templates: [
+          {
+            id: "t1",
+            subject: "Kurzer Abgleich zur Architektenplanung",
+            body:
+              "Guten Tag {{salutation}},\n\n{{persona_hook}}\n\nIch wollte kurz nachfragen, ob das Thema Architektenplanung bei Ihnen aktuell noch relevant ist oder ob es sich zeitlich verschoben hat.\n\nWenn es passt, koennen wir das in einem kurzen Austausch einordnen."
+          },
+          {
+            id: "t2",
+            subject: "Ist das Projekt noch aktuell?",
+            body:
+              "Guten Tag {{salutation}},\n\nich hake kurz nach: Gibt es bei Ihnen aktuell ein konkretes Projekt, bei dem externe Unterstuetzung in fruehen Planungsphasen sinnvoll sein koennte?\n\nEine kurze Rueckmeldung reicht vollkommen."
+          },
+          {
+            id: "t3",
+            subject: "Planungskapazitaet bei Bedarf",
+            body:
+              "Guten Tag {{salutation}},\n\n{{persona_hook}}\n\nWenn intern gerade Kapazitaeten fehlen, koennen wir bei Varianten, Flaechen, Genehmigungsgrundlagen und LP 1-4 strukturiert unterstuetzen.\n\nSoll ich Ihnen dazu einen kurzen Vorschlag fuer einen Abgleich schicken?"
+          },
+          {
+            id: "t5",
+            subject: "Soll ich das Thema vorerst schliessen?",
+            body:
+              "Guten Tag {{salutation}},\n\nich moechte das Thema nicht kuenstlich offenhalten. Wenn aktuell kein Bedarf besteht, schliesse ich den Vorgang gern und melde mich nicht weiter dazu.\n\nWenn es spaeter wieder relevant wird, bin ich jederzeit erreichbar."
+          }
+        ]
+      }
+    ]
   }
 };
+
+function campaignsWithDefaultExamples(campaigns: OutreachCampaignSettings[] | undefined): OutreachCampaignSettings[] {
+  const current = campaigns && campaigns.length > 0 ? campaigns : [];
+  const currentIds = new Set(current.map((campaign) => campaign.id));
+  return [
+    ...current,
+    ...defaultCrmSettings.outreachCampaigns.campaigns.filter((campaign) => !currentIds.has(campaign.id))
+  ];
+}
 
 const globalForSettings = globalThis as unknown as {
   lightCrmRuntimeSettings?: CrmRuntimeSettings;
@@ -103,7 +365,15 @@ async function writeCrmSettings(settings: CrmRuntimeSettings) {
 
 export async function getCrmRuntimeSettings(): Promise<CrmRuntimeSettings> {
   if (globalForSettings.lightCrmRuntimeSettings) {
-    return globalForSettings.lightCrmRuntimeSettings;
+    const settings = {
+      ...globalForSettings.lightCrmRuntimeSettings,
+      outreachCampaigns: {
+        ...globalForSettings.lightCrmRuntimeSettings.outreachCampaigns,
+        campaigns: campaignsWithDefaultExamples(globalForSettings.lightCrmRuntimeSettings.outreachCampaigns.campaigns)
+      }
+    };
+    globalForSettings.lightCrmRuntimeSettings = settings;
+    return settings;
   }
   try {
     const raw = await readFile(settingsPath, "utf8");
@@ -114,6 +384,11 @@ export async function getCrmRuntimeSettings(): Promise<CrmRuntimeSettings> {
       commercialOffers: {
         ...defaultCrmSettings.commercialOffers,
         ...(stored.commercialOffers ?? {})
+      },
+      outreachCampaigns: {
+        ...defaultCrmSettings.outreachCampaigns,
+        ...(stored.outreachCampaigns ?? {}),
+        campaigns: campaignsWithDefaultExamples(stored.outreachCampaigns?.campaigns)
       }
     };
     globalForSettings.lightCrmRuntimeSettings = settings;

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getCrm, handleRouteError, optionalText, parseJson, resolveWorkspaceId } from "../../_shared";
-import { notesWithTabularPatch } from "../note-fields";
+import { leadNoteFields, notesWithTabularPatch, readJsonNoteField, replaceJsonNoteField } from "../note-fields";
 
 const LeadPatch = z
   .object({
@@ -29,6 +29,7 @@ const LeadPatch = z
     sourceChannel: optionalText,
     clientProjects: optionalText,
     budgetEur: optionalText,
+    offerFields: z.record(optionalText).optional(),
     rawInput: optionalText
   })
   .strict();
@@ -121,7 +122,14 @@ export async function POST(request: Request) {
       });
       nextClientId = createdClient.id;
     }
-    const nextNotes = notesWithTabularPatch(existing.notes, input.patch);
+    let nextNotes = notesWithTabularPatch(existing.notes, input.patch);
+    if (input.patch.offerFields) {
+      const currentOfferFields = readJsonNoteField<Record<string, string>>(nextNotes ?? existing.notes, leadNoteFields.offerFields) ?? {};
+      nextNotes = replaceJsonNoteField(nextNotes, leadNoteFields.offerFields, {
+        ...currentOfferFields,
+        ...input.patch.offerFields
+      });
+    }
     const lead = await crm.upsertLeadWithClientResolution({
       ...existing,
       ...leadPatch,

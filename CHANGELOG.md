@@ -2,6 +2,25 @@
 
 All notable LightCrm releases are documented here. Starting with `0.2.0`, every version bump must include a changelog entry.
 
+## 0.3.40 - 2026-06-17
+
+### Added
+
+- Added outreach campaign settings, metaprompt-to-campaign generation, draft generation, campaign start/advance flows, and campaign calendar feed enrichment for Call Target outreach work.
+- Added Gmail OAuth send endpoints and a Today calendar fallback `Send Gmail` compose action for outreach emails.
+- Added richer Call Target table/details support, including outreach campaign details, campaign calendar column data, and Node Research / letter tracking fields.
+
+### Changed
+
+- Refined Today calendar campaign cards with a compact collapsible email editor, smaller field labels, right-aligned campaign actions, paper-plane send animation, and hidden duplicate campaign metadata.
+- Improved outreach metaprompt parsing so large prompts can normalize common LLM response shapes and return field-specific validation errors instead of repeated generic `Required` messages.
+- Improved lead and commercial-offer detail editing, offer missing-field handling, and linked client display/editing across table and details views.
+
+### Verification
+
+- `pnpm --filter @lightcrm/web typecheck`
+- `pnpm --filter @lightcrm/ui typecheck`
+
 ## 0.3.39 - 2026-06-16
 
 ### Added

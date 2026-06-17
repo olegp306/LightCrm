@@ -8,20 +8,21 @@ datasource db {
 }
 
 model Workspace {
-  id               String            @id @default(cuid())
-  name             String
-  createdAt        DateTime          @default(now())
-  updatedAt        DateTime          @updatedAt
-  clients          Client[]
-  leads            Lead[]
-  coldTargets      ColdTarget[]
-  outreachTouches  OutreachTouch[]
-  reminders        Reminder[]
-  calendarEvents   CalendarEvent[]
-  documentFiles     DocumentFile[]
-  leadSummaries     LeadSummary[]
-  tablePreferences TablePreference[]
-  auditLogs        AuditLog[]
+  id                          String                       @id @default(cuid())
+  name                        String
+  createdAt                   DateTime                     @default(now())
+  updatedAt                   DateTime                     @updatedAt
+  clients                     Client[]
+  leads                       Lead[]
+  coldTargets                 ColdTarget[]
+  outreachCampaignAssignments OutreachCampaignAssignment[]
+  outreachTouches             OutreachTouch[]
+  reminders                   Reminder[]
+  calendarEvents              CalendarEvent[]
+  documentFiles               DocumentFile[]
+  leadSummaries               LeadSummary[]
+  tablePreferences            TablePreference[]
+  auditLogs                   AuditLog[]
 }
 
 model Client {
@@ -48,9 +49,9 @@ model Client {
   updatedAt         DateTime        @updatedAt
   archivedAt        DateTime?
 
+  @@unique([workspaceId, code])
   @@index([workspaceId, archivedAt])
   @@index([workspaceId, email])
-  @@unique([workspaceId, code])
 }
 
 model Lead {
@@ -79,9 +80,9 @@ model Lead {
   updatedAt         DateTime        @updatedAt
   archivedAt        DateTime?
 
+  @@unique([workspaceId, code])
   @@index([workspaceId, archivedAt])
   @@index([workspaceId, clientId])
-  @@unique([workspaceId, code])
 }
 
 model LeadSummary {
@@ -102,27 +103,58 @@ model LeadSummary {
 }
 
 model ColdTarget {
-  id               String          @id @default(cuid())
-  workspaceId      String
-  workspace        Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  outreachTouches  OutreachTouch[]
-  reminders        Reminder[]
-  calendarEvents   CalendarEvent[]
-  name             String
-  company          String?
-  role             String?
-  email            String?
-  phone            String?
-  linkedinUrl      String?
-  website          String?
-  status           String          @default("new")
-  source           String?
-  notes            String?
-  createdAt        DateTime        @default(now())
-  updatedAt        DateTime        @updatedAt
-  archivedAt       DateTime?
+  id                          String                       @id @default(cuid())
+  workspaceId                 String
+  workspace                   Workspace                    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  outreachCampaignAssignments OutreachCampaignAssignment[]
+  outreachTouches             OutreachTouch[]
+  reminders                   Reminder[]
+  calendarEvents              CalendarEvent[]
+  code                        String?
+  name                        String
+  company                     String?
+  role                        String?
+  email                       String?
+  phone                       String?
+  linkedinUrl                 String?
+  website                     String?
+  status                      String                       @default("new")
+  source                      String?
+  notesResearch               String?
+  archivedLetters             String?
+  notes                       String?
+  createdAt                   DateTime                     @default(now())
+  updatedAt                   DateTime                     @updatedAt
+  archivedAt                  DateTime?
 
+  @@unique([workspaceId, code])
   @@index([workspaceId, archivedAt])
+}
+
+model OutreachCampaignAssignment {
+  id                String     @id @default(cuid())
+  workspaceId       String
+  workspace         Workspace  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  coldTargetId      String
+  coldTarget        ColdTarget @relation(fields: [coldTargetId], references: [id], onDelete: Cascade)
+  campaignId        String
+  campaignName      String
+  status            String     @default("active")
+  currentTouchIndex Int        @default(0)
+  nextTouchAt       DateTime?
+  nextActionTitle   String?
+  draftSubject      String?
+  draftBody         String?
+  outcome           String?
+  startedAt         DateTime   @default(now())
+  stoppedAt         DateTime?
+  createdAt         DateTime   @default(now())
+  updatedAt         DateTime   @updatedAt
+  archivedAt        DateTime?
+
+  @@unique([workspaceId, coldTargetId, campaignId])
+  @@index([workspaceId, status, nextTouchAt])
+  @@index([coldTargetId])
 }
 
 model OutreachTouch {
@@ -150,24 +182,24 @@ model OutreachTouch {
 }
 
 model Reminder {
-  id            String      @id @default(cuid())
-  workspaceId   String
-  workspace     Workspace   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  clientId      String?
-  client        Client?     @relation(fields: [clientId], references: [id], onDelete: SetNull)
-  leadId        String?
-  lead          Lead?       @relation(fields: [leadId], references: [id], onDelete: SetNull)
-  coldTargetId  String?
-  coldTarget    ColdTarget? @relation(fields: [coldTargetId], references: [id], onDelete: SetNull)
+  id             String          @id @default(cuid())
+  workspaceId    String
+  workspace      Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  clientId       String?
+  client         Client?         @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  leadId         String?
+  lead           Lead?           @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  coldTargetId   String?
+  coldTarget     ColdTarget?     @relation(fields: [coldTargetId], references: [id], onDelete: SetNull)
   calendarEvents CalendarEvent[]
-  title         String
-  description   String?
-  dueAt         DateTime
-  status        String      @default("open")
-  sourceChannel String?
-  createdAt     DateTime    @default(now())
-  updatedAt     DateTime    @updatedAt
-  archivedAt    DateTime?
+  title          String
+  description    String?
+  dueAt          DateTime
+  status         String          @default("open")
+  sourceChannel  String?
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  archivedAt     DateTime?
 
   @@index([workspaceId, dueAt])
   @@index([workspaceId, status])
@@ -223,10 +255,10 @@ model DocumentFile {
   updatedAt       DateTime  @updatedAt
   archivedAt      DateTime?
 
+  @@unique([workspaceId, storageProvider, storageBucket, storageKey])
   @@index([workspaceId, archivedAt])
   @@index([workspaceId, leadId])
   @@index([workspaceId, clientId])
-  @@unique([workspaceId, storageProvider, storageBucket, storageKey])
 }
 
 model TablePreference {

@@ -15,7 +15,8 @@ const noteFields = {
   area: "Area",
   description: "Description",
   address: "Address",
-  budgetEur: "Budget EUR"
+  budgetEur: "Budget EUR",
+  offerFields: "Offer fields"
 } as const;
 
 export type CommercialOfferGenerationResult = {
@@ -64,6 +65,26 @@ function readNumber(value: string | null): number | null {
         : raw.replace(",", ".");
   const numeric = Number(normalized);
   return Number.isFinite(numeric) ? numeric : null;
+}
+
+function readOfferFields(notes: string | null): Record<string, string> {
+  const raw = readNoteField(notes, noteFields.offerFields);
+  if (!raw) {
+    return {};
+  }
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      return {};
+    }
+    return Object.fromEntries(
+      Object.entries(parsed)
+        .map(([key, value]) => [key, typeof value === "string" ? value.trim() : ""] as const)
+        .filter(([, value]) => value)
+    );
+  } catch {
+    return {};
+  }
 }
 
 function formatCurrency(value: number | null): string | null {
@@ -206,16 +227,18 @@ export async function generateCommercialOfferForLead(input: {
   const offerVersion = nextCommercialOfferVersion(existingDocuments, lead.id);
   const validUntil = new Date(now);
   validUntil.setDate(validUntil.getDate() + settings.commercialOffers.offerValidityDays);
+  const offerFields = readOfferFields(lead.notes);
   const values = {
+    ...offerFields,
     date: formatDate(now),
-    client_name: client?.name ?? null,
-    client_address_line_1: null,
-    client_address_line_2: null,
-    project_name: project,
-    project_address: address,
+    client_name: client?.name ?? offerFields.client_name ?? null,
+    client_address_line_1: offerFields.client_address_line_1 ?? null,
+    client_address_line_2: offerFields.client_address_line_2 ?? null,
+    project_name: project ?? offerFields.project_name ?? null,
+    project_address: address ?? offerFields.project_address ?? null,
     bgf: readiness.values.bgf,
     wohnflaeche: readiness.values.wohnflaeche,
-    project_type: projectTypeFromLead(project, description) ?? null,
+    project_type: offerFields.project_type ?? projectTypeFromLead(project, description) ?? null,
     lp1_3_net: formatCurrency(readiness.values.lp1_3Net),
     lp4_net: formatCurrency(readiness.values.lp4Net),
     total_net: formatCurrency(readiness.values.totalNet),

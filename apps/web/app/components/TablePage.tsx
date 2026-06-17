@@ -3,6 +3,7 @@
 import type { CrmTableProps, CrmTableRow } from "@lightcrm/ui";
 import { recordsToRows, type ApiRecord } from "@lightcrm/ui";
 import dynamic from "next/dynamic";
+import { useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
 const CrmTable = dynamic(() => import("@lightcrm/ui").then((module) => module.CrmTable), {
@@ -14,6 +15,27 @@ type LiveTablePageProps = CrmTableProps & {
   endpoint: string;
   calendarFeedEndpoint?: string;
   offerGenerateEndpoint?: string;
+  outreachStartEndpoint?: string;
+  outreachAdvanceEndpoint?: string;
+  outreachDraftEndpoint?: string;
+};
+
+type CrmSettingsResponse = {
+  settings?: {
+    commercialOffers?: {
+      activeTemplate?: {
+        placeholders?: string[];
+      } | null;
+    };
+    outreachCampaigns?: {
+      campaigns?: CrmTableProps["outreachCampaigns"];
+    };
+  };
+  commercialOffers?: {
+    activeTemplate?: {
+      placeholders?: string[];
+    } | null;
+  };
 };
 
 type CalendarFeedItem = {
@@ -30,31 +52,45 @@ type CalendarFeedItem = {
   };
 };
 
-function rowsWithCalendarItems(rows: CrmTableRow[], feed: CalendarFeedItem[]): CrmTableRow[] {
-  const byLeadId = new Map<string, CalendarFeedItem[]>();
+function rowsWithCalendarItems(
+  rows: CrmTableRow[],
+  feed: CalendarFeedItem[],
+  relatedEntity: CalendarFeedItem["related"]["entity"]
+): CrmTableRow[] {
+  const byRelatedId = new Map<string, CalendarFeedItem[]>();
   for (const item of feed) {
-    if (item.related.entity !== "lead" || !item.related.id) {
+    if (item.related.entity !== relatedEntity || !item.related.id) {
       continue;
     }
-    byLeadId.set(item.related.id, [...(byLeadId.get(item.related.id) ?? []), item]);
+    byRelatedId.set(item.related.id, [...(byRelatedId.get(item.related.id) ?? []), item]);
   }
   return rows.map((row) => ({
     ...row,
     values: {
       ...row.values,
-      calendar: byLeadId.get(row.id) ?? []
+      calendar: byRelatedId.get(row.id) ?? []
     }
   }));
 }
 
+function calendarRelatedEntity(archiveEntity: CrmTableProps["archiveEntity"]): CalendarFeedItem["related"]["entity"] {
+  if (archiveEntity === "lead" || archiveEntity === "client" || archiveEntity === "coldTarget") {
+    return archiveEntity;
+  }
+  return "lead";
+}
+
 export function TablePage({ endpoint, rows: _sampleRows, columns, calendarFeedEndpoint, ...props }: LiveTablePageProps) {
   const [liveRows, setLiveRows] = useState<CrmTableRow[] | null>(null);
+  const [offerTemplateFields, setOfferTemplateFields] = useState<string[]>([]);
+  const [outreachCampaigns, setOutreachCampaigns] = useState<CrmTableProps["outreachCampaigns"]>([]);
   const [failed, setFailed] = useState(false);
   const [initialFocusRef, setInitialFocusRef] = useState<string | null>(null);
+  const searchParams = useSearchParams();
 
   useEffect(() => {
-    setInitialFocusRef(new URLSearchParams(window.location.search).get("leadId"));
-  }, []);
+    setInitialFocusRef(searchParams.get("record") ?? searchParams.get("leadId"));
+  }, [searchParams]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -65,7 +101,23 @@ export function TablePage({ endpoint, rows: _sampleRows, columns, calendarFeedEn
         throw new Error(`Failed to load ${endpoint}`);
       }
       const records = (await response.json()) as ApiRecord[];
-      const nextRows = recordsToRows(records, columns);
+      const nextRows = recordsToRows(records, columns).map((row, index) => {
+        const offerFields = records[index]?.offerFields;
+        if (!offerFields || typeof offerFields !== "object" || Array.isArray(offerFields)) {
+          return row;
+        }
+        return {
+          ...row,
+          values: {
+            ...row.values,
+            ...Object.fromEntries(
+              Object.entries(offerFields)
+                .filter(([, value]) => typeof value === "string" || typeof value === "number")
+                .map(([key, value]) => [`offerFields.${key}`, String(value)])
+            )
+          }
+        };
+      });
       if (!calendarFeedEndpoint) {
         return nextRows;
       }
@@ -74,7 +126,7 @@ export function TablePage({ endpoint, rows: _sampleRows, columns, calendarFeedEn
         throw new Error(`Failed to load ${calendarFeedEndpoint}`);
       }
       const feed = (await calendarResponse.json()) as CalendarFeedItem[];
-      return rowsWithCalendarItems(nextRows, feed);
+      return rowsWithCalendarItems(nextRows, feed, calendarRelatedEntity(props.archiveEntity));
     };
     loadRows()
       .then((nextRows) => setLiveRows(nextRows))
@@ -88,6 +140,35 @@ export function TablePage({ endpoint, rows: _sampleRows, columns, calendarFeedEn
 
     return () => controller.abort();
   }, [calendarFeedEndpoint, columns, endpoint]);
+
+  useEffect(() => {
+    if (!props.offerGenerateEndpoint && !props.outreachStartEndpoint) {
+      setOfferTemplateFields([]);
+      setOutreachCampaigns([]);
+      return;
+    }
+    const controller = new AbortController();
+    fetch("/api/crm/settings", { signal: controller.signal })
+      .then(async (response) => {
+        if (!response.ok) {
+          return [];
+        }
+        const settings = (await response.json()) as CrmSettingsResponse;
+        setOutreachCampaigns(settings.settings?.outreachCampaigns?.campaigns ?? []);
+        return settings.settings?.commercialOffers?.activeTemplate?.placeholders ?? settings.commercialOffers?.activeTemplate?.placeholders ?? [];
+      })
+      .then((placeholders) => {
+        setOfferTemplateFields(placeholders);
+      })
+      .catch((error: unknown) => {
+        if (error instanceof DOMException && error.name === "AbortError") {
+          return;
+        }
+        setOfferTemplateFields([]);
+        setOutreachCampaigns([]);
+      });
+    return () => controller.abort();
+  }, [props.offerGenerateEndpoint, props.outreachStartEndpoint]);
 
   const activeRows = liveRows ?? [];
   const initialFocusRowId = useMemo(() => {
@@ -114,6 +195,8 @@ export function TablePage({ endpoint, rows: _sampleRows, columns, calendarFeedEn
       columns={columns}
       rows={activeRows}
       initialFocusRowId={initialFocusRowId}
+      offerTemplateFields={offerTemplateFields}
+      outreachCampaigns={outreachCampaigns}
     />
   );
 }

@@ -105,12 +105,46 @@ export type ClientOption = {
   whatsapp?: string | null;
 };
 
+export type OutreachCampaignTouchpoint = {
+  id: string;
+  touchNumber: number;
+  dayOffset: number;
+  channel: "email" | "linkedin" | "phone";
+  title: string;
+  action: string;
+  templateId?: string;
+};
+
+export type OutreachCampaign = {
+  id: string;
+  name: string;
+  status: "active" | "draft" | "archived";
+  summary: string;
+  goal: string;
+  prompt: string;
+  touchpoints: OutreachCampaignTouchpoint[];
+};
+
 function visibleClientReference(client: ClientOption): string | null {
   const code = client.code?.trim();
   if (code && !/^csv-client-/i.test(code)) {
     return code;
   }
   return /^C-\d{4}-\d+/i.test(client.id) ? client.id : null;
+}
+
+function clientPickerLabel(client: ClientOption | null, fallbackName?: string | null): string {
+  if (!client) {
+    return fallbackName?.trim() ? fallbackName.trim() : "No client selected";
+  }
+  return [
+    visibleClientReference(client),
+    client.name?.trim() || "Unnamed client",
+    client.phone?.trim(),
+    client.email?.trim()
+  ]
+    .filter(Boolean)
+    .join(" В· ");
 }
 
 export type ArchiveRecordEntity = "client" | "lead" | "coldTarget" | "reminder" | "calendarEvent" | "documentFile" | "leadSummary";
@@ -127,6 +161,11 @@ export type CrmTableProps = {
   updateRecordEndpoint?: string;
   updateRecordIdField?: string;
   offerGenerateEndpoint?: string;
+  offerTemplateFields?: string[];
+  outreachCampaigns?: OutreachCampaign[];
+  outreachStartEndpoint?: string;
+  outreachAdvanceEndpoint?: string;
+  outreachDraftEndpoint?: string;
   sendToTelegramEndpoint?: string;
   clientOptionsEndpoint?: string;
   archiveEntity?: ArchiveRecordEntity;
@@ -211,9 +250,24 @@ type MobileEditTarget = {
 type DetailsPanelState = {
   rowId: string;
   values: Record<string, string>;
-  clientQuery: string;
+  clientPickerOpen: boolean;
   selectedClientId: string | null;
   saving: boolean;
+};
+
+type OutreachDraftState = {
+  subject: string;
+  body: string;
+  channel: OutreachCampaignTouchpoint["channel"];
+  dueAt: string | null;
+  status: string | null;
+  action: string;
+  email: string | null;
+  loading: boolean;
+  error: string | null;
+  personaHook?: string;
+  promptApplied?: boolean;
+  recreated?: boolean;
 };
 
 type DetailsButtonPosition = {
@@ -248,10 +302,10 @@ function defaultPreferences(columns: CrmTableColumn[]): TablePreferences {
 }
 
 const handoffBallLabels: Record<HandoffBallType, { label: string; icon: string }> = {
-  football: { label: "Football", icon: "⚽" },
-  basketball: { label: "Basketball", icon: "🏀" },
-  volleyball: { label: "Volleyball", icon: "🏐" },
-  potato: { label: "Hot potato", icon: "🥔" }
+  football: { label: "Football", icon: "вљЅ" },
+  basketball: { label: "Basketball", icon: "рџЏЂ" },
+  volleyball: { label: "Volleyball", icon: "рџЏђ" },
+  potato: { label: "Hot potato", icon: "рџҐ”" }
 };
 
 const handoffSoundPresets: Record<HandoffBallType, HandoffSoundPreset> = {
@@ -259,6 +313,13 @@ const handoffSoundPresets: Record<HandoffBallType, HandoffSoundPreset> = {
   basketball: { label: "Net", src: "/sounds/handoff/basketball-net.mp3" },
   volleyball: { label: "Catch", src: "/sounds/handoff/volleyball-catch.mp3" },
   potato: { label: "Pop click", src: "/sounds/handoff/potato-pop-click.mp3" }
+};
+
+const handoffBallIcons: Record<HandoffBallType, string> = {
+  football: "\u26BD",
+  basketball: "\u{1F3C0}",
+  volleyball: "\u{1F3D0}",
+  potato: "\u{1F954}"
 };
 
 function normalizedHandoffSide(value: CrmTableCellValue | undefined): "us" | "client" {
@@ -659,6 +720,28 @@ function calendarCellDisplayData(items: CalendarCellValue): string {
   return items.map((item) => `${calendarDateLabel(item.startsAt)} ${calendarTimeLabel(item.startsAt)} ${item.title}`).join(", ");
 }
 
+function outreachDraftKey(rowId: string, campaignId: string, touchId: string): string {
+  return `${rowId}:${campaignId}:${touchId}`;
+}
+
+function gmailComposeUrl(email: string, subject: string, body: string): string {
+  const params = new URLSearchParams({
+    view: "cm",
+    fs: "1",
+    to: email,
+    su: subject,
+    body
+  });
+  return `https://mail.google.com/mail/?${params.toString()}`;
+}
+
+function emailBodyParagraphs(body: string): string[] {
+  return body
+    .split(/\n{2,}/)
+    .map((paragraph) => paragraph.trim())
+    .filter(Boolean);
+}
+
 function actionTone(value: CrmTableCellValue | undefined): { fill: string; stroke: string; dot: string; text: string } {
   const state = textCellValue(value)?.toLocaleLowerCase() ?? "";
   if (state === "crm") {
@@ -1008,6 +1091,45 @@ const offerMissingFieldInputs: Record<string, OfferMissingFieldInput> = {
   }
 };
 
+const computedOfferTemplateFields = new Set([
+  "date",
+  "bgf",
+  "wohnflaeche",
+  "wohnflaecheLabel",
+  "lp1_3_net",
+  "lp4_net",
+  "total_net",
+  "mwst",
+  "total_gross",
+  "ms1_net",
+  "ms2_net",
+  "ms3_net",
+  "pricing_mode",
+  "offer_valid_until"
+]);
+
+function normalizeOfferTemplateField(value: string): string {
+  return value.replace(/^\{\{\s*/, "").replace(/\s*\}\}$/, "").trim();
+}
+
+function offerTemplateInputForField(field: string): OfferMissingFieldInput | null {
+  const key = normalizeOfferTemplateField(field);
+  if (!key || computedOfferTemplateFields.has(key)) {
+    return null;
+  }
+  const known = offerMissingFieldInputs[key];
+  if (known) {
+    return known;
+  }
+  return {
+    key,
+    label: humanOfferFieldName(key),
+    columnId: `offerFields.${key}`,
+    category: "document",
+    placeholder: humanOfferFieldName(key)
+  };
+}
+
 function offerMissingInputForField(field: string): OfferMissingFieldInput {
   return (
     offerMissingFieldInputs[field] ?? {
@@ -1018,6 +1140,22 @@ function offerMissingInputForField(field: string): OfferMissingFieldInput {
       placeholder: humanOfferFieldName(field)
     }
   );
+}
+
+function formatOfferAreaInputValue(value: string): string {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return "";
+  }
+  const numeric = trimmed
+    .replace(/\s*m(?:2|ВІ)?\s*$/i, "")
+    .replace(/[.\s']/g, "")
+    .replace(",", ".");
+  const parsed = Number(numeric);
+  if (!Number.isFinite(parsed)) {
+    return trimmed;
+  }
+  return formatAreaValue(parsed);
 }
 
 function humanOfferFieldName(value: string): string {
@@ -1076,7 +1214,7 @@ function isDetailsEditableColumn(column: CrmTableColumn): boolean {
   return (
     column.valueKind !== "documents" &&
     column.valueKind !== "calendar" &&
-    !["code", "summaryShort", "summaryLong", "summaryUpdatedAt", "offerMissingFields"].includes(column.id)
+    !["code", "summaryShort", "summaryLong", "summaryUpdatedAt", "offerMissingFields", "campaignName", "campaignTouch", "campaignStatus", "nextAction"].includes(column.id)
   );
 }
 
@@ -1351,7 +1489,7 @@ const handoffCellRenderer: CustomRenderer<HandoffCustomCell> = {
     const from = cell.data.from;
     const to = cell.data.to;
     const displaySide = progress !== null && to ? to : side;
-    const icon = handoffBallLabels[cell.data.ballType].icon;
+    const icon = handoffBallIcons[cell.data.ballType];
     const leftX = rect.x + 22;
     const rightX = rect.x + rect.width - 22;
     const centerY = rect.y + rect.height / 2;
@@ -1408,7 +1546,7 @@ const handoffCellRenderer: CustomRenderer<HandoffCustomCell> = {
       ctx.font = "700 12px Inter, sans-serif";
       ctx.textAlign = "left";
       ctx.textBaseline = "middle";
-      ctx.fillText("✦", rect.x + 5, centerY - 1);
+      ctx.fillText("вњ¦", rect.x + 5, centerY - 1);
     }
 
     if (insightHover) {
@@ -1445,6 +1583,11 @@ export function CrmTable({
   updateRecordEndpoint,
   updateRecordIdField = "leadId",
   offerGenerateEndpoint,
+  offerTemplateFields = [],
+  outreachCampaigns = [],
+  outreachStartEndpoint,
+  outreachAdvanceEndpoint,
+  outreachDraftEndpoint,
   sendToTelegramEndpoint,
   clientOptionsEndpoint,
   archiveEntity,
@@ -1496,6 +1639,13 @@ export function CrmTable({
   const [uploadPulse, setUploadPulse] = useState(0);
   const [isUploading, setIsUploading] = useState(false);
   const [isGeneratingOffer, setIsGeneratingOffer] = useState(false);
+  const [selectedOutreachCampaignId, setSelectedOutreachCampaignId] = useState<string>("");
+  const [startingOutreachCampaign, setStartingOutreachCampaign] = useState(false);
+  const [advancingOutreachCampaign, setAdvancingOutreachCampaign] = useState(false);
+  const [outreachDrafts, setOutreachDrafts] = useState<Record<string, OutreachDraftState>>({});
+  const [styledOutreachDrafts, setStyledOutreachDrafts] = useState<Record<string, boolean>>({});
+  const [selectedOutreachOutcome, setSelectedOutreachOutcome] = useState("interested");
+  const [outreachCampaignError, setOutreachCampaignError] = useState<string | null>(null);
   const [isSendingToTelegram, setIsSendingToTelegram] = useState(false);
   const [telegramSendNotice, setTelegramSendNotice] = useState<string | null>(null);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
@@ -1523,6 +1673,7 @@ export function CrmTable({
     Record<string, { from: "us" | "client"; to: "us" | "client"; progress: number }>
   >({});
   const lastHandoffClickRef = useRef<{ key: string; at: number } | null>(null);
+  const initialDetailsOpenedRef = useRef<string | null>(null);
   const updateRecordIdPayload = useCallback(
     (rowId: string) => ({ [updateRecordIdField]: rowId }),
     [updateRecordIdField]
@@ -1549,6 +1700,7 @@ export function CrmTable({
     () => columns.some((column) => column.id === "projectName") && columns.some((column) => column.id === "code"),
     [columns]
   );
+  const isColdTargetTable = archiveEntity === "coldTarget";
   const isDarkMode = useDarkModeEnabled();
   const tableFontScale = normalizedFontScale(preferences.fontScale);
   const tableTooltipFontSize = Math.round(11 * tableFontScale);
@@ -1605,6 +1757,13 @@ export function CrmTable({
     setSavingDraftIds(new Set());
     setFlashRowId(null);
   }, [rows]);
+
+  useEffect(() => {
+    if (selectedOutreachCampaignId && outreachCampaigns.some((campaign) => campaign.id === selectedOutreachCampaignId)) {
+      return;
+    }
+    setSelectedOutreachCampaignId(outreachCampaigns.find((campaign) => campaign.status === "active")?.id ?? outreachCampaigns[0]?.id ?? "");
+  }, [outreachCampaigns, selectedOutreachCampaignId]);
 
   useEffect(() => {
     const hasPendingUploads = Object.values(pendingDocumentUploads).some((count) => count > 0);
@@ -1755,10 +1914,6 @@ export function CrmTable({
     () => configuredColumns.filter((column) => isDetailsEditableColumn(column)),
     [configuredColumns]
   );
-  const detailsClientColumns = useMemo(
-    () => configuredColumns.filter((column) => column.id === "client.name" || column.id === "client.phone" || column.id === "client.email"),
-    [configuredColumns]
-  );
   const detailsModalColumns = useMemo(
     () =>
       configuredColumns.filter(
@@ -1777,10 +1932,20 @@ export function CrmTable({
   const detailsPanelOfferMissingFields = detailsPanelRow ? offerMissingFieldChips(detailsPanelRow.values.offerMissingFields) : [];
   const detailsOfferMissingInputs = detailsPanelOfferMissingFields.map(offerMissingInputForField);
   const detailsOfferPriceInputs = detailsOfferMissingInputs.filter((item) => item.category === "price");
-  const detailsOfferDocumentInputs = detailsOfferMissingInputs.filter((item) => item.category === "document");
+  const detailsOfferDocumentInputs = [
+    ...detailsOfferMissingInputs.filter((item) => item.category === "document"),
+    ...offerTemplateFields.map(offerTemplateInputForField).filter((item): item is OfferMissingFieldInput => Boolean(item))
+  ].filter((field, index, fields) => fields.findIndex((candidate) => candidate.key === field.key) === index);
+  const detailsOfferFieldInputs = [...detailsOfferPriceInputs, ...detailsOfferDocumentInputs];
+  const selectedOutreachCampaign =
+    outreachCampaigns.find((campaign) => campaign.id === selectedOutreachCampaignId) ??
+    outreachCampaigns.find((campaign) => campaign.status === "active") ??
+    outreachCampaigns[0] ??
+    null;
   const hasDetailsDocumentsSection = detailsPanelDocuments.length > 0 || columns.some((column) => column.id === "documents");
   const hasDetailsCalendarSection = detailsPanelCalendarItems.length > 0 || columns.some((column) => column.id === "calendar");
-  const hasDetailsSideSections = isLeadTable || hasDetailsDocumentsSection || hasDetailsCalendarSection || Boolean(detailsPanelSummary);
+  const hasDetailsSideSections =
+    isLeadTable || isColdTargetTable || hasDetailsDocumentsSection || hasDetailsCalendarSection || Boolean(detailsPanelSummary);
   const detailsModalEyebrow = isLeadTable ? "Lead card" : `${title.replace(/\s+table$/i, "").replace(/s$/i, "")} details`;
   const detailsModalTitle = detailsPanelRow
     ? String(mobileDisplayValue(detailsPanelRow.values.code) || mobileDisplayValue(detailsPanelRow.values.name) || detailsPanelRow.id)
@@ -2136,17 +2301,32 @@ export function CrmTable({
         return current;
       }
       const visibleOrder = configuredColumns.map((column) => column.id);
-      const fullOrder = [...(current.order ?? columns.map((column) => column.id))];
       const movedId = visibleOrder[sourceIndex];
-      const targetId = visibleOrder[targetIndex];
-      const sourceFullIndex = fullOrder.indexOf(movedId);
-      const targetFullIndex = fullOrder.indexOf(targetId);
-      if (sourceFullIndex < 0 || targetFullIndex < 0) {
+      if (!movedId) {
         return current;
       }
-      const order = [...fullOrder];
-      order.splice(sourceFullIndex, 1);
-      order.splice(targetFullIndex, 0, movedId);
+      const columnIds = columns.map((column) => column.id);
+      const knownIds = new Set(columnIds);
+      const baseOrder = [...(current.order ?? []), ...columnIds].filter((id, index, order) => knownIds.has(id) && order.indexOf(id) === index);
+      const nextVisibleOrder = [...visibleOrder];
+      nextVisibleOrder.splice(sourceIndex, 1);
+      nextVisibleOrder.splice(Math.min(targetIndex, nextVisibleOrder.length), 0, movedId);
+
+      const visibleIds = new Set(visibleOrder);
+      const hiddenByAnchor = new Map<string | null, string[]>();
+      let previousVisibleId: string | null = null;
+      for (const id of baseOrder) {
+        if (visibleIds.has(id)) {
+          previousVisibleId = id;
+          continue;
+        }
+        hiddenByAnchor.set(previousVisibleId, [...(hiddenByAnchor.get(previousVisibleId) ?? []), id]);
+      }
+
+      const order = [...(hiddenByAnchor.get(null) ?? [])];
+      for (const id of nextVisibleOrder) {
+        order.push(id, ...(hiddenByAnchor.get(id) ?? []));
+      }
       return { ...current, order };
     });
   }, [columns, configuredColumns]);
@@ -2771,7 +2951,7 @@ export function CrmTable({
         ? {
             ...current,
             selectedClientId: client.id,
-            clientQuery: "",
+            clientPickerOpen: false,
             values: {
               ...current.values,
               "client.name": client.name ?? "",
@@ -2815,22 +2995,69 @@ export function CrmTable({
   }, [mobileEditTarget, updateRecordEndpoint, updateRecordIdPayload]);
 
   const openDetailsPanel = useCallback((row: CrmTableRow) => {
-    const detailFieldIds = new Set([...detailsEditableColumns.map((column) => column.id), "budgetEur", "offerMissingFields"]);
+    const offerFieldIds = [
+      ...offerMissingFieldChips(row.values.offerMissingFields).map(offerMissingInputForField),
+      ...offerTemplateFields.map(offerTemplateInputForField).filter((item): item is OfferMissingFieldInput => Boolean(item))
+    ].map((field) => field.columnId);
+    const detailFieldIds = new Set([
+      ...detailsEditableColumns.map((column) => column.id),
+      "client.name",
+      "client.phone",
+      "client.email",
+      "budgetEur",
+      "offerMissingFields",
+      ...offerFieldIds
+    ]);
     const values = Object.fromEntries(
       [...detailFieldIds].map((fieldId) => {
         const value = mobileDisplayValue(row.values[fieldId]);
         return [fieldId, value === "n/a" ? "" : String(value)];
       })
     );
-    setDetailsPanel({ rowId: row.id, values, clientQuery: "", selectedClientId: null, saving: false });
-  }, [detailsEditableColumns]);
+    const selectedClient =
+      clientOptions.find((client) => {
+        const clientName = (client.name ?? "").trim().toLowerCase();
+        const valueName = (values["client.name"] ?? "").trim().toLowerCase();
+        const clientPhone = (client.phone ?? "").trim();
+        const valuePhone = (values["client.phone"] ?? "").trim();
+        const clientEmail = (client.email ?? "").trim().toLowerCase();
+        const valueEmail = (values["client.email"] ?? "").trim().toLowerCase();
+        if (valueEmail && clientEmail === valueEmail) {
+          return true;
+        }
+        if (valuePhone && clientPhone === valuePhone) {
+          return true;
+        }
+        return Boolean(valueName && clientName === valueName);
+      }) ?? null;
+    setDetailsPanel({ rowId: row.id, values, clientPickerOpen: false, selectedClientId: selectedClient?.id ?? null, saving: false });
+  }, [clientOptions, detailsEditableColumns, offerTemplateFields]);
 
-  const saveDetailsPanel = useCallback(async () => {
-    if (!detailsPanel || !detailsPanelRow || !updateRecordEndpoint || detailsPanel.saving) {
+  useEffect(() => {
+    if (!initialFocusRowId || !updateRecordEndpoint || initialDetailsOpenedRef.current === initialFocusRowId) {
       return;
     }
-    const saveColumns = [...detailsEditableColumns, ...(["budgetEur"] as const).map((id) => ({ id, title: id } as CrmTableColumn))];
-    const patch = Object.fromEntries(
+    const row = filteredRows.find((candidate) => candidate.id === initialFocusRowId);
+    if (!row) {
+      return;
+    }
+    initialDetailsOpenedRef.current = initialFocusRowId;
+    setDetailAnchorRowId(row.id);
+    openDetailsPanel(row);
+  }, [filteredRows, initialFocusRowId, openDetailsPanel, updateRecordEndpoint]);
+
+  const saveDetailsPanelChanges = useCallback(async (options: { closePanel?: boolean } = {}) => {
+    const closePanel = options.closePanel ?? true;
+    if (!detailsPanel || !detailsPanelRow || !updateRecordEndpoint || detailsPanel.saving) {
+      return false;
+    }
+    const offerDetailInputs = [...detailsOfferPriceInputs, ...detailsOfferDocumentInputs];
+    const saveColumns = [
+      ...detailsEditableColumns.filter((column) => column.group !== "Client" && !column.id.startsWith("client.")),
+      ...(["budgetEur"] as const).map((id) => ({ id, title: id }) as CrmTableColumn),
+      ...offerDetailInputs.map((field) => ({ id: field.columnId, title: field.label }) as CrmTableColumn)
+    ].filter((column, index, list) => list.findIndex((candidate) => candidate.id === column.id) === index);
+    const flatPatch = Object.fromEntries(
       saveColumns
         .map((column) => {
           const currentValue = mobileDisplayValue(detailsPanelRow.values[column.id]);
@@ -2840,13 +3067,26 @@ export function CrmTable({
         })
         .filter((entry): entry is [string, string | null] => Boolean(entry))
     );
+    const offerFields = Object.fromEntries(
+      Object.entries(flatPatch)
+        .filter(([columnId]) => columnId.startsWith("offerFields."))
+        .map(([columnId, value]) => [columnId.slice("offerFields.".length), value])
+    );
+    const patch: Record<string, string | null | Record<string, string | null>> = Object.fromEntries(
+      Object.entries(flatPatch).filter(([columnId]) => !columnId.startsWith("offerFields."))
+    );
+    if (Object.keys(offerFields).length > 0) {
+      patch.offerFields = offerFields;
+    }
     if (detailsPanel.selectedClientId) {
       patch.clientId = detailsPanel.selectedClientId;
     }
 
     if (Object.keys(patch).length === 0) {
-      setDetailsPanel(null);
-      return;
+      if (closePanel) {
+        setDetailsPanel(null);
+      }
+      return true;
     }
 
     setDetailsPanel((current) => (current ? { ...current, saving: true } : current));
@@ -2865,18 +3105,55 @@ export function CrmTable({
       if (!response.ok) {
         throw new Error(payload.error ?? "Details update failed.");
       }
+      const selectedClient = detailsPanel.selectedClientId
+        ? clientOptions.find((client) => client.id === detailsPanel.selectedClientId) ?? null
+        : null;
       setEditableRows((current) =>
-        Object.entries(patch)
+        Object.entries(flatPatch)
           .filter(([columnId]) => columnId !== "clientId")
+          .filter((entry): entry is [string, string | null] => typeof entry[1] === "string" || entry[1] === null)
           .reduce((rows, [columnId, value]) => updateRowCell(rows, detailsPanel.rowId, columnId, value ?? ""), current)
+          .map((row) =>
+            row.id === detailsPanel.rowId && selectedClient
+              ? {
+                  ...row,
+                  values: {
+                    ...row.values,
+                    "client.name": selectedClient.name ?? "",
+                    "client.phone": selectedClient.phone ?? "",
+                    "client.email": selectedClient.email ?? "",
+                    messenger: selectedClient.whatsapp ?? row.values.messenger
+                  }
+                }
+              : row
+          )
       );
       setCreateError(null);
-      setDetailsPanel(null);
+      if (closePanel) {
+        setDetailsPanel(null);
+      } else {
+        setDetailsPanel((current) => (current ? { ...current, saving: false } : current));
+      }
+      return true;
     } catch (error) {
       setCreateError(error instanceof Error ? error.message : "Details update failed.");
       setDetailsPanel((current) => (current ? { ...current, saving: false } : current));
+      return false;
     }
-  }, [detailsEditableColumns, detailsPanel, detailsPanelRow, updateRecordEndpoint, updateRecordIdPayload]);
+  }, [
+    detailsEditableColumns,
+    detailsOfferDocumentInputs,
+    detailsOfferPriceInputs,
+    detailsPanel,
+    detailsPanelRow,
+    clientOptions,
+    updateRecordEndpoint,
+    updateRecordIdPayload
+  ]);
+
+  const saveDetailsPanel = useCallback(async () => {
+    await saveDetailsPanelChanges({ closePanel: true });
+  }, [saveDetailsPanelChanges]);
 
   const selectClientForLead = useCallback(
     async (client: ClientOption) => {
@@ -3308,8 +3585,7 @@ export function CrmTable({
     }
   }, [cellDeleteTarget, isDeletingCellItem]);
 
-  const generateOfferForSelectedRow = useCallback(async () => {
-    const row = selectedRows[0];
+  const generateOfferForRow = useCallback(async (row: CrmTableRow) => {
     if (!row || !offerGenerateEndpoint || isGeneratingOffer) {
       return;
     }
@@ -3348,7 +3624,207 @@ export function CrmTable({
     } finally {
       setIsGeneratingOffer(false);
     }
-  }, [isGeneratingOffer, offerGenerateEndpoint, selectedRows]);
+  }, [isGeneratingOffer, offerGenerateEndpoint]);
+
+  const generateOfferForSelectedRow = useCallback(async () => {
+    const row = selectedRows[0];
+    if (!row) {
+      return;
+    }
+    await generateOfferForRow(row);
+  }, [generateOfferForRow, selectedRows]);
+
+  const generateOfferForDetailsRow = useCallback(async () => {
+    if (!detailsPanelRow) {
+      return;
+    }
+    const saved = await saveDetailsPanelChanges({ closePanel: false });
+    if (!saved) {
+      return;
+    }
+    await generateOfferForRow(detailsPanelRow);
+  }, [detailsPanelRow, generateOfferForRow, saveDetailsPanelChanges]);
+
+  const applyOutreachResponseToRow = useCallback((rowId: string, payload: {
+    rowPatch?: Record<string, string | null>;
+    calendarItem?: CalendarCellItem | null;
+    calendarItems?: CalendarCellItem[];
+  }) => {
+    setEditableRows((current) =>
+      current.map((row) => {
+        if (row.id !== rowId) {
+          return row;
+        }
+        const patchedValues: Record<string, CrmTableCellValue> = { ...row.values };
+        Object.entries(payload.rowPatch ?? {}).forEach(([key, value]) => {
+          patchedValues[key] = value ?? "";
+        });
+        const nextCalendarItems = payload.calendarItems ?? (payload.calendarItem ? [payload.calendarItem] : []);
+        if (nextCalendarItems.length > 0) {
+          const existingItems = cellCalendarItems(row.values.calendar);
+          patchedValues.calendar = [
+            ...existingItems.filter(
+              (item) => !nextCalendarItems.some((nextItem) => nextItem.kind === item.kind && nextItem.id === item.id)
+            ),
+            ...nextCalendarItems
+          ];
+        }
+        return { ...row, values: patchedValues };
+      })
+    );
+  }, []);
+
+  const loadOutreachDraftForDetailsRow = useCallback(
+    async (touch: OutreachCampaignTouchpoint, options?: { force?: boolean }) => {
+      if (!detailsPanelRow || !selectedOutreachCampaign || !outreachDraftEndpoint) {
+        return;
+      }
+      const key = outreachDraftKey(detailsPanelRow.id, selectedOutreachCampaign.id, touch.id);
+      const existing = outreachDrafts[key];
+      if (!options?.force && existing && (existing.loading || (!existing.error && existing.body))) {
+        return;
+      }
+      setOutreachDrafts((current) => ({
+        ...current,
+        [key]: {
+          subject: existing?.subject ?? "",
+          body: existing?.body ?? "",
+          channel: existing?.channel ?? touch.channel,
+          dueAt: existing?.dueAt ?? null,
+          status: existing?.status ?? null,
+          action: existing?.action ?? touch.action,
+          email: existing?.email ?? null,
+          loading: true,
+          error: null
+        }
+      }));
+      try {
+        const response = await fetch(outreachDraftEndpoint, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            workspaceId: "default",
+            coldTargetId: detailsPanelRow.id,
+            campaignId: selectedOutreachCampaign.id,
+            touchId: touch.id,
+            force: Boolean(options?.force)
+          })
+        });
+        const payload = (await response.json()) as {
+          error?: string;
+          draft?: Omit<OutreachDraftState, "loading" | "error">;
+          calendarItem?: CalendarCellItem;
+        };
+        if (!response.ok || !payload.draft) {
+          throw new Error(payload.error ?? "Draft creation failed.");
+        }
+        const draft = payload.draft;
+        setOutreachDrafts((current) => ({
+          ...current,
+          [key]: {
+            ...draft,
+            loading: false,
+            error: null
+          }
+        }));
+        applyOutreachResponseToRow(detailsPanelRow.id, { calendarItem: payload.calendarItem ?? null });
+      } catch (reason) {
+        setOutreachDrafts((current) => ({
+          ...current,
+          [key]: {
+            subject: existing?.subject ?? "",
+            body: existing?.body ?? "",
+            channel: existing?.channel ?? touch.channel,
+            dueAt: existing?.dueAt ?? null,
+            status: existing?.status ?? null,
+            action: existing?.action ?? touch.action,
+            email: existing?.email ?? null,
+            loading: false,
+            error: reason instanceof Error ? reason.message : "Draft creation failed."
+          }
+        }));
+      }
+    },
+    [applyOutreachResponseToRow, detailsPanelRow, outreachDraftEndpoint, outreachDrafts, selectedOutreachCampaign]
+  );
+
+  const startOutreachCampaignForDetailsRow = useCallback(async (planMode: "next" | "allDraft" = "next") => {
+    if (!detailsPanelRow || !selectedOutreachCampaign || !outreachStartEndpoint || startingOutreachCampaign) {
+      return;
+    }
+    setStartingOutreachCampaign(true);
+    setOutreachCampaignError(null);
+    try {
+      const response = await fetch(outreachStartEndpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          workspaceId: "default",
+          coldTargetId: detailsPanelRow.id,
+          campaignId: selectedOutreachCampaign.id,
+          planMode
+        })
+      });
+      const payload = (await response.json()) as {
+        error?: string;
+        rowPatch?: Record<string, string | null>;
+        calendarItem?: CalendarCellItem;
+        calendarItems?: CalendarCellItem[];
+      };
+      if (!response.ok) {
+        throw new Error(payload.error ?? "Campaign start failed.");
+      }
+      applyOutreachResponseToRow(detailsPanelRow.id, payload);
+    } catch (reason) {
+      setOutreachCampaignError(reason instanceof Error ? reason.message : "Campaign start failed.");
+    } finally {
+      setStartingOutreachCampaign(false);
+    }
+  }, [applyOutreachResponseToRow, detailsPanelRow, outreachStartEndpoint, selectedOutreachCampaign, startingOutreachCampaign]);
+
+  const advanceOutreachCampaignForDetailsRow = useCallback(
+    async (action: "mark_sent" | "stop") => {
+      if (!detailsPanelRow || !selectedOutreachCampaign || !outreachAdvanceEndpoint || advancingOutreachCampaign) {
+        return;
+      }
+      setAdvancingOutreachCampaign(true);
+      setOutreachCampaignError(null);
+      try {
+        const response = await fetch(outreachAdvanceEndpoint, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            workspaceId: "default",
+            coldTargetId: detailsPanelRow.id,
+            campaignId: selectedOutreachCampaign.id,
+            action,
+            ...(action === "stop" ? { outcome: selectedOutreachOutcome } : {})
+          })
+        });
+        const payload = (await response.json()) as {
+          error?: string;
+          rowPatch?: Record<string, string | null>;
+          calendarItems?: CalendarCellItem[];
+        };
+        if (!response.ok) {
+          throw new Error(payload.error ?? "Campaign update failed.");
+        }
+        applyOutreachResponseToRow(detailsPanelRow.id, payload);
+      } catch (reason) {
+        setOutreachCampaignError(reason instanceof Error ? reason.message : "Campaign update failed.");
+      } finally {
+        setAdvancingOutreachCampaign(false);
+      }
+    },
+    [
+      advancingOutreachCampaign,
+      applyOutreachResponseToRow,
+      detailsPanelRow,
+      outreachAdvanceEndpoint,
+      selectedOutreachCampaign,
+      selectedOutreachOutcome
+    ]
+  );
 
   const sendRowsToTelegram = useCallback(
     async (rowsToSend: CrmTableRow[]) => {
@@ -3406,20 +3882,6 @@ export function CrmTable({
         })
         .slice(0, 8)
     : [];
-  const detailsClientOptions =
-    detailsPanel && isLeadTable
-      ? clientOptions
-          .filter((client) => {
-            const queryText = detailsPanel.clientQuery.trim().toLowerCase();
-            if (!queryText) {
-              return true;
-            }
-            return [client.code, client.name, client.company, client.email, client.phone, client.whatsapp]
-              .filter(Boolean)
-              .some((value) => String(value).toLowerCase().includes(queryText));
-          })
-          .slice(0, 6)
-      : [];
   const mobileColumns = configuredColumns
     .filter((column) => !["description", "summaryShort", "summaryLong", "summaryUpdatedAt"].includes(column.id))
     .slice()
@@ -3427,7 +3889,10 @@ export function CrmTable({
     .slice(0, 6);
 
   return (
-    <section className="tableSurface">
+    <section
+      className="tableSurface"
+      style={{ "--table-font-scale": tableFontScale } as CSSProperties}
+    >
       <header className="tableHeader">
         <div>
           <h1>{title}</h1>
@@ -3535,7 +4000,7 @@ export function CrmTable({
                 aria-expanded={showHandoffMenu}
                 onClick={() => setShowHandoffMenu((value) => !value)}
               >
-                <span aria-hidden="true">{handoffBallLabels[normalizedHandoffBall(preferences.handoffBall)].icon}</span>
+                <span aria-hidden="true">{handoffBallIcons[normalizedHandoffBall(preferences.handoffBall)]}</span>
               </button>
               {showHandoffMenu ? (
                 <div className="handoffBallPopover" role="dialog" aria-label="Choose handoff ball and sound">
@@ -3558,7 +4023,7 @@ export function CrmTable({
                             setShowHandoffMenu(false);
                           }}
                         >
-                          <span aria-hidden="true">{item.icon}</span>
+                          <span aria-hidden="true">{handoffBallIcons[value as HandoffBallType]}</span>
                         </button>
                       );
                     })}
@@ -3688,7 +4153,7 @@ export function CrmTable({
           <strong>Scheduled events</strong>
           {sortCalendarItemsByStart(calendarTooltip.items).map((item) => (
             <span key={`${item.kind}-${item.id}`}>
-              {calendarDayMonthLabel(item.startsAt)} {calendarTimeLabel(item.startsAt)} · {item.title}
+              {calendarDayMonthLabel(item.startsAt)} {calendarTimeLabel(item.startsAt)} В· {item.title}
             </span>
           ))}
         </div>
@@ -3741,7 +4206,7 @@ export function CrmTable({
                   <button type="button" key={client.id} onClick={() => void selectClientForLead(client)} disabled={clientPicker.saving}>
                     <span>{client.code ?? client.id}</span>
                     <strong>{client.name ?? "Unnamed client"}</strong>
-                    <small>{[client.phone, client.email].filter(Boolean).join(" · ") || client.company || "No contact details"}</small>
+                    <small>{[client.phone, client.email].filter(Boolean).join(" В· ") || client.company || "No contact details"}</small>
                   </button>
                 ))
               ) : (
@@ -3964,7 +4429,7 @@ export function CrmTable({
                     <span>
                       Downloads: {documents.length} {documents.length === 1 ? "item" : "items"}
                     </span>
-                    <i aria-hidden="true">⌄</i>
+                    <i aria-hidden="true">вЊ„</i>
                   </summary>
                   {documents.length > 0 ? (
                     <div className="leadDocumentCardList">
@@ -4035,9 +4500,13 @@ export function CrmTable({
                             return (
                               <button
                                 type="button"
-                                className="leadDocumentCard"
+                                className="leadDocumentCard detailsDocumentCard"
                                 key={document.id}
-                                title={`${document.fileName}${document.shortSummary ? `\n${document.shortSummary}` : ""}`}
+                                title={[
+                                  document.fileName,
+                                  createdAt ? `Added ${createdAt}` : "Added date unknown",
+                                  document.shortSummary || "No summary yet"
+                                ].join("\n")}
                                 onClick={() => setPreviewDocument(document)}
                               >
                                 <span
@@ -4048,9 +4517,11 @@ export function CrmTable({
                                 </span>
                                 <span className="leadDocumentCardMain">
                                   <strong>{displayLabel}</strong>
-                                  <span>{createdAt ? `Added ${createdAt}` : "Added date unknown"}</span>
                                 </span>
-                                <span className="leadDocumentCardSummary">{document.shortSummary || "No summary yet"}</span>
+                                <span className="detailsDocumentCardText">
+                                  <small>{createdAt ? `Added ${createdAt}` : "Added date unknown"}</small>
+                                  <span className="detailsDocumentCardSummary">{document.shortSummary || "No summary yet"}</span>
+                                </span>
                               </button>
                             );
                           })}
@@ -4221,7 +4692,7 @@ export function CrmTable({
               ) : null}
               {hasSummary ? (
                 <div className="mobileLeadSummary">
-                  <span>Summary{summary.updatedAt ? ` · ${mobileDisplayValue(summary.updatedAt)}` : ""}</span>
+                  <span>Summary{summary.updatedAt ? ` В· ${mobileDisplayValue(summary.updatedAt)}` : ""}</span>
                   <strong>{summary.short}</strong>
                   {summary.long ? (
                     <details>
@@ -4254,54 +4725,51 @@ export function CrmTable({
               </button>
             </header>
 
-            <div className={`detailsDrawerBody${hasDetailsSideSections ? "" : " single"}`}>
+            <div
+              className={`detailsDrawerBody${hasDetailsSideSections ? "" : " single"}${isLeadTable ? " lead" : ""}${isColdTargetTable ? " coldTarget" : ""}`}
+            >
               <div className="detailsDrawerFields">
-                {isLeadTable && detailsClientColumns.length > 0 ? (
+                {isLeadTable ? (
                   <section className="detailsClientSection">
-                    <header>
-                      <div>
-                        <span>Client record</span>
-                        <strong>{detailsPanel.values["client.name"] || "No client selected"}</strong>
-                      </div>
+                    <span className="detailsFieldLabel">Client</span>
+                    <div className="detailsClientPicker">
                       <input
-                        placeholder="Search clients"
-                        value={detailsPanel.clientQuery}
-                        onChange={(event) =>
-                          setDetailsPanel((current) => (current ? { ...current, clientQuery: event.target.value } : current))
+                        readOnly
+                        aria-label="Selected client"
+                        value={clientPickerLabel(
+                          clientOptions.find((client) => client.id === detailsPanel.selectedClientId) ?? null,
+                          detailsPanel.values["client.name"]
+                        )}
+                        onClick={() =>
+                          setDetailsPanel((current) => (current ? { ...current, clientPickerOpen: true } : current))
                         }
                       />
-                    </header>
-                    {detailsPanel.clientQuery || detailsClientOptions.length > 0 ? (
-                      <div className="detailsClientOptions">
-                        {detailsClientOptions.length > 0 ? (
-                          detailsClientOptions.map((client) => (
-                            <button type="button" key={client.id} onClick={() => selectClientInDetails(client)}>
-                              {visibleClientReference(client) ? <span>{visibleClientReference(client)}</span> : null}
-                              <strong>{client.name ?? "Unnamed client"}</strong>
-                              <small>{[client.phone, client.email].filter(Boolean).join(" · ") || client.company || "No contact details"}</small>
-                            </button>
-                          ))
-                        ) : (
-                          <p>No clients found.</p>
-                        )}
-                      </div>
-                    ) : null}
-                    <div className="detailsClientFields">
-                      {detailsClientColumns.map((column) => {
-                        const guide = guideForColumn(column);
-                        return (
-                          <label key={column.id}>
-                            <span className="detailsFieldLabel">
-                              {column.title}
-                              {guide ? <i title={`${guide.source}: ${guide.meaning}`}>?</i> : null}
-                            </span>
-                            <input
-                              value={detailsPanel.values[column.id] ?? ""}
-                              onChange={(event) => setDetailsValue(column.id, event.target.value)}
-                            />
-                          </label>
-                        );
-                      })}
+                      <button
+                        type="button"
+                        aria-label="Choose client"
+                        onClick={() =>
+                          setDetailsPanel((current) =>
+                            current ? { ...current, clientPickerOpen: !current.clientPickerOpen } : current
+                          )
+                        }
+                      >
+                        <Search size={14} />
+                      </button>
+                      {detailsPanel.clientPickerOpen ? (
+                        <div className="detailsClientOptions">
+                          {clientOptions.length > 0 ? (
+                            clientOptions.slice(0, 8).map((client) => (
+                              <button type="button" key={client.id} onClick={() => selectClientInDetails(client)}>
+                                {visibleClientReference(client) ? <span>{visibleClientReference(client)}</span> : null}
+                                <strong>{client.name ?? "Unnamed client"}</strong>
+                                <small>{[client.phone, client.email].filter(Boolean).join(" В· ") || client.company || "No contact details"}</small>
+                              </button>
+                            ))
+                          ) : (
+                            <p>No clients found.</p>
+                          )}
+                        </div>
+                      ) : null}
                     </div>
                   </section>
                 ) : null}
@@ -4325,7 +4793,7 @@ export function CrmTable({
                   }
                   if (column.valueKind === "handoff") {
                     const side = normalizedHandoffSide(detailsPanel.values[column.id] ?? detailsPanelRow.values[column.id]);
-                    const ball = handoffBallLabels[normalizedHandoffBall(preferences.handoffBall)].icon;
+                    const ball = handoffBallIcons[normalizedHandoffBall(preferences.handoffBall)];
                     const animation = handoffAnimations[detailsPanel.rowId] ?? null;
                     const from = animation?.from ?? side;
                     const to = animation?.to ?? side;
@@ -4389,24 +4857,33 @@ export function CrmTable({
               {hasDetailsSideSections ? (
                 <div className="detailsDrawerSections">
                   {isLeadTable ? (
-                    <section className="detailsDrawerSection offer">
-                      <div className="detailsDrawerSectionHeader">
+                    <details className="detailsDrawerSection offer" open>
+                      <summary className="detailsDrawerSectionHeader">
                         <div>
-                          <span>Missing for offer</span>
-                          <strong>
-                            {detailsPanelOfferMissingFields.length > 0
-                              ? `${detailsPanelOfferMissingFields.length} field${detailsPanelOfferMissingFields.length === 1 ? "" : "s"}`
+                          <span>
+                            Missing for offer
+                            <strong>
+                            {detailsOfferFieldInputs.length > 0
+                              ? `${detailsOfferFieldInputs.length} field${detailsOfferFieldInputs.length === 1 ? "" : "s"}`
                               : "Ready"}
-                          </strong>
+                            </strong>
+                          </span>
                         </div>
-                        <button type="button" onClick={() => void copyOfferMissingFields(detailsPanelRow)}>
-                          {copiedOfferFieldsRowId === detailsPanelRow.id ? "Copied" : "Copy"}
-                        </button>
-                      </div>
-                      {detailsPanelOfferMissingFields.length > 0 ? (
+                        <div className="detailsOfferActions">
+                          {offerGenerateEndpoint ? (
+                            <button type="button" onClick={() => void generateOfferForDetailsRow()} disabled={isGeneratingOffer}>
+                              {isGeneratingOffer ? "..." : "KP"}
+                            </button>
+                          ) : null}
+                          <button type="button" onClick={() => void copyOfferMissingFields(detailsPanelRow)}>
+                            {copiedOfferFieldsRowId === detailsPanelRow.id ? "Copied" : "Copy"}
+                          </button>
+                        </div>
+                      </summary>
+                      {detailsOfferFieldInputs.length > 0 ? (
                         <div className="detailsOfferMissingEditor">
                           {[
-                            ["Price fields", detailsOfferPriceInputs],
+                            ["", detailsOfferPriceInputs],
                             ["Document fields", detailsOfferDocumentInputs]
                           ].map(([groupTitle, groupInputs]) => {
                             const inputs = groupInputs as OfferMissingFieldInput[];
@@ -4415,7 +4892,7 @@ export function CrmTable({
                             }
                             return (
                               <section key={groupTitle as string}>
-                                <span>{groupTitle as string}</span>
+                                {groupTitle ? <span>{groupTitle as string}</span> : null}
                                 {inputs.map((field) => (
                                   <label key={field.key}>
                                     <span>{field.label}</span>
@@ -4423,6 +4900,11 @@ export function CrmTable({
                                       value={detailsPanel.values[field.columnId] ?? ""}
                                       placeholder={field.placeholder}
                                       onChange={(event) => setDetailsValue(field.columnId, event.target.value)}
+                                      onBlur={
+                                        field.columnId === "area"
+                                          ? (event) => setDetailsValue(field.columnId, formatOfferAreaInputValue(event.target.value))
+                                          : undefined
+                                      }
                                     />
                                     {field.hint ? <small>{field.hint}</small> : null}
                                   </label>
@@ -4434,12 +4916,212 @@ export function CrmTable({
                       ) : (
                         <p className="detailsDrawerEmpty compact">No missing fields detected.</p>
                       )}
+                    </details>
+                  ) : null}
+
+                  {isColdTargetTable ? (
+                    <section className="detailsDrawerSection outreach">
+                      <div className="detailsDrawerSectionHeader">
+                        <div>
+                          <span>
+                            Outreach campaign
+                            <strong>{mobileDisplayValue(detailsPanelRow.values.campaignStatus) || "Not started"}</strong>
+                          </span>
+                        </div>
+                      </div>
+                      {outreachCampaigns.length > 0 ? (
+                        <div className="detailsOutreachPanel">
+                          <label>
+                            <span>Campaign</span>
+                            <select
+                              value={selectedOutreachCampaign?.id ?? ""}
+                              onChange={(event) => setSelectedOutreachCampaignId(event.target.value)}
+                            >
+                              {outreachCampaigns.map((campaign) => (
+                                <option key={campaign.id} value={campaign.id}>
+                                  {campaign.name}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                          {selectedOutreachCampaign ? (
+                            <>
+                              <p>{selectedOutreachCampaign.summary}</p>
+                              <div className="detailsOutreachTouches">
+                                {selectedOutreachCampaign.touchpoints.map((touch) => {
+                                  const key = outreachDraftKey(detailsPanelRow.id, selectedOutreachCampaign.id, touch.id);
+                                  const draft = outreachDrafts[key];
+                                  const isStyledDraft = styledOutreachDrafts[key] ?? true;
+                                  return (
+                                    <details
+                                      className="detailsOutreachTouch"
+                                      key={touch.id}
+                                      onToggle={(event) => {
+                                        if (event.currentTarget.open) {
+                                          void loadOutreachDraftForDetailsRow(touch);
+                                        }
+                                      }}
+                                    >
+                                      <summary>
+                                        <span className="detailsOutreachTouchTitle">
+                                          <span>D+{touch.dayOffset}</span>
+                                          <strong>{touch.title}</strong>
+                                        </span>
+                                        <small>{touch.channel}</small>
+                                      </summary>
+                                      <div className="detailsOutreachDraft">
+                                        <div className="detailsOutreachDraftHeader">
+                                          <p>{touch.action}</p>
+                                          <button
+                                            type="button"
+                                            aria-pressed={isStyledDraft}
+                                            onClick={() =>
+                                              setStyledOutreachDrafts((current) => ({
+                                                ...current,
+                                                [key]: !isStyledDraft
+                                              }))
+                                            }
+                                          >
+                                            {isStyledDraft ? "Styled" : "Plain"}
+                                          </button>
+                                        </div>
+                                        {!draft || draft.loading ? <p className="detailsOutreachDraftStatus">Preparing draft...</p> : null}
+                                        {draft?.error ? <p className="detailsDrawerError">{draft.error}</p> : null}
+                                        {draft && !draft.loading && !draft.error ? (
+                                          <>
+                                            <label>
+                                              <span>Subject</span>
+                                              <input readOnly value={draft.subject || "(no subject)"} />
+                                            </label>
+                                            <label>
+                                              <span>Email</span>
+                                              {isStyledDraft ? (
+                                                <div className="detailsOutreachEmailPreview">
+                                                  {emailBodyParagraphs(draft.body).map((paragraph, paragraphIndex, paragraphs) => (
+                                                    <p
+                                                      className={
+                                                        paragraphIndex === 0
+                                                          ? "lead"
+                                                          : paragraphIndex === paragraphs.length - 1
+                                                            ? "closing"
+                                                            : undefined
+                                                      }
+                                                      key={`${key}-${paragraphIndex}`}
+                                                    >
+                                                      {paragraph}
+                                                    </p>
+                                                  ))}
+                                                </div>
+                                              ) : (
+                                                <textarea readOnly rows={7} value={draft.body} />
+                                              )}
+                                            </label>
+                                            <div className="detailsOutreachDraftActions">
+                                              <button
+                                                type="button"
+                                                onClick={() => void loadOutreachDraftForDetailsRow(touch, { force: true })}
+                                              >
+                                                Recreate
+                                              </button>
+                                              <button
+                                                type="button"
+                                                disabled={draft.channel !== "email" || !draft.email}
+                                                onClick={() => {
+                                                  if (draft.email) {
+                                                    window.open(
+                                                      gmailComposeUrl(
+                                                        draft.email,
+                                                        draft.subject,
+                                                        draft.body
+                                                      ),
+                                                      "_blank",
+                                                      "noopener,noreferrer"
+                                                    );
+                                                  }
+                                                }}
+                                              >
+                                                {draft.channel === "email" && draft.email ? "Send email" : "No email address"}
+                                              </button>
+                                            </div>
+                                          </>
+                                        ) : null}
+                                      </div>
+                                    </details>
+                                  );
+                                })}
+                              </div>
+                              {detailsPanelRow.values.nextAction ? (
+                                <div className="detailsOutreachCurrent">
+                                  <span>Current next action</span>
+                                  <strong>{mobileDisplayValue(detailsPanelRow.values.nextAction)}</strong>
+                                </div>
+                              ) : null}
+                              {outreachCampaignError ? <p className="detailsDrawerError">{outreachCampaignError}</p> : null}
+                              {detailsPanelRow.values.campaignName ? (
+                                <div className="detailsOutreachWorkflow">
+                                  <button
+                                    type="button"
+                                    onClick={() => void advanceOutreachCampaignForDetailsRow("mark_sent")}
+                                    disabled={advancingOutreachCampaign || !outreachAdvanceEndpoint}
+                                  >
+                                    {advancingOutreachCampaign ? "Updating" : "Mark touch sent"}
+                                  </button>
+                                  <label>
+                                    <span>Outcome</span>
+                                    <select
+                                      value={selectedOutreachOutcome}
+                                      onChange={(event) => setSelectedOutreachOutcome(event.target.value)}
+                                    >
+                                      <option value="interested">interested</option>
+                                      <option value="later">later</option>
+                                      <option value="existing_architect">existing architect</option>
+                                      <option value="remove_me">remove me</option>
+                                      <option value="silent_8_touches">silent after 8 touches</option>
+                                      <option value="not_a_fit">not a fit</option>
+                                    </select>
+                                  </label>
+                                  <button
+                                    type="button"
+                                    onClick={() => void advanceOutreachCampaignForDetailsRow("stop")}
+                                    disabled={advancingOutreachCampaign || !outreachAdvanceEndpoint}
+                                  >
+                                    Stop with outcome
+                                  </button>
+                                </div>
+                              ) : null}
+                              <div className="detailsOutreachActions">
+                                <button
+                                  type="button"
+                                  className="primary"
+                                  onClick={() => void startOutreachCampaignForDetailsRow("next")}
+                                  disabled={startingOutreachCampaign || !outreachStartEndpoint}
+                                >
+                                  {startingOutreachCampaign
+                                    ? "Starting"
+                                    : detailsPanelRow.values.campaignName
+                                      ? "Restart campaign"
+                                      : "Start campaign"}
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => void startOutreachCampaignForDetailsRow("allDraft")}
+                                  disabled={startingOutreachCampaign || !outreachStartEndpoint}
+                                >
+                                  Draft full cadence
+                                </button>
+                              </div>
+                            </>
+                          ) : null}
+                        </div>
+                      ) : (
+                        <p className="detailsDrawerEmpty compact">No outreach campaigns configured.</p>
+                      )}
                     </section>
                   ) : null}
 
                   {detailsPanelSummary ? (
                     <section className="detailsDrawerSection">
-                      <span>Summary{detailsPanelSummary.updatedAt ? ` · ${mobileDisplayValue(detailsPanelSummary.updatedAt)}` : ""}</span>
+                      <span>Summary{detailsPanelSummary.updatedAt ? ` В· ${mobileDisplayValue(detailsPanelSummary.updatedAt)}` : ""}</span>
                       <p className="detailsDrawerSummary">{detailsPanelSummary.short}</p>
                       {detailsPanelSummary.long ? (
                         <details className="detailsDrawerDetails">
@@ -4506,7 +5188,7 @@ export function CrmTable({
                             <li key={`${item.kind}-${item.id}`}>
                               <time>{calendarDateLabel(item.startsAt)} {calendarTimeLabel(item.startsAt)}</time>
                               <strong>{item.title}</strong>
-                              <span>{[item.kind, item.status, item.sourceChannel].filter(Boolean).join(" · ")}</span>
+                              <span>{[item.kind, item.status, item.sourceChannel].filter(Boolean).join(" В· ")}</span>
                             </li>
                           ))}
                         </ul>
@@ -4567,7 +5249,7 @@ export function CrmTable({
             <p>
               {cellDeleteTarget.kind === "document"
                 ? cellDeleteTarget.item.fileName
-                : `${cellDeleteTarget.item.title} · ${calendarDayMonthLabel(cellDeleteTarget.item.startsAt)} ${calendarTimeLabel(cellDeleteTarget.item.startsAt)}`}
+                : `${cellDeleteTarget.item.title} В· ${calendarDayMonthLabel(cellDeleteTarget.item.startsAt)} ${calendarTimeLabel(cellDeleteTarget.item.startsAt)}`}
             </p>
             <footer>
               <button type="button" onClick={() => setCellDeleteTarget(null)}>
@@ -4666,7 +5348,7 @@ export function CrmTable({
                 <article key={summaryItem.id}>
                   <span>
                     {formatDocumentCreatedAt(summaryItem.createdAt) ?? summaryItem.createdAt}
-                    {summaryItem.source ? ` · ${summaryItem.source}` : ""}
+                    {summaryItem.source ? ` В· ${summaryItem.source}` : ""}
                   </span>
                   <strong>{summaryItem.shortSummary}</strong>
                   {summaryItem.longSummary ? <p>{summaryItem.longSummary}</p> : null}
@@ -4719,7 +5401,7 @@ export function CrmTable({
                 <h2>{previewDocument.fileName}</h2>
               </div>
               <button type="button" onClick={() => setPreviewDocument(null)} aria-label="Close document preview">
-                ×
+                Р“вЂ”
               </button>
             </header>
             <p>{previewDocument.longSummary ?? previewDocument.shortSummary}</p>
@@ -4773,7 +5455,7 @@ export function CrmTable({
                 <h2>Add record</h2>
               </div>
               <button type="button" onClick={() => setIsCreateOpen(false)} aria-label="Close create form">
-                ×
+                Р“вЂ”
               </button>
             </header>
             {createRecord.fields.map((field) => (
@@ -4823,7 +5505,7 @@ export function CrmTable({
                 <h2>Add documents</h2>
               </div>
               <button type="button" onClick={closeDocumentUpload} aria-label="Close upload form">
-                ×
+                Р“вЂ”
               </button>
             </header>
             <div className="selectedUploadFiles">
@@ -4855,3 +5537,5 @@ export function CrmTable({
     </section>
   );
 }
+
+

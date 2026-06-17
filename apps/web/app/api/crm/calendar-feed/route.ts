@@ -1,6 +1,7 @@
 import type { CalendarEvent, Client, ColdTarget, Lead, Reminder } from "@lightcrm/core";
 import { NextResponse } from "next/server";
 import { defaultWorkspaceId, getCrm, handleRouteError } from "../_shared";
+import { getCrmRuntimeSettings } from "../settings/crm-settings-store";
 
 type CalendarFeedKind = "reminder" | "event";
 type RelatedEntity = "lead" | "client" | "coldTarget" | null;
@@ -21,6 +22,18 @@ type CalendarFeedItem = {
     label: string | null;
     href: string | null;
   };
+  outreach?: {
+    campaignId: string;
+    campaignName: string;
+    touchId: string | null;
+    touchNumber: number | null;
+    touchTitle: string | null;
+    action: string | null;
+    channel: string | null;
+    subject: string | null;
+    body: string | null;
+    email: string | null;
+  } | null;
 };
 
 function parseDateParam(value: string | null): Date | null {
@@ -80,6 +93,57 @@ function displaySourceChannel(value: string | null): string | null {
   return value?.toLocaleLowerCase() === "telegram" ? "TG" : value;
 }
 
+function textAfterMarker(value: string | null, marker: string): string | null {
+  if (!value) {
+    return null;
+  }
+  const index = value.indexOf(marker);
+  if (index < 0) {
+    return null;
+  }
+  const rest = value.slice(index + marker.length);
+  const nextSection = rest.search(/\n\n[A-Z][A-Za-z ]+:/);
+  return (nextSection >= 0 ? rest.slice(0, nextSection) : rest).trim() || null;
+}
+
+function outreachDetailsForReminder(
+  reminder: Reminder,
+  coldTargets: Map<string, ColdTarget>,
+  campaigns: Awaited<ReturnType<typeof getCrmRuntimeSettings>>["outreachCampaigns"]["campaigns"]
+): CalendarFeedItem["outreach"] {
+  if (reminder.sourceChannel !== "outreach-campaign" || !reminder.coldTargetId) {
+    return null;
+  }
+  const lines = (reminder.description ?? "").split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+  const campaignName = lines[0] ?? "";
+  const campaign = campaigns.find((item) => item.name === campaignName) ?? null;
+  const touchMatch = reminder.title.match(/^Touch\s+(\d+):\s*(.+?)(?:\s+-\s+.+)?$/i);
+  const touchNumber = touchMatch ? Number(touchMatch[1]) : null;
+  const touchTitle = touchMatch?.[2]?.trim() || null;
+  const touch =
+    campaign?.touchpoints.find((item) => item.touchNumber === touchNumber) ??
+    campaign?.touchpoints.find((item) => item.title === touchTitle) ??
+    null;
+  const subject = textAfterMarker(reminder.description, "Subject:");
+  const body = textAfterMarker(reminder.description, "Draft:");
+  const coldTarget = coldTargets.get(reminder.coldTargetId);
+  if (!campaign && !subject && !body) {
+    return null;
+  }
+  return {
+    campaignId: campaign?.id ?? campaignName,
+    campaignName: campaign?.name ?? campaignName,
+    touchId: touch?.id ?? null,
+    touchNumber,
+    touchTitle: touch?.title ?? touchTitle,
+    action: touch?.action ?? lines[1] ?? null,
+    channel: touch?.channel ?? null,
+    subject,
+    body,
+    email: coldTarget?.email ?? null
+  };
+}
+
 function resolveLeadFilter(value: string | null, leads: Lead[]): string | null {
   if (!value) {
     return null;
@@ -126,12 +190,13 @@ export async function GET(request: Request) {
     };
     const includeArchived = url.searchParams.get("includeArchived") === "true";
     const crm = getCrm();
-    const [reminders, events, leads, clients, coldTargets] = await Promise.all([
+    const [reminders, events, leads, clients, coldTargets, settings] = await Promise.all([
       crm.listRecords({ entity: "reminder", workspaceId, includeArchived }),
       crm.listRecords({ entity: "calendarEvent", workspaceId, includeArchived }),
       crm.listRecords({ entity: "lead", workspaceId, includeArchived: true }),
       crm.listRecords({ entity: "client", workspaceId, includeArchived: true }),
-      crm.listRecords({ entity: "coldTarget", workspaceId, includeArchived: true })
+      crm.listRecords({ entity: "coldTarget", workspaceId, includeArchived: true }),
+      getCrmRuntimeSettings()
     ]);
     const lookup = {
       leads: new Map(leads.map((lead) => [lead.id, lead])),
@@ -156,7 +221,8 @@ export async function GET(request: Request) {
         status: reminder.status,
         sourceChannel: displaySourceChannel(reminder.sourceChannel),
         location: null,
-        related: resolveRelated(reminder, lookup)
+        related: resolveRelated(reminder, lookup),
+        outreach: outreachDetailsForReminder(reminder, lookup.coldTargets, settings.outreachCampaigns.campaigns)
       }));
     const visibleReminderIds = new Set(reminderItems.map((reminder) => reminder.id));
     const eventItems: CalendarFeedItem[] = events
@@ -173,7 +239,8 @@ export async function GET(request: Request) {
         status: event.syncStatus,
         sourceChannel: displaySourceChannel(event.externalProvider ?? "crm"),
         location: event.location,
-        related: resolveRelated(event, lookup)
+        related: resolveRelated(event, lookup),
+        outreach: null
       }));
     return NextResponse.json(
       [...reminderItems, ...eventItems].sort((left, right) => left.startsAt.localeCompare(right.startsAt))

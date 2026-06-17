@@ -36,7 +36,37 @@ type CrmSettingsResponse = {
       offerValidityDays: number;
       autoGenerateWhenReady: boolean;
     };
+    outreachCampaigns: {
+      campaigns: OutreachCampaignSettings[];
+    };
   };
+};
+
+type CreateOutreachCampaignResponse = CrmSettingsResponse & {
+  campaign: OutreachCampaignSettings;
+};
+
+type OutreachCampaignSettings = {
+  id: string;
+  name: string;
+  status: "active" | "draft" | "archived";
+  summary: string;
+  goal: string;
+  prompt: string;
+  touchpoints: Array<{
+    id: string;
+    touchNumber: number;
+    dayOffset: number;
+    channel: "email" | "linkedin" | "phone";
+    title: string;
+    action: string;
+    templateId?: string;
+  }>;
+  templates: Array<{
+    id: string;
+    subject: string;
+    body: string;
+  }>;
 };
 
 const intentOptions: CrmIntent[] = [
@@ -116,7 +146,7 @@ type ProjectPerson = LangGraphRuntimeSettings["projectPeople"][number];
 type OfferReadinessField = LangGraphRuntimeSettings["offerReadiness"]["fields"][number];
 
 export function LangGraphSettingsPage() {
-  const [activeTab, setActiveTab] = useState<"crm" | "langgraph">("crm");
+  const [activeTab, setActiveTab] = useState<"crm" | "outreach" | "langgraph">("crm");
   const [settings, setSettings] = useState<LangGraphRuntimeSettings | null>(null);
   const [presets, setPresets] = useState<LangGraphRuntimeSettings[]>([]);
   const [crmSettings, setCrmSettings] = useState<CrmSettingsResponse["settings"] | null>(null);
@@ -124,6 +154,9 @@ export function LangGraphSettingsPage() {
   const [crmStatus, setCrmStatus] = useState<"loading" | "saved" | "saving" | "error">("loading");
   const [error, setError] = useState<string | null>(null);
   const [crmError, setCrmError] = useState<string | null>(null);
+  const [newCampaignMetaprompt, setNewCampaignMetaprompt] = useState("");
+  const [campaignCreateStatus, setCampaignCreateStatus] = useState<"idle" | "running" | "saved" | "error">("idle");
+  const [campaignCreateNotice, setCampaignCreateNotice] = useState<string | null>(null);
   const [traceText, setTraceText] = useState(
     "Новый лид из WhatsApp: дом 140 м2. Напомни через две недели подготовить e-mail."
   );
@@ -441,6 +474,72 @@ export function LangGraphSettingsPage() {
     }
   }
 
+  async function patchCrmOutreachCampaign(campaignId: string, value: Partial<OutreachCampaignSettings>) {
+    if (!crmSettings) {
+      return;
+    }
+    const optimistic = {
+      ...crmSettings,
+      outreachCampaigns: {
+        ...crmSettings.outreachCampaigns,
+        campaigns: crmSettings.outreachCampaigns.campaigns.map((campaign) =>
+          campaign.id === campaignId ? { ...campaign, ...value } : campaign
+        )
+      }
+    };
+    setCrmSettings(optimistic);
+    setCrmStatus("saving");
+    try {
+      const response = await fetch("/api/crm/settings", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ outreachCampaigns: optimistic.outreachCampaigns })
+      });
+      const payload = (await response.json()) as CrmSettingsResponse & { error?: string };
+      if (!response.ok) {
+        throw new Error(payload.error ?? "Outreach campaign save failed");
+      }
+      setCrmSettings(payload.settings);
+      setCrmError(null);
+      setCrmStatus("saved");
+    } catch (reason) {
+      setCrmSettings(crmSettings);
+      setCrmError(reason instanceof Error ? reason.message : "Outreach campaign save failed");
+      setCrmStatus("error");
+    }
+  }
+
+  async function createOutreachCampaignFromMetaprompt() {
+    const metaprompt = newCampaignMetaprompt.trim();
+    if (!metaprompt) {
+      setCampaignCreateNotice("Paste a metaprompt first.");
+      setCampaignCreateStatus("error");
+      return;
+    }
+    setCampaignCreateStatus("running");
+    setCampaignCreateNotice(null);
+    setCrmError(null);
+    try {
+      const response = await fetch("/api/crm/outreach-campaigns/from-metaprompt", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ metaprompt })
+      });
+      const payload = (await response.json()) as CreateOutreachCampaignResponse & { error?: string };
+      if (!response.ok) {
+        throw new Error(payload.error ?? "Campaign creation failed");
+      }
+      setCrmSettings(payload.settings);
+      setNewCampaignMetaprompt("");
+      setCampaignCreateStatus("saved");
+      setCampaignCreateNotice(`Created ${payload.campaign.name}`);
+      setCrmStatus("saved");
+    } catch (reason) {
+      setCampaignCreateStatus("error");
+      setCampaignCreateNotice(reason instanceof Error ? reason.message : "Campaign creation failed");
+    }
+  }
+
   async function runTracePreview() {
     if (!traceText.trim()) {
       return;
@@ -494,17 +593,30 @@ export function LangGraphSettingsPage() {
           <p>
             {activeTab === "crm"
               ? "Commercial offer templates, fee tables, and CRM workflow defaults."
+              : activeTab === "outreach"
+                ? "Outreach campaign metaprompts, cadence summaries, and launch defaults."
               : activePreset?.description ?? settings.description}
           </p>
         </div>
-        <span className={`liveStatus ${activeTab === "crm" ? crmStatus : status}`}>
-          {(activeTab === "crm" ? crmStatus : status) === "saved" ? "Live" : activeTab === "crm" ? crmStatus : status}
+        <span className={`liveStatus ${activeTab === "crm" || activeTab === "outreach" ? crmStatus : status}`}>
+          {(activeTab === "crm" || activeTab === "outreach" ? crmStatus : status) === "saved"
+            ? "Live"
+            : activeTab === "crm" || activeTab === "outreach"
+              ? crmStatus
+              : status}
         </span>
       </header>
 
       <div className="settingsTabs">
         <button className={activeTab === "crm" ? "active" : ""} type="button" onClick={() => setActiveTab("crm")}>
           CRM Settings
+        </button>
+        <button
+          className={activeTab === "outreach" ? "active" : ""}
+          type="button"
+          onClick={() => setActiveTab("outreach")}
+        >
+          Outreach Campaigns
         </button>
         <button
           className={activeTab === "langgraph" ? "active" : ""}
@@ -608,6 +720,116 @@ export function LangGraphSettingsPage() {
                 </div>
               </div>
             </section>
+          </div>
+        </>
+      ) : activeTab === "outreach" ? (
+        <>
+          {crmError ? <div className="settingsError">{crmError}</div> : null}
+          <div className="settingsGrid">
+            <section className="settingsPanel wide outreachCampaignPanel">
+              <div className="settingsPanelHeader">
+                <div>
+                  <h2>Create campaign from metaprompt</h2>
+                  <p>Paste a full outreach metaprompt. The LLM will turn it into campaign summary, touchpoints, and email templates.</p>
+                </div>
+                <span className="settingsPill">LLM</span>
+              </div>
+              <label>
+                <span>New campaign metaprompt</span>
+                <textarea
+                  rows={8}
+                  value={newCampaignMetaprompt}
+                  onChange={(event) => {
+                    setNewCampaignMetaprompt(event.target.value);
+                    if (campaignCreateStatus !== "running") {
+                      setCampaignCreateStatus("idle");
+                      setCampaignCreateNotice(null);
+                    }
+                  }}
+                  placeholder="Paste the full campaign metaprompt here..."
+                />
+              </label>
+              <div className="settingsActions">
+                <button
+                  type="button"
+                  onClick={() => void createOutreachCampaignFromMetaprompt()}
+                  disabled={campaignCreateStatus === "running" || !newCampaignMetaprompt.trim()}
+                >
+                  {campaignCreateStatus === "running" ? "Creating..." : "Create campaign"}
+                </button>
+                {campaignCreateNotice ? (
+                  <span className={campaignCreateStatus === "error" ? "settingsInlineError" : "settingsInlineNotice"}>
+                    {campaignCreateNotice}
+                  </span>
+                ) : null}
+              </div>
+            </section>
+            {(crmSettings?.outreachCampaigns.campaigns ?? []).map((campaign) => (
+              <section className="settingsPanel wide outreachCampaignPanel" key={campaign.id}>
+                <div className="settingsPanelHeader">
+                  <div>
+                    <h2>{campaign.name}</h2>
+                    <p>{campaign.goal}</p>
+                  </div>
+                  <span className="settingsPill">{campaign.status}</span>
+                </div>
+                <label>
+                  <span>Short summary</span>
+                  <textarea
+                    rows={3}
+                    value={campaign.summary}
+                    onChange={(event) => {
+                      setCrmSettings((current) =>
+                        current
+                          ? {
+                              ...current,
+                              outreachCampaigns: {
+                                ...current.outreachCampaigns,
+                                campaigns: current.outreachCampaigns.campaigns.map((item) =>
+                                  item.id === campaign.id ? { ...item, summary: event.target.value } : item
+                                )
+                              }
+                            }
+                          : current
+                      );
+                    }}
+                    onBlur={(event) => patchCrmOutreachCampaign(campaign.id, { summary: event.target.value })}
+                  />
+                </label>
+                <div className="outreachTouchGrid">
+                  {campaign.touchpoints.map((touch) => (
+                    <article key={touch.id}>
+                      <span>D+{touch.dayOffset}</span>
+                      <strong>{touch.touchNumber}. {touch.title}</strong>
+                      <small>{touch.channel} · {touch.action}</small>
+                    </article>
+                  ))}
+                </div>
+                <label>
+                  <span>Metaprompt</span>
+                  <textarea
+                    rows={10}
+                    value={campaign.prompt}
+                    onChange={(event) => {
+                      setCrmSettings((current) =>
+                        current
+                          ? {
+                              ...current,
+                              outreachCampaigns: {
+                                ...current.outreachCampaigns,
+                                campaigns: current.outreachCampaigns.campaigns.map((item) =>
+                                  item.id === campaign.id ? { ...item, prompt: event.target.value } : item
+                                )
+                              }
+                            }
+                          : current
+                      );
+                    }}
+                    onBlur={(event) => patchCrmOutreachCampaign(campaign.id, { prompt: event.target.value })}
+                  />
+                </label>
+              </section>
+            ))}
           </div>
         </>
       ) : (

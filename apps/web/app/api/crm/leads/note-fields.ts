@@ -9,6 +9,7 @@ export const leadNoteFields = {
   address: "Address",
   clientProjects: "Client projects",
   budgetEur: "Budget EUR",
+  offerFields: "Offer fields",
   rawInput: "Raw input"
 } as const;
 
@@ -65,6 +66,31 @@ export function replaceNoteField(notes: string | null | undefined, label: string
     .map((block) => block.trim())
     .filter(Boolean)
     .join("\n\n") || null;
+}
+
+export function readJsonNoteField<TValue>(notes: string | null, label: string): TValue | null {
+  const raw = readNoteField(notes, label);
+  if (!raw) {
+    return null;
+  }
+  try {
+    return JSON.parse(raw) as TValue;
+  } catch {
+    return null;
+  }
+}
+
+export function replaceJsonNoteField(
+  notes: string | null | undefined,
+  label: string,
+  value: Record<string, string | null | undefined>
+): string | null {
+  const compact = Object.fromEntries(
+    Object.entries(value)
+      .map(([key, fieldValue]) => [key, typeof fieldValue === "string" ? fieldValue.trim() : ""] as const)
+      .filter(([, fieldValue]) => fieldValue)
+  );
+  return replaceNoteField(notes, label, Object.keys(compact).length > 0 ? JSON.stringify(compact, null, 2) : null);
 }
 
 export function notesWithTabularPatch<TPatch extends Record<string, unknown>>(

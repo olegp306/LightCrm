@@ -39,7 +39,18 @@ function NavIcon({ icon: Icon }: { icon: LucideIcon }) {
   );
 }
 
+function getEnvironmentBadge() {
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
+  const workspaceId = process.env.LIGHTCRM_WORKSPACE_ID ?? "";
+  if (workspaceId.toLowerCase() === "test" || appUrl.includes(":3004")) {
+    return "Тестовый стенд · 3004";
+  }
+  return null;
+}
+
 export default function RootLayout({ children }: { children: React.ReactNode }) {
+  const environmentBadge = getEnvironmentBadge();
+
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
@@ -58,6 +69,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                 <strong>LightCrm</strong>
                 <span>v{appPackage.version}</span>
               </Link>
+              {environmentBadge ? <div className="environmentBadge">{environmentBadge}</div> : null}
             </div>
             <nav className="nav" aria-label="CRM navigation">
               <div className="navPrimary" aria-label="Operator workspace">

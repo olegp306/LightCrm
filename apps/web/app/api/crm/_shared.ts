@@ -39,7 +39,14 @@ export async function parseJson<TSchema extends z.ZodTypeAny>(
 
 export function handleRouteError(error: unknown) {
   if (error instanceof z.ZodError) {
-    return jsonError(error.issues.map((issue) => issue.message).join("; "));
+    return jsonError(
+      error.issues
+        .map((issue) => {
+          const path = issue.path.length > 0 ? issue.path.join(".") : "request";
+          return `${path}: ${issue.message}`;
+        })
+        .join("; ")
+    );
   }
   if (error instanceof Error) {
     return jsonError(error.message);

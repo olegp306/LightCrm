@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { evaluateCommercialOfferReadiness } from "@lightcrm/core";
 import { defaultWorkspaceId, getCrm, handleRouteError } from "../_shared";
 import { getCrmRuntimeSettings } from "../settings/crm-settings-store";
-import { leadNoteFields, readNoteField } from "./note-fields";
+import { leadNoteFields, readJsonNoteField, readNoteField } from "./note-fields";
 
 const leadSummaryShortMax = 260;
 const leadSummaryLongMax = 900;
@@ -125,6 +125,7 @@ export async function GET(request: Request) {
         const todo = readNoteField(lead.notes, leadNoteFields.todo);
         const ballSide = readNoteField(lead.notes, leadNoteFields.ballSide) ?? "us";
         const budgetEur = readNoteField(lead.notes, leadNoteFields.budgetEur);
+        const offerFields = readJsonNoteField<Record<string, string>>(lead.notes, leadNoteFields.offerFields) ?? {};
         const storedSummary = latestSummaryByLeadId.get(lead.id);
         const notesSummary = readLatestLeadSummary(lead.notes);
         const offerReadiness = evaluateCommercialOfferReadiness(
@@ -161,6 +162,7 @@ export async function GET(request: Request) {
           messenger: lead.whatsapp ?? client?.whatsapp ?? null,
           clientProjects: readNoteField(lead.notes, leadNoteFields.clientProjects),
           budgetEur,
+          offerFields,
           rawInput: readNoteField(lead.notes, leadNoteFields.rawInput),
           offerStatus: offerReadiness.status,
           offerMissingFields: offerReadiness.missingFields.join(", "),

@@ -54,6 +54,7 @@ export type Lead = BaseRecord & {
 };
 
 export type ColdTarget = BaseRecord & {
+  code: string | null;
   name: string;
   company: string | null;
   role: string | null;
@@ -63,6 +64,8 @@ export type ColdTarget = BaseRecord & {
   website: string | null;
   status: ColdTargetStatus;
   source: string | null;
+  notesResearch: string | null;
+  archivedLetters: string | null;
   notes: string | null;
 };
 
@@ -201,6 +204,7 @@ export type UpsertLeadInput = {
 export type UpsertColdTargetInput = {
   id?: string;
   workspaceId: string;
+  code?: string | null;
   name: string;
   company?: string | null;
   role?: string | null;
@@ -210,6 +214,8 @@ export type UpsertColdTargetInput = {
   website?: string | null;
   status?: ColdTargetStatus;
   source?: string | null;
+  notesResearch?: string | null;
+  archivedLetters?: string | null;
   notes?: string | null;
 };
 

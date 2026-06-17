@@ -124,6 +124,21 @@ input {
   font-size: 13px;
 }
 
+.environmentBadge {
+  display: inline-flex;
+  align-items: center;
+  margin-top: 8px;
+  max-width: 100%;
+  border: 1px solid var(--warn);
+  border-radius: 6px;
+  padding: 4px 8px;
+  background: var(--warn-soft);
+  color: var(--warn);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
 .nav {
   display: grid;
   gap: 10px;
@@ -507,6 +522,31 @@ input {
   font-size: 13px;
 }
 
+.calendarTouchFilter {
+  align-items: center;
+  display: inline-flex;
+  gap: 6px;
+  min-width: 0;
+}
+
+.calendarTouchFilter span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.calendarTouchFilter select {
+  background: color-mix(in srgb, var(--control) 78%, var(--panel));
+  border: 1px solid color-mix(in srgb, var(--line) 70%, transparent);
+  border-radius: 7px;
+  color: var(--ink);
+  font: inherit;
+  font-size: 12px;
+  min-height: 30px;
+  min-width: 190px;
+  padding: 6px 10px;
+}
+
 .calendarCreateForm {
   align-items: end;
   background: var(--panel);
@@ -720,6 +760,15 @@ input {
   background: color-mix(in srgb, var(--accent) 78%, #ffffff);
 }
 
+.calendarSplit .calendarDayItems .calendarChipOutreach {
+  background: color-mix(in srgb, #8b5cf6 82%, #ffffff);
+}
+
+.calendarSplit .calendarDayItems .calendarChipOutreach.activeOutreach {
+  background: color-mix(in srgb, #f59e0b 86%, #ffffff);
+  box-shadow: 0 0 0 2px color-mix(in srgb, #f59e0b 24%, transparent);
+}
+
 .calendarSplit .calendarDayItems .calendarChip > *,
 .calendarSplit .calendarDayItems .calendarChipTime {
   display: none;
@@ -799,6 +848,16 @@ input {
 
 .calendarChipEvent {
   border-left-color: var(--accent);
+}
+
+.calendarChipOutreach {
+  border-left-color: #8b5cf6;
+}
+
+.calendarChipOutreach.activeOutreach {
+  border-color: color-mix(in srgb, #f59e0b 48%, var(--line));
+  border-left-color: #f59e0b;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, #f59e0b 18%, transparent);
 }
 
 .calendarChip div {
@@ -905,10 +964,18 @@ input {
 }
 
 .calendarInspector > header {
+  align-items: center;
   border-bottom: 1px solid color-mix(in srgb, var(--line) 50%, transparent);
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+  padding: 5px 12px 10px;
+}
+
+.calendarInspector > header > div:first-child {
   display: grid;
   gap: 4px;
-  padding: 5px 12px 10px;
+  min-width: 0;
 }
 
 .calendarInspector > header span {
@@ -920,6 +987,21 @@ input {
 
 .calendarInspector > header strong {
   font-size: 16px;
+}
+
+.calendarInspectorHeaderActions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  justify-content: flex-end;
+  min-width: 0;
+}
+
+.calendarInspectorCount {
+  color: var(--muted);
+  font-size: 12px;
+  white-space: nowrap;
 }
 
 .calendarTimeline {
@@ -972,14 +1054,12 @@ input {
   padding: 10px 11px;
   transition:
     border-color 140ms ease,
-    box-shadow 140ms ease,
-    transform 140ms ease;
+    box-shadow 140ms ease;
 }
 
 .calendarTimelineCard:hover {
   border-color: color-mix(in srgb, var(--accent) 24%, var(--line));
   box-shadow: 0 8px 18px color-mix(in srgb, var(--shadow) 20%, transparent);
-  transform: translateY(-1px);
 }
 
 .calendarTimelineTopline {
@@ -1017,12 +1097,299 @@ input {
   margin: 0;
 }
 
+.calendarTimelineOutreachLine {
+  color: var(--ink-soft);
+  display: -webkit-box;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+}
+
+.calendarEmailDetails {
+  border: 1px solid color-mix(in srgb, var(--line) 60%, transparent);
+  border-radius: 7px;
+  overflow: hidden;
+}
+
+.calendarEmailDetails summary {
+  align-items: center;
+  background: color-mix(in srgb, var(--control) 72%, var(--panel));
+  color: var(--ink-soft);
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  font-weight: 700;
+  list-style: none;
+  padding: 6px 8px;
+}
+
+.calendarEmailDetails summary::after {
+  color: var(--muted);
+  content: "show";
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.calendarEmailDetails[open] summary::after {
+  content: "hide";
+}
+
+.calendarEmailDetails summary::-webkit-details-marker {
+  display: none;
+}
+
+.calendarEmailSummaryHide,
+.calendarEmailDetails[open] .calendarEmailSummaryShow {
+  display: none;
+}
+
+.calendarEmailDetails[open] .calendarEmailSummaryHide {
+  display: inline;
+}
+
+.calendarEmailPreview {
+  display: grid;
+  gap: 3px;
+  padding: 5px 6px 6px;
+}
+
+.calendarEmailSubjectRow {
+  align-items: end;
+  display: grid;
+  gap: 6px;
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.calendarEmailSubjectRow label {
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+}
+
+.calendarEmailSubjectRow button,
+.calendarEmailActions button,
+.calendarEmailGmailButton {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--ink-soft);
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  min-height: 28px;
+  padding: 5px 9px;
+}
+
+.calendarEmailSubjectRow button[aria-pressed="true"] {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.calendarEmailBody {
+  display: grid;
+  gap: 1px;
+  margin: 0;
+}
+
+.calendarEmailSubjectRow label > span,
+.calendarEmailBody > span {
+  color: var(--muted);
+  font-size: 7px;
+  font-weight: 700;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.calendarEmailPreview > p strong {
+  color: var(--ink);
+  font-size: 13px;
+}
+
+.calendarEmailPreview input,
+.calendarEmailPreview textarea {
+  background: color-mix(in srgb, var(--control) 72%, var(--panel));
+  border: 1px solid color-mix(in srgb, var(--line) 68%, transparent);
+  border-radius: 7px;
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+  min-width: 0;
+  padding: 5px 7px;
+  width: 100%;
+}
+
+.calendarEmailPreview textarea {
+  min-height: 132px;
+  resize: vertical;
+}
+
+.calendarEmailStyledBody,
+.calendarEmailBody pre {
+  background: color-mix(in srgb, var(--panel) 88%, var(--control));
+  border: 1px solid color-mix(in srgb, var(--line) 54%, transparent);
+  border-radius: 7px;
+  color: var(--ink-soft);
+  font-size: 12px;
+  line-height: 1.5;
+  margin: 0;
+  padding: 6px 7px;
+  white-space: pre-wrap;
+}
+
+.calendarEmailStyledBody.editable {
+  cursor: text;
+  min-height: 96px;
+  outline: none;
+}
+
+.calendarEmailStyledBody.editable:focus {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--line));
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 14%, transparent);
+}
+
+.calendarEmailStyledBody p {
+  margin: 0 0 8px;
+}
+
+.calendarEmailStyledBody p:last-child {
+  margin-bottom: 0;
+}
+
+.calendarEmailStyledBody p.lead {
+  color: var(--ink);
+  font-weight: 700;
+}
+
+.calendarEmailStyledBody p.closing {
+  font-style: italic;
+}
+
+.calendarEmailActions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.calendarEmailSendButton {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: white;
+}
+
+.calendarEmailGmailButton {
+  align-items: center;
+  display: inline-flex;
+  gap: 6px;
+}
+
+.calendarEmailGmailButton:hover {
+  background: color-mix(in srgb, #d93025 10%, var(--panel));
+  border-color: color-mix(in srgb, #d93025 36%, var(--line));
+  color: color-mix(in srgb, #d93025 72%, var(--ink));
+}
+
+.calendarEmailSendButton {
+  align-items: center;
+  display: inline-flex;
+  gap: 6px;
+  isolation: isolate;
+  overflow: visible;
+  position: relative;
+}
+
+.calendarEmailSendIcon {
+  flex: 0 0 auto;
+  transform-origin: 50% 50%;
+}
+
+.calendarEmailSendButton.sent .calendarEmailSendIcon {
+  animation: calendarPaperPlaneTakeoff 920ms cubic-bezier(0.2, 0.82, 0.22, 1) forwards;
+  filter: drop-shadow(0 7px 12px color-mix(in srgb, var(--accent) 42%, transparent));
+  position: relative;
+  z-index: 3;
+}
+
+.calendarEmailActions button:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+.calendarEmailStatus,
+.calendarEmailCelebration {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.calendarEmailCelebration {
+  color: color-mix(in srgb, var(--success) 72%, var(--ink));
+  font-weight: 800;
+  opacity: 0;
+  animation: calendarSuccessAppear 260ms ease 760ms forwards;
+}
+
+@keyframes calendarPaperPlaneTakeoff {
+  0% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) rotate(0deg) scale(1);
+  }
+  34% {
+    opacity: 1;
+    transform: translate3d(18px, -24px, 0) rotate(-15deg) scale(1.06);
+  }
+  72% {
+    opacity: 0.86;
+    transform: translate3d(54px, -92px, 0) rotate(9deg) scale(0.92);
+  }
+  100% {
+    opacity: 0;
+    transform: translate3d(96px, -154px, 0) rotate(18deg) scale(0.76);
+  }
+}
+
+@keyframes calendarSuccessAppear {
+  from {
+    opacity: 0;
+    transform: translateY(3px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .calendarEmailSendButton.sent .calendarEmailSendIcon,
+  .calendarEmailCelebration {
+    animation: none;
+    opacity: 1;
+    transform: none;
+  }
+}
+
 .calendarTimelineActions {
   align-items: center;
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
+  justify-content: space-between;
   padding-top: 2px;
+}
+
+.calendarTimelineActionsLeft,
+.calendarTimelineActionsRight {
+  align-items: center;
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.calendarTimelineActionsRight {
+  margin-left: auto;
+  justify-content: flex-end;
 }
 
 .calendarTimelineActions a,
@@ -1042,6 +1409,24 @@ input {
 .calendarTimelineActions button:hover {
   background: var(--accent-soft);
   color: var(--accent);
+}
+
+.calendarTimelineActions .calendarEmailSendButton {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: white;
+}
+
+.calendarTimelineActions .calendarEmailSendButton:hover {
+  background: color-mix(in srgb, var(--accent) 88%, #ffffff);
+  border-color: var(--accent);
+  color: white;
+}
+
+.calendarTimelineActions .calendarEmailGmailButton:hover {
+  background: color-mix(in srgb, #d93025 10%, var(--panel));
+  border-color: color-mix(in srgb, #d93025 36%, var(--line));
+  color: color-mix(in srgb, #d93025 72%, var(--ink));
 }
 
 .calendarInspectorEmpty {
@@ -1128,7 +1513,7 @@ input {
 
 .leadFieldGuide summary::before {
   color: var(--muted);
-  content: "›";
+  content: "вЂє";
   display: inline-block;
   font-size: 15px;
   line-height: 1;
@@ -1622,6 +2007,7 @@ input {
   display: inline-flex;
   gap: 2px;
   padding: 2px;
+  pointer-events: none;
   position: absolute;
   z-index: 5;
 }
@@ -1637,6 +2023,7 @@ input {
   height: 22px;
   justify-content: center;
   padding: 0;
+  pointer-events: auto;
   width: 22px;
 }
 
@@ -2077,6 +2464,10 @@ input {
   }
 }
 
+.tableSurface {
+  --table-font-scale: 1;
+}
+
 .detailsDrawerBackdrop {
   align-items: center;
   background: color-mix(in srgb, var(--backdrop) 58%, transparent);
@@ -2094,13 +2485,14 @@ input {
   border-radius: 8px;
   box-shadow: 0 22px 54px var(--shadow-strong);
   color: var(--ink);
+  font-size: calc(13px * var(--table-font-scale, 1));
   display: grid;
   gap: 12px;
   grid-template-rows: auto minmax(0, 1fr) auto;
-  max-height: min(760px, calc(100vh - 36px));
-  max-width: min(920px, calc(100vw - 36px));
+  max-height: min(950px, calc(100vh - 36px));
+  max-width: min(1500px, calc(100vw - 36px));
   padding: 16px;
-  width: 880px;
+  width: 1430px;
 }
 
 .detailsDrawer header {
@@ -2128,13 +2520,13 @@ input {
 }
 
 .detailsDrawer h2 {
-  font-size: 17px;
+  font-size: calc(17px * var(--table-font-scale, 1));
   line-height: 1.2;
 }
 
 .detailsDrawer p {
   color: var(--muted);
-  font-size: 13px;
+  font-size: calc(13px * var(--table-font-scale, 1));
 }
 
 .detailsDrawer header button {
@@ -2203,6 +2595,14 @@ input {
   grid-template-columns: 1fr;
 }
 
+.detailsDrawerBody.lead {
+  grid-template-columns: minmax(360px, 0.4fr) minmax(560px, 0.6fr);
+}
+
+.detailsDrawerBody.coldTarget {
+  grid-template-columns: minmax(320px, 0.4fr) minmax(520px, 0.6fr);
+}
+
 .detailsDrawerFields {
   align-content: start;
   display: grid;
@@ -2228,11 +2628,12 @@ input {
 .detailsDrawerSection > span,
 .detailsDrawerDetails summary {
   color: var(--muted);
-  font-size: 11px;
+  font-size: calc(11px * var(--table-font-scale, 1));
   font-weight: 700;
 }
 
 .detailsDrawerFields input,
+.detailsDrawerFields select,
 .detailsDrawerFields textarea,
 .detailsDrawerField strong {
   background: var(--control);
@@ -2240,7 +2641,7 @@ input {
   border-radius: 6px;
   color: var(--ink);
   font: inherit;
-  font-size: 13px;
+  font-size: calc(13px * var(--table-font-scale, 1));
   min-width: 0;
   padding: 8px 9px;
 }
@@ -2252,19 +2653,19 @@ input {
   overflow-wrap: anywhere;
 }
 
+.detailsDrawerFields select {
+  cursor: pointer;
+}
+
 .detailsDrawerFields textarea {
   line-height: 1.35;
   resize: vertical;
 }
 
 .detailsClientSection {
-  background: color-mix(in srgb, var(--control) 72%, var(--panel));
-  border: 1px solid var(--line);
-  border-radius: 8px;
   display: grid;
-  gap: 8px;
-  grid-column: 1 / -1;
-  padding: 9px;
+  gap: 4px;
+  position: relative;
 }
 
 .detailsClientSection > header {
@@ -2294,11 +2695,59 @@ input {
   overflow-wrap: anywhere;
 }
 
+.detailsClientPicker {
+  align-items: stretch;
+  display: grid;
+  gap: 0;
+  grid-template-columns: minmax(0, 1fr) 34px;
+  min-width: 0;
+  position: relative;
+}
+
+.detailsClientPicker input {
+  border-bottom-right-radius: 0;
+  border-top-right-radius: 0;
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.detailsClientPicker > button {
+  align-items: center;
+  background: var(--control);
+  border: 1px solid var(--line);
+  border-left: 0;
+  border-radius: 0 6px 6px 0;
+  color: var(--muted);
+  cursor: pointer;
+  display: inline-flex;
+  justify-content: center;
+  padding: 0;
+}
+
+.detailsClientPicker > button:hover,
+.detailsClientPicker > button:focus-visible {
+  background: var(--accent-soft);
+  color: var(--accent);
+  outline: none;
+}
+
 .detailsClientOptions {
+  background: color-mix(in srgb, var(--control) 82%, var(--panel));
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: 0 18px 44px rgba(15, 23, 42, 0.2);
   display: grid;
   gap: 5px;
-  max-height: 156px;
+  left: 0;
+  margin-top: 4px;
+  max-height: 168px;
   overflow: auto;
+  padding: 6px;
+  position: absolute;
+  right: 0;
+  top: 100%;
+  z-index: 50;
 }
 
 .detailsClientOptions button {
@@ -2460,6 +2909,12 @@ input {
 
 .detailsDrawerSection.offer {
   background: color-mix(in srgb, #fff4d8 38%, var(--control));
+  gap: 4px;
+  padding: 6px 8px;
+}
+
+.detailsDrawerSection.outreach {
+  background: color-mix(in srgb, var(--accent) 8%, var(--control));
 }
 
 .detailsDrawerSectionHeader {
@@ -2467,6 +2922,10 @@ input {
   display: flex;
   gap: 8px;
   justify-content: space-between;
+}
+
+.detailsDrawerSectionHeader::-webkit-details-marker {
+  display: none;
 }
 
 .detailsDrawerSectionHeader div {
@@ -2477,14 +2936,27 @@ input {
 
 .detailsDrawerSectionHeader span {
   color: var(--muted);
-  font-size: 11px;
+  font-size: calc(11px * var(--table-font-scale, 1));
   font-weight: 700;
+}
+
+.detailsDrawerSectionHeader span {
+  align-items: baseline;
+  display: inline-flex;
+  gap: 6px;
 }
 
 .detailsDrawerSectionHeader strong {
   color: var(--ink);
-  font-size: 13px;
+  font-size: calc(11px * var(--table-font-scale, 1));
   font-weight: 700;
+}
+
+.detailsDrawerSectionHeader .detailsOfferActions {
+  display: inline-flex;
+  gap: 6px;
+  justify-content: flex-end;
+  min-width: max-content;
 }
 
 .detailsDrawerSectionHeader button,
@@ -2495,19 +2967,25 @@ input {
   color: var(--ink);
   cursor: pointer;
   font: inherit;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
-  padding: 4px 8px;
+  min-height: 28px;
+  padding: 5px 10px;
+}
+
+.detailsDrawerSectionHeader button:disabled {
+  cursor: wait;
+  opacity: 0.62;
 }
 
 .detailsOfferMissingEditor {
   display: grid;
-  gap: 9px;
+  gap: 4px;
 }
 
 .detailsOfferMissingEditor section {
   display: grid;
-  gap: 6px;
+  gap: 3px;
 }
 
 .detailsOfferMissingEditor section > span {
@@ -2518,7 +2996,7 @@ input {
 
 .detailsOfferMissingEditor label {
   display: grid;
-  gap: 4px;
+  gap: 2px;
 }
 
 .detailsOfferMissingEditor label > span {
@@ -2533,15 +3011,340 @@ input {
   border-radius: 6px;
   color: var(--ink);
   font: inherit;
-  font-size: 13px;
+  font-size: 12px;
   min-width: 0;
-  padding: 7px 8px;
+  padding: 4px 7px;
 }
 
 .detailsOfferMissingEditor small {
   color: var(--ink-soft);
+  font-size: 10px;
+  line-height: 1.2;
+}
+
+.detailsOutreachPanel {
+  display: grid;
+  gap: 6px;
+}
+
+.detailsOutreachPanel label {
+  display: grid;
+  gap: 4px;
+}
+
+.detailsOutreachPanel label > span,
+.detailsOutreachCurrent span {
+  color: var(--muted);
+  font-size: calc(11px * var(--table-font-scale, 1));
+  font-weight: 700;
+}
+
+.detailsOutreachPanel select {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--ink);
+  font: inherit;
+  font-size: calc(13px * var(--table-font-scale, 1));
+  min-width: 0;
+  padding: 6px 8px;
+}
+
+.detailsOutreachPanel p {
+  color: var(--ink-soft);
+  font-size: calc(13px * var(--table-font-scale, 1));
+  line-height: 1.25;
+  margin: 0;
+}
+
+.detailsOutreachPanel ol {
+  display: grid;
+  gap: 5px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.detailsOutreachPanel li {
+  align-items: center;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  display: grid;
+  gap: 4px;
+  grid-template-columns: 34px minmax(0, 1fr) auto;
+  min-width: 0;
+  padding: 5px 6px;
+}
+
+.detailsOutreachPanel li span {
+  color: var(--accent);
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.detailsOutreachPanel li strong {
+  color: var(--ink);
   font-size: 11px;
-  line-height: 1.3;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.detailsOutreachPanel li small {
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.detailsOutreachTouches {
+  display: grid;
+  gap: 4px;
+}
+
+.detailsOutreachTouch {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  min-width: 0;
+}
+
+.detailsOutreachTouch summary {
+  align-items: center;
+  cursor: pointer;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  list-style: none;
+  min-width: 0;
+  padding: 5px 6px;
+}
+
+.detailsOutreachTouch summary::-webkit-details-marker {
+  display: none;
+}
+
+.detailsOutreachTouchTitle {
+  align-items: baseline;
+  display: inline-flex;
+  gap: 7px;
+  min-width: 0;
+}
+
+.detailsOutreachTouchTitle span {
+  color: var(--accent);
+  flex: 0 0 auto;
+  font-size: calc(13px * var(--table-font-scale, 1));
+  font-weight: 800;
+}
+
+.detailsOutreachTouchTitle strong {
+  color: var(--ink);
+  font-size: calc(13px * var(--table-font-scale, 1));
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.detailsOutreachTouch summary small {
+  color: var(--muted);
+  font-size: calc(11px * var(--table-font-scale, 1));
+}
+
+.detailsOutreachDraft {
+  border-top: 1px solid var(--line);
+  display: grid;
+  gap: 7px;
+  padding: 6px;
+}
+
+.detailsOutreachDraftHeader {
+  align-items: start;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.detailsOutreachDraftStatus {
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.detailsOutreachDraft label {
+  display: grid;
+  gap: 4px;
+}
+
+.detailsOutreachDraft input,
+.detailsOutreachDraft textarea {
+  background: var(--control);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--ink);
+  font: inherit;
+  font-size: calc(13px * var(--table-font-scale, 1));
+  line-height: 1.35;
+  min-width: 0;
+  padding: 8px 9px;
+}
+
+.detailsOutreachDraftActions {
+  display: grid;
+  gap: 6px;
+  grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
+}
+
+.detailsOutreachDraft textarea {
+  resize: vertical;
+}
+
+.detailsOutreachDraft button {
+  background: var(--control);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--ink);
+  cursor: pointer;
+  font: inherit;
+  font-size: calc(12px * var(--table-font-scale, 1));
+  font-weight: 700;
+  padding: 6px 9px;
+}
+
+.detailsOutreachDraftHeader button {
+  min-height: 28px;
+  padding: 5px 9px;
+  white-space: nowrap;
+}
+
+.detailsOutreachDraftHeader button[aria-pressed="true"] {
+  background: color-mix(in srgb, var(--accent) 12%, var(--control));
+  border-color: color-mix(in srgb, var(--accent) 38%, var(--line));
+  color: var(--accent);
+}
+
+.detailsOutreachEmailPreview {
+  background: var(--control);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--ink);
+  display: grid;
+  font-size: calc(13px * var(--table-font-scale, 1));
+  gap: 8px;
+  line-height: 1.42;
+  min-height: 188px;
+  padding: 9px 10px;
+  white-space: pre-wrap;
+}
+
+.detailsOutreachEmailPreview p {
+  color: var(--ink);
+  font-size: inherit;
+  line-height: inherit;
+  margin: 0;
+}
+
+.detailsOutreachEmailPreview p.lead {
+  font-weight: 650;
+}
+
+.detailsOutreachEmailPreview p.closing {
+  color: color-mix(in srgb, var(--ink) 84%, var(--accent));
+  font-style: italic;
+}
+
+.detailsOutreachDraft button:hover {
+  border-color: color-mix(in srgb, var(--accent) 46%, var(--line));
+}
+
+.detailsOutreachDraft button:disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
+}
+
+.detailsOutreachCurrent {
+  background: color-mix(in srgb, var(--panel) 74%, var(--accent));
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  display: grid;
+  gap: 3px;
+  padding: 6px 8px;
+}
+
+.detailsOutreachCurrent strong {
+  color: var(--ink);
+  font-size: 12px;
+}
+
+.detailsOutreachWorkflow {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  display: grid;
+  gap: 7px;
+  padding: 7px;
+}
+
+.detailsOutreachWorkflow button,
+.detailsOutreachWorkflow select {
+  background: var(--control);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--ink);
+  font: inherit;
+  font-size: 12px;
+  min-width: 0;
+  padding: 6px 8px;
+}
+
+.detailsOutreachWorkflow button {
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.detailsOutreachWorkflow button:hover,
+.detailsOutreachWorkflow select:focus {
+  border-color: color-mix(in srgb, var(--accent) 46%, var(--line));
+}
+
+.detailsOutreachWorkflow button:disabled {
+  cursor: wait;
+  opacity: 0.62;
+}
+
+.detailsOutreachActions {
+  display: grid;
+  gap: 6px;
+  grid-template-columns: 1fr;
+}
+
+.detailsOutreachActions button {
+  background: var(--control);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--ink);
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 7px 10px;
+}
+
+.detailsOutreachActions button.primary {
+  background: var(--accent);
+  border: 1px solid var(--accent);
+  color: #fff;
+}
+
+.detailsOutreachActions button:disabled {
+  cursor: wait;
+  opacity: 0.62;
+}
+
+.detailsDrawerError {
+  color: #b42318;
+  font-size: 11px;
+  margin: 0;
 }
 
 .detailsDrawerSummary {
@@ -2693,6 +3496,57 @@ input {
 
 .leadDocumentCardSummary {
   font-size: 11px;
+}
+
+.detailsDocumentCard {
+  align-items: start;
+  grid-template-columns: 18px minmax(92px, 0.34fr) minmax(0, 1fr);
+  min-height: 58px;
+  padding: 6px 8px;
+}
+
+.detailsDocumentCard .leadDocumentCardBadge {
+  border-radius: 4px;
+  font-size: 6px;
+  height: 14px;
+  margin-top: 2px;
+  width: 14px;
+}
+
+.detailsDocumentCard .leadDocumentCardMain strong {
+  font-size: 11px;
+}
+
+.detailsDocumentCard .leadDocumentCardMain span {
+  font-size: 9px;
+}
+
+.detailsDocumentCardText {
+  color: var(--ink-soft);
+  display: grid;
+  font-size: 11px;
+  gap: 2px;
+  line-height: 1.25;
+  min-width: 0;
+}
+
+.detailsDocumentCardText small {
+  color: var(--muted);
+  font-size: 9px;
+  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.detailsDocumentCardSummary {
+  display: -webkit-box;
+  line-clamp: 3;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  max-height: calc(1.25em * 3);
+  overflow: hidden;
+  white-space: normal;
 }
 
 .detailsDrawer footer {
@@ -3851,6 +4705,56 @@ input {
   color: var(--accent);
 }
 
+.settingsPill {
+  background: color-mix(in srgb, var(--accent) 12%, var(--control));
+  border: 1px solid color-mix(in srgb, var(--accent) 36%, var(--line));
+  border-radius: 999px;
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 700;
+  padding: 4px 8px;
+  white-space: nowrap;
+}
+
+.settingsActions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.settingsActions button {
+  background: var(--accent);
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  color: #fff;
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 800;
+  min-height: 32px;
+  padding: 7px 12px;
+}
+
+.settingsActions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
+}
+
+.settingsInlineNotice,
+.settingsInlineError {
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.settingsInlineNotice {
+  color: var(--accent);
+}
+
+.settingsInlineError {
+  color: #b42318;
+}
+
 .settingsPanel label {
   display: grid;
   gap: 6px;
@@ -3877,6 +4781,50 @@ input {
   font-size: 13px;
   line-height: 1.45;
   resize: vertical;
+}
+
+.outreachCampaignPanel {
+  align-content: start;
+}
+
+.outreachTouchGrid {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.outreachTouchGrid article {
+  background: var(--control);
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  padding: 8px;
+}
+
+.outreachTouchGrid article span {
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.outreachTouchGrid article strong {
+  color: var(--ink);
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.outreachTouchGrid article small {
+  color: var(--muted);
+  display: -webkit-box;
+  font-size: 11px;
+  line-height: 1.25;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
 }
 
 .settingsPanel input[type="range"] {
@@ -4730,6 +5678,10 @@ input {
     grid-column: span 1;
   }
 
+  .outreachTouchGrid {
+    grid-template-columns: 1fr;
+  }
+
   .traceChat {
     max-height: 420px;
   }
@@ -4763,3 +5715,6 @@ input {
     gap: 10px;
   }
 }
+
+
+

@@ -5,6 +5,8 @@ node_modules
 .local-storage
 .superpowers
 .tmp/
+local-imports/
+migration-manifests/
 dist
 coverage
 .turbo

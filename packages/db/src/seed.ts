@@ -47,13 +47,16 @@ async function main() {
   const target = await crm.upsertColdTarget({
     id: "seed_cold_maya",
     workspaceId,
+    code: "T-2026-001",
     name: "Maya Ops",
     company: "Bright Supply",
     role: "COO",
     email: "maya@example.com",
     linkedinUrl: "linkedin.com/in/maya",
     status: "queued",
-    source: "manual research"
+    source: "manual research",
+    notesResearch: "Manual research notes for the outbound target.",
+    archivedLetters: "Initial intro letter draft."
   });
 
   await crm.createOutreachTouch({

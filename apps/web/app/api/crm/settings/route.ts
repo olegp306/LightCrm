@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { handleRouteError } from "../_shared";
-import { getCrmRuntimeSettings, updateCrmRuntimeSettings } from "./crm-settings-store";
+import { getCrmRuntimeSettings, updateCrmRuntimeSettings, type OutreachCampaignSettings } from "./crm-settings-store";
 
 export const dynamic = "force-dynamic";
 
@@ -21,6 +21,9 @@ export async function PUT(request: Request) {
         offerValidityDays: number;
         autoGenerateWhenReady: boolean;
       }>;
+      outreachCampaigns?: Partial<{
+        campaigns: OutreachCampaignSettings[];
+      }>;
     };
     const next = {
       ...current,
@@ -33,6 +36,10 @@ export async function PUT(request: Request) {
         ...(input.commercialOffers?.autoGenerateWhenReady === undefined
           ? {}
           : { autoGenerateWhenReady: input.commercialOffers.autoGenerateWhenReady })
+      },
+      outreachCampaigns: {
+        ...current.outreachCampaigns,
+        ...(input.outreachCampaigns?.campaigns === undefined ? {} : { campaigns: input.outreachCampaigns.campaigns })
       }
     };
     return NextResponse.json({ settings: await updateCrmRuntimeSettings(next) });

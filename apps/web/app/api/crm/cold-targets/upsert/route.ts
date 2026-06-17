@@ -5,6 +5,7 @@ import { getCrm, handleRouteError, optionalText, parseJson, workspaceId } from "
 const schema = z.object({
   id: z.string().optional(),
   workspaceId,
+  code: optionalText,
   name: z.string().trim().min(1),
   company: optionalText,
   role: optionalText,
@@ -14,6 +15,8 @@ const schema = z.object({
   website: optionalText,
   status: z.enum(["new", "queued", "contacted", "replied", "notFit", "archived"]).optional(),
   source: optionalText,
+  notesResearch: optionalText,
+  archivedLetters: optionalText,
   notes: optionalText
 });
 
