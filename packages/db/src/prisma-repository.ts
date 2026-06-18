@@ -44,9 +44,14 @@ function mapColdTarget(record: Awaited<ReturnType<PrismaClient["coldTarget"]["fi
   if (!record) {
     throw new Error("Cold target not found");
   }
+  const preferredLanguage =
+    record.preferredLanguage === "de" || record.preferredLanguage === "ru" || record.preferredLanguage === "en"
+      ? record.preferredLanguage
+      : null;
   return {
     ...record,
-    status: ensureStatus(record.status, "new")
+    status: ensureStatus(record.status, "new"),
+    preferredLanguage
   };
 }
 

@@ -173,6 +173,10 @@ function nullable(value: string | null | undefined): string | null {
   return value ?? null;
 }
 
+function nullableOutreachLanguage(value: ColdTarget["preferredLanguage"] | undefined): ColdTarget["preferredLanguage"] {
+  return value === "de" || value === "ru" || value === "en" ? value : null;
+}
+
 function trimText(value: string | null | undefined): string | null {
   const trimmed = value?.trim();
   return trimmed ? trimmed : null;
@@ -509,6 +513,7 @@ export function createCrmService(repository: CrmRepository) {
       notesResearch: nullable(input.notesResearch ?? existing?.notesResearch),
       archivedLetters: nullable(input.archivedLetters ?? existing?.archivedLetters),
       notes: nullable(input.notes ?? existing?.notes),
+      preferredLanguage: nullableOutreachLanguage(input.preferredLanguage ?? existing?.preferredLanguage),
       createdAt: existing?.createdAt ?? timestamp,
       updatedAt: timestamp,
       archivedAt: existing?.archivedAt ?? null

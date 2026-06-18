@@ -17,7 +17,11 @@ const schema = z.object({
   source: optionalText,
   notesResearch: optionalText,
   archivedLetters: optionalText,
-  notes: optionalText
+  notes: optionalText,
+  preferredLanguage: z.preprocess(
+    (value) => (value === "" || value === "auto" ? null : value),
+    z.enum(["de", "ru", "en"]).nullable().optional()
+  )
 });
 
 export async function POST(request: Request) {

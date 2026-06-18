@@ -38,6 +38,7 @@ type CrmSettingsResponse = {
     };
     outreachCampaigns: {
       emailSignature: string;
+      emailStyleGuide: string;
       campaigns: OutreachCampaignSettings[];
     };
   };
@@ -543,6 +544,38 @@ export function LangGraphSettingsPage() {
     }
   }
 
+  async function patchCrmOutreachStyleGuide(emailStyleGuide: string) {
+    if (!crmSettings) {
+      return;
+    }
+    const optimistic = {
+      ...crmSettings,
+      outreachCampaigns: {
+        ...crmSettings.outreachCampaigns,
+        emailStyleGuide
+      }
+    };
+    setCrmSettings(optimistic);
+    setCrmStatus("saving");
+    try {
+      const response = await fetch("/api/crm/settings", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ outreachCampaigns: { emailStyleGuide } })
+      });
+      const payload = (await response.json()) as CrmSettingsResponse & { error?: string };
+      if (!response.ok) {
+        throw new Error(payload.error ?? "CRM settings save failed");
+      }
+      setCrmSettings(payload.settings);
+      setCrmStatus("saved");
+    } catch (reason) {
+      setCrmSettings(crmSettings);
+      setCrmError(reason instanceof Error ? reason.message : "CRM settings save failed");
+      setCrmStatus("error");
+    }
+  }
+
   async function createOutreachCampaignFromMetaprompt() {
     const metaprompt = newCampaignMetaprompt.trim();
     if (!metaprompt) {
@@ -787,6 +820,27 @@ export function LangGraphSettingsPage() {
                     )
                   }
                   onBlur={(event) => patchCrmOutreachSignature(event.target.value)}
+                />
+              </label>
+              <label>
+                <span>Email style guide</span>
+                <textarea
+                  rows={8}
+                  value={crmSettings?.outreachCampaigns.emailStyleGuide ?? ""}
+                  onChange={(event) =>
+                    setCrmSettings((current) =>
+                      current
+                        ? {
+                            ...current,
+                            outreachCampaigns: {
+                              ...current.outreachCampaigns,
+                              emailStyleGuide: event.target.value
+                            }
+                          }
+                        : current
+                    )
+                  }
+                  onBlur={(event) => patchCrmOutreachStyleGuide(event.target.value)}
                 />
               </label>
             </section>

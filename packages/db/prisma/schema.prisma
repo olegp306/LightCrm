@@ -123,6 +123,7 @@ model ColdTarget {
   notesResearch               String?
   archivedLetters             String?
   notes                       String?
+  preferredLanguage           String?
   createdAt                   DateTime                     @default(now())
   updatedAt                   DateTime                     @updatedAt
   archivedAt                  DateTime?

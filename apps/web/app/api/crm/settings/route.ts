@@ -23,6 +23,7 @@ export async function PUT(request: Request) {
       }>;
       outreachCampaigns?: Partial<{
         emailSignature: string;
+        emailStyleGuide: string;
         campaigns: OutreachCampaignSettings[];
       }>;
     };
@@ -43,6 +44,9 @@ export async function PUT(request: Request) {
         ...(input.outreachCampaigns?.emailSignature === undefined
           ? {}
           : { emailSignature: input.outreachCampaigns.emailSignature }),
+        ...(input.outreachCampaigns?.emailStyleGuide === undefined
+          ? {}
+          : { emailStyleGuide: input.outreachCampaigns.emailStyleGuide }),
         ...(input.outreachCampaigns?.campaigns === undefined ? {} : { campaigns: input.outreachCampaigns.campaigns })
       }
     };

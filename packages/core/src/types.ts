@@ -13,6 +13,7 @@ export type CrmEntity =
 export type ClientStatus = "active" | "warm" | "paused" | "archived";
 export type LeadStatus = "new" | "contacted" | "qualified" | "lost" | "converted" | "archived";
 export type ColdTargetStatus = "new" | "queued" | "contacted" | "replied" | "notFit" | "archived";
+export type OutreachLanguage = "de" | "ru" | "en";
 export type ReminderStatus = "open" | "done" | "snoozed" | "archived";
 export type OutreachDirection = "inbound" | "outbound";
 
@@ -67,6 +68,7 @@ export type ColdTarget = BaseRecord & {
   notesResearch: string | null;
   archivedLetters: string | null;
   notes: string | null;
+  preferredLanguage: OutreachLanguage | null;
 };
 
 export type OutreachTouch = {
@@ -217,6 +219,7 @@ export type UpsertColdTargetInput = {
   notesResearch?: string | null;
   archivedLetters?: string | null;
   notes?: string | null;
+  preferredLanguage?: OutreachLanguage | null;
 };
 
 export type UpsertReminderInput = {

@@ -3,7 +3,9 @@ import type { OutreachCampaignSettings, OutreachCampaignTouchpoint } from "../se
 export type OutreachDraftTarget = {
   name: string;
   company: string | null;
+  role?: string | null;
   notesResearch: string | null;
+  preferredLanguage?: string | null;
   email?: string | null;
   phone?: string | null;
   city?: string | null;
@@ -18,12 +20,38 @@ export type OutreachDraft = {
   promptApplied: boolean;
 };
 
+type OutreachLanguage = "de" | "ru" | "en";
+
 function compactText(value: string | null | undefined) {
   return value?.replace(/\s+/g, " ").trim() ?? "";
 }
 
 function hasCyrillic(value: string) {
   return /[\u0400-\u04ff]/.test(value);
+}
+
+function detectOutreachLanguage(target: OutreachDraftTarget): OutreachLanguage {
+  if (target.preferredLanguage === "de" || target.preferredLanguage === "ru" || target.preferredLanguage === "en") {
+    return target.preferredLanguage;
+  }
+  const contactText = [target.name, target.company, target.role, target.city, target.country].map(compactText).join(" ");
+  const research = compactText(target.notesResearch);
+  if (hasCyrillic(contactText)) {
+    return "ru";
+  }
+  if (/\b(London|United Kingdom|UK|USA|United States|English)\b/i.test(contactText)) {
+    return "en";
+  }
+  if (/\b(Germany|Deutschland|Deutsch|Bayern|Munich|München|Chiemgau|Bauträger|Bautraeger|GmbH)\b/i.test(contactText)) {
+    return "de";
+  }
+  if (!contactText && hasCyrillic(research)) {
+    return "ru";
+  }
+  if (/\b(developer|residential|planning|architecture|London|United Kingdom|UK|USA|United States)\b/i.test(research)) {
+    return "en";
+  }
+  return "de";
 }
 
 function forbidsPraise(prompt: string) {
@@ -38,7 +66,7 @@ function splitSentences(value: string) {
 }
 
 function normalizeGermanText(value: string) {
-  return value
+  const normalized = value
     .replace(/[\u201c\u201d]/g, "\"")
     .replace(/[\u2018\u2019]/g, "'")
     .replace(/\u00a0/g, " ")
@@ -49,6 +77,52 @@ function normalizeGermanText(value: string) {
     .replace(/\u00c3\u0084/g, "\u00c4")
     .replace(/\u00c3\u0096/g, "\u00d6")
     .replace(/\u00c3\u009c/g, "\u00dc");
+  const replacements: Array<[RegExp, string | ((match: string) => string)]> = [
+    [/\bfuer\b/g, "für"],
+    [/\bFuer\b/g, "Für"],
+    [/\bfrueh(e[nsrm]?)?\b/g, (match: string) => match.replace("frue", "frü")],
+    [/\bFrueh(e[nsrm]?)?\b/g, (match: string) => match.replace("Frue", "Frü")],
+    [/Bautraeger/g, "Bauträger"],
+    [/\bUnterstuetzung\b/g, "Unterstützung"],
+    [/\bunterstuetzung\b/g, "unterstützung"],
+    [/\bunterstuetzen\b/g, "unterstützen"],
+    [/\bunterstuetzt\b/g, "unterstützt"],
+    [/Kapazitaet/g, "Kapazität"],
+    [/kapazitaet/g, "kapazität"],
+    [/\bWaere\b/g, "Wäre"],
+    [/\bwaere\b/g, "wäre"],
+    [/\bnaechst(e[nsrm]?)?\b/g, (match: string) => match.replace("naech", "näch")],
+    [/\bNaechst(e[nsrm]?)?\b/g, (match: string) => match.replace("Naech", "Näch")],
+    [/\bmoeglich(e[nsrm]?)?\b/g, (match: string) => match.replace("moeg", "mög")],
+    [/\bMoeglich(e[nsrm]?)?\b/g, (match: string) => match.replace("Moeg", "Mög")],
+    [/\bmoechte(n|st|t)?\b/g, (match: string) => match.replace("moech", "möch")],
+    [/\bMoechte(n|st|t)?\b/g, (match: string) => match.replace("Moech", "Möch")],
+    [/\bgrundsaetzlich\b/g, "grundsätzlich"],
+    [/\bpruefen\b/g, "prüfen"],
+    [/\bPruefen\b/g, "Prüfen"],
+    [/\bFlaechen\b/g, "Flächen"],
+    [/\bflaechen\b/g, "flächen"],
+    [/\bkoennen\b/g, "können"],
+    [/\bKoennen\b/g, "Können"],
+    [/\bschliessen\b/g, "schließen"],
+    [/\bSchliessen\b/g, "Schließen"],
+    [/\bschliesse\b/g, "schließe"],
+    [/\bSchliesse\b/g, "Schließe"],
+    [/\bstoeren\b/g, "stören"],
+    [/\bStoeren\b/g, "Stören"],
+    [/\bspaeter\b/g, "später"],
+    [/\bSpaeter\b/g, "Später"],
+    [/\bkuenstlich\b/g, "künstlich"],
+    [/\bRueckmeldung\b/g, "Rückmeldung"],
+    [/\brueckmeldung\b/g, "rückmeldung"],
+    [/\bBuer(o|os)\b/g, (match: string) => match.replace("Buer", "Bür")],
+    [/\bbuer(o|os)\b/g, (match: string) => match.replace("buer", "bür")]
+  ];
+  return replacements.reduce(
+    (current, [pattern, replacement]) =>
+      typeof replacement === "function" ? current.replace(pattern, replacement) : current.replace(pattern, replacement),
+    normalized
+  );
 }
 
 function companySalutation(target: OutreachDraftTarget) {
@@ -68,12 +142,12 @@ function extractExperienceFact(research: string) {
   if (plusMatch) {
     const total = Number(plusMatch[1]) + Number(plusMatch[2]);
     if (Number.isFinite(total) && total >= 10) {
-      return "Die Recherche nennt langjährige Erfahrung im Bau- und Immobilienumfeld; daran knüpfen wir mit früher, belastbarer Planung an.";
+      return "Ihre langjährige Erfahrung im Bau- und Immobilienumfeld macht eine belastbare frühe Planung besonders relevant.";
     }
   }
   const yearsMatch = research.match(/(\d{2,})\s*(?:jahre|years|Р В»Р ВµРЎвЂљ)/i);
   if (yearsMatch) {
-    return "Die Recherche zeigt langjährige Erfahrung im Projekt- und Bauumfeld; daran knüpfen wir mit belastbarer früher Planung an.";
+    return "Ihre langjährige Erfahrung im Projekt- und Bauumfeld ist ein guter Anknüpfungspunkt für belastbare frühe Planung.";
   }
   return "";
 }
@@ -93,16 +167,16 @@ function extractLocationFact(research: string, target: OutreachDraftTarget) {
 function extractProjectFact(research: string) {
   const normalized = research.toLocaleLowerCase();
   if (/bautraeger|bautr\u00e4ger|developer|development|projektentwick/i.test(research)) {
-    return "Der Research-Kontext passt zu Bauträger- und Projektentwicklungsaufgaben, bei denen frühe Varianten und Genehmigungsgrundlagen entscheidend sind.";
+    return "Ihre Arbeit passt zu Bauträger- und Projektentwicklungsaufgaben, bei denen frühe Varianten und Genehmigungsgrundlagen entscheidend sind.";
   }
   if (/wohn|residential|mehrfamilien|apartment|housing/i.test(research)) {
-    return "Der Research-Kontext verweist auf Wohnungsbau; gerade dort helfen klare Flächen, Varianten und Genehmigungsgrundlagen früh im Prozess.";
+    return "Bei Wohnungsbauprojekten helfen klare Flächen, Varianten und Genehmigungsgrundlagen früh im Prozess.";
   }
   if (/office|buero|b\u00fcro|gewerbe|commercial/i.test(research)) {
-    return "Der Research-Kontext verweist auf gewerbliche Projekte; dafür kann eine klare frühe Planung die Abstimmung und Genehmigung strukturieren.";
+    return "Bei gewerblichen Projekten kann klare frühe Planung die Abstimmung und Genehmigung strukturieren.";
   }
   if (normalized.includes("architecture") || normalized.includes("architektur")) {
-    return "Der Research-Kontext zeigt Berührungspunkte mit Planung und Bau; unser Ansatz bleibt deshalb konkret bei LP 1-4 und belastbaren Entscheidungsgrundlagen.";
+    return "Ihre Arbeit hat erkennbare Berührungspunkte mit Planung und Bau; unser Ansatz bleibt deshalb konkret bei LP 1-4 und belastbaren Entscheidungsgrundlagen.";
   }
   return "";
 }
@@ -141,10 +215,77 @@ function personaHookFromResearch(campaign: OutreachCampaignSettings, target: Out
 
   const safeSentence = safeResearchSentence(research, noPraise);
   if (safeSentence) {
-    return `Aus der Recherche nehme ich vor allem diesen Anknüpfungspunkt mit: ${safeSentence}`;
+    return `Ein fachlicher Anknüpfungspunkt ist für mich: ${safeSentence}`;
   }
 
-  return "Aus den Research-Notizen ergibt sich ein möglicher Bezug zu frühen Projektphasen; deshalb halte ich einen kurzen fachlichen Abgleich für sinnvoll.";
+  return "Die Angaben zum Kontakt deuten auf Planungs- und Bauaufgaben in frühen Projektphasen hin; ein kurzer fachlicher Abgleich kann klären, ob externe LP 1-4-Unterstützung sinnvoll ist.";
+}
+
+function personaHookForLanguage(campaign: OutreachCampaignSettings, target: OutreachDraftTarget, language: OutreachLanguage) {
+  if (language === "de") {
+    return normalizeGermanText(personaHookFromResearch(campaign, target));
+  }
+  const research = compactText(target.notesResearch);
+  const company = compactText(target.company) || compactText(target.name);
+  if (language === "ru") {
+    if (/девелоп|застрой|жил|проект|архитект/i.test(research)) {
+      return `${company ? `${company} работает с девелопментом, жилыми проектами или ранними стадиями планирования. ` : ""}На таких стадиях обычно особенно важны понятные варианты, площади и подготовка к согласованию.`;
+    }
+    return "По данным контакта видна возможная связь с проектированием и ранними стадиями проекта; короткий профессиональный разговор поможет понять, нужна ли внешняя поддержка по LP 1-4.";
+  }
+  if (/developer|residential|planning|architecture|project/i.test(research)) {
+    return `${company ? `${company} appears to work in development, residential projects, or early-stage planning. ` : ""}At that stage, clear options, areas, and approval-ready documentation can make decisions easier.`;
+  }
+  return "The contact data suggests a possible link to planning or early project phases; a short professional check-in could clarify whether external LP 1-4 support is useful.";
+}
+
+function translatedDraft(
+  campaign: OutreachCampaignSettings,
+  coldTarget: OutreachDraftTarget,
+  language: Exclude<OutreachLanguage, "de">,
+  emailSignature?: string | null
+): OutreachDraft {
+  const promptApplied = Boolean(compactText(campaign.prompt));
+  const salutation = companySalutation(coldTarget);
+  const personaHook = personaHookForLanguage(campaign, coldTarget, language);
+  if (language === "ru") {
+    return {
+      subject: "Архитектурное планирование для ранних стадий проекта",
+      body: appendSignature(
+        [
+          `Здравствуйте${salutation === "zusammen" ? "" : `, ${salutation}`},`,
+          "",
+          personaHook,
+          "",
+          "Мы можем поддержать девелоперские и строительные проекты как внешний архитектурный партнер на ранних стадиях: варианты, площади, концепция и подготовка к согласованию.",
+          "",
+          "Будет ли вам удобно коротко обсудить, может ли такая поддержка быть полезна для текущих или будущих проектов?"
+        ].join("\n"),
+        emailSignature
+      ),
+      salutation,
+      personaHook,
+      promptApplied
+    };
+  }
+  return {
+    subject: "Architectural planning for early project phases",
+    body: appendSignature(
+      [
+        `Hello${salutation === "zusammen" ? "" : ` ${salutation}`},`,
+        "",
+        personaHook,
+        "",
+        "We support developers and construction teams as an external architectural planning partner for early project phases: options, areas, concept work, and approval-ready documentation.",
+        "",
+        "Would a short conversation in the next few days be useful to see whether this could fit current or upcoming projects?"
+      ].join("\n"),
+      emailSignature
+    ),
+    salutation,
+    personaHook,
+    promptApplied
+  };
 }
 
 function fillTemplate(value: string, replacements: Record<string, string>) {
@@ -180,6 +321,10 @@ export function draftForCampaign(
   touch: Pick<OutreachCampaignTouchpoint, "templateId" | "action" | "channel">,
   emailSignature?: string | null
 ): OutreachDraft {
+  const language = detectOutreachLanguage(coldTarget);
+  if (language !== "de") {
+    return translatedDraft(campaign, coldTarget, language, emailSignature);
+  }
   const promptApplied = Boolean(compactText(campaign.prompt));
   const template = campaign.templates.find((item) => item.id === touch.templateId);
   const salutation = companySalutation(coldTarget);

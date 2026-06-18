@@ -55,6 +55,7 @@ export type CrmRuntimeSettings = {
   };
   outreachCampaigns: {
     emailSignature: string;
+    emailStyleGuide: string;
     campaigns: OutreachCampaignSettings[];
   };
 };
@@ -117,6 +118,14 @@ const defaultCrmSettings: CrmRuntimeSettings = {
     autoGenerateWhenReady: true
   },
   outreachCampaigns: {
+    emailStyleGuide: [
+      "Working languages: German, Russian, English.",
+      "Auto-detect the outreach language from client-facing cold target fields. Internal research notes are a weak hint only.",
+      "Allow explicit per-target language override: de, ru, en.",
+      "For German emails use business Sie tone, correct German umlauts, and client-facing wording.",
+      "Persona hook: 1-2 factual, specific sentences. No praise, no marketing language, no internal words like Research, Notes, Context.",
+      "If contact salutation is uncertain, use a neutral greeting."
+    ].join("\n"),
     emailSignature: [
       "Mit freundlichen Grüßen",
       "Ekaterina Reyzbikh",
@@ -372,6 +381,18 @@ function campaignsWithDefaultExamples(campaigns: OutreachCampaignSettings[] | un
   ];
 }
 
+function mergeOutreachCampaignSettings(outreachCampaigns: Partial<CrmRuntimeSettings["outreachCampaigns"]> | undefined) {
+  return {
+    ...defaultCrmSettings.outreachCampaigns,
+    ...(outreachCampaigns ?? {}),
+    emailSignature:
+      typeof outreachCampaigns?.emailSignature === "string"
+        ? outreachCampaigns.emailSignature
+        : defaultCrmSettings.outreachCampaigns.emailSignature,
+    campaigns: campaignsWithDefaultExamples(outreachCampaigns?.campaigns)
+  };
+}
+
 const globalForSettings = globalThis as unknown as {
   lightCrmRuntimeSettings?: CrmRuntimeSettings;
 };
@@ -390,10 +411,7 @@ export async function getCrmRuntimeSettings(): Promise<CrmRuntimeSettings> {
   if (globalForSettings.lightCrmRuntimeSettings) {
     const settings = {
       ...globalForSettings.lightCrmRuntimeSettings,
-      outreachCampaigns: {
-        ...globalForSettings.lightCrmRuntimeSettings.outreachCampaigns,
-        campaigns: campaignsWithDefaultExamples(globalForSettings.lightCrmRuntimeSettings.outreachCampaigns.campaigns)
-      }
+      outreachCampaigns: mergeOutreachCampaignSettings(globalForSettings.lightCrmRuntimeSettings.outreachCampaigns)
     };
     globalForSettings.lightCrmRuntimeSettings = settings;
     return settings;
@@ -408,11 +426,7 @@ export async function getCrmRuntimeSettings(): Promise<CrmRuntimeSettings> {
         ...defaultCrmSettings.commercialOffers,
         ...(stored.commercialOffers ?? {})
       },
-      outreachCampaigns: {
-        ...defaultCrmSettings.outreachCampaigns,
-        ...(stored.outreachCampaigns ?? {}),
-        campaigns: campaignsWithDefaultExamples(stored.outreachCampaigns?.campaigns)
-      }
+      outreachCampaigns: mergeOutreachCampaignSettings(stored.outreachCampaigns)
     };
     globalForSettings.lightCrmRuntimeSettings = settings;
     return settings;

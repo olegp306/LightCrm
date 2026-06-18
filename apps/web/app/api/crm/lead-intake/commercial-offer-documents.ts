@@ -19,45 +19,61 @@ function firstMatch(text: string, patterns: RegExp[]): string | null {
   for (const pattern of patterns) {
     const match = text.match(pattern);
     if (match?.[1]?.trim()) {
-      return compactText(match[1], 120);
+      return normalizeOfferValue(compactText(match[1], 120));
     }
   }
   return null;
 }
 
+function normalizeOfferValue(value: string): string {
+  return value
+    .replace(/\s+/g, " ")
+    .replace(/€/g, "EUR")
+    .replace(/\beuro\b/gi, "EUR")
+    .replace(/\bm2\b/gi, "m²")
+    .replace(/\bqm\b/gi, "m²")
+    .trim();
+}
+
 function extractCommercialOfferParameters(source: string) {
   const compact = source.replace(/\s+/g, " ").trim();
-  const gross = firstMatch(compact, [
-    /(?:total gross|brutto|gesamthonorar(?:\s+brutto)?|honorar(?:\s+brutto)?)[:\s]+([0-9][0-9\s.,']*\s*(?:eur|euro|€)?)/i
+  const bgf = firstMatch(compact, [
+    /\bBGF[:\s]+([0-9][0-9\s.,']*\s*(?:m2|m²|qm)?)/i,
+    /\b(?:Area|Projektflaeche|Projektfläche)[:\s]+([0-9][0-9\s.,']*\s*(?:m2|m²|qm)?)/i
   ]);
-  const area = firstMatch(compact, [
-    /(?:bgf|area|projektflaeche|projektfläche|wohnflaeche|wohnfläche)[:\s]+([0-9][0-9\s.,']*\s*(?:m2|m²|qm)?)/i
+  const wohnflaeche = firstMatch(compact, [
+    /\b(?:Wohnflaeche|Wohnfläche)[:\s]+([0-9][0-9\s.,']*\s*(?:m2|m²|qm)?)/i
   ]);
-  const client = firstMatch(compact, [/(?:client|kunde|auftraggeber|bauherr)[:\s]+([^.;\n]{2,120})/i]);
-  const project = firstMatch(compact, [/(?:project|projekt|bauvorhaben|lead name)[:\s]+([^.;\n]{2,140})/i]);
-  const clientAddress = firstMatch(compact, [
-    /(?:client address|kundenadresse|anschrift|adresse(?:\s+auftraggeber)?)[:\s]+([^.;\n]{2,160})/i
+  const lp1_3Net = firstMatch(compact, [
+    /\bLP\s*1\s*-\s*3\s*net[:\s]+([0-9][0-9\s.,']*\s*(?:eur|euro|€)?)/i
   ]);
-  const projectAddress = firstMatch(compact, [
-    /(?:project address|projektadresse|grundstueck|grundstück|standort|ort)[:\s]+([^.;\n]{2,160})/i
+  const lp4Net = firstMatch(compact, [/\bLP\s*4\s*net[:\s]+([0-9][0-9\s.,']*\s*(?:eur|euro|€)?)/i]);
+  const totalNet = firstMatch(compact, [
+    /\bTotal\s+net[:\s]+([0-9][0-9\s.,']*\s*(?:eur|euro|€)?)/i,
+    /\b(?:Netto|Gesamthonorar\s+netto)[:\s]+([0-9][0-9\s.,']*\s*(?:eur|euro|€)?)/i
   ]);
-  const email = compact.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i)?.[0] ?? null;
-  const phone = compact.match(/(?:\+|00)\d[\d\s()./-]{6,}\d/)?.[0] ?? null;
-  const scope = firstMatch(compact, [
-    /(lp\s*1\s*(?:-|to)\s*4[^.;\n]{0,120})/i,
-    /(leistungsphase[n]?\s*1\s*(?:-|to)\s*4[^.;\n]{0,120})/i,
-    /(architektenleistungen[^.;\n]{0,120})/i
+  const vat = firstMatch(compact, [
+    /\b(?:VAT\s*19%|MwSt\.?\s*19%|MWST\s*19%)[:\s]+([0-9][0-9\s.,']*\s*(?:eur|euro|€)?)/i
   ]);
-  const deadlines = firstMatch(compact, [/(?:deadline|due|frist|zeitplan|termine|soll)[:\s]+([^.;\n]{2,140})/i]);
+  const totalGross = firstMatch(compact, [
+    /\bTotal\s+gross[:\s]+([0-9][0-9\s.,']*\s*(?:eur|euro|€)?)/i,
+    /\b(?:Brutto|Gesamthonorar(?:\s+brutto)?|Honorar(?:\s+brutto)?)[:\s]+([0-9][0-9\s.,']*\s*(?:eur|euro|€)?)/i
+  ]);
+  const paymentPlanMatch = compact.match(
+    /\bPayment\s+plan\s+net[:\s]+30%\s*([0-9][0-9\s.,']*\s*(?:eur|euro|€)?)\s+40%\s*([0-9][0-9\s.,']*\s*(?:eur|euro|€)?)\s+30%\s*([0-9][0-9\s.,']*\s*(?:eur|euro|€)?)/i
+  );
+  const paymentPlan = paymentPlanMatch
+    ? `30% ${normalizeOfferValue(paymentPlanMatch[1])}, 40% ${normalizeOfferValue(paymentPlanMatch[2])}, 30% ${normalizeOfferValue(paymentPlanMatch[3])}`
+    : null;
   return {
-    client,
-    project,
-    area,
-    fee: gross,
-    clientAddress,
-    projectAddress,
-    contacts: [phone, email].filter(Boolean).join(" | ") || null,
-    scopeDeadlines: [scope, deadlines].filter(Boolean).join(" | ") || null
+    bgf,
+    wohnflaeche,
+    lp1_3Net,
+    lp4Net,
+    totalNet,
+    vat,
+    totalGross,
+    paymentPlan
   };
 }
 
@@ -83,29 +99,25 @@ export function incomingCommercialOfferSummary(input: {
   const parameters = extractCommercialOfferParameters(source);
   const parameterLines = [
     `Version: KP V${input.version} received.`,
-    `Client: ${parameters.client ?? "to review"}`,
-    `Project: ${parameters.project ?? "to review"}`,
-    `Area / BGF: ${parameters.area ?? "to review"}`,
-    `Fee: ${parameters.fee ?? "to review"}`,
-    `Client address: ${parameters.clientAddress ?? "to review"}`,
-    `Project address: ${parameters.projectAddress ?? "to review"}`,
-    `Contacts: ${parameters.contacts ?? "to review"}`,
-    `Scope / deadlines: ${parameters.scopeDeadlines ?? "to review"}`
+    "Pricing mode: received.",
+    `BGF: ${parameters.bgf ?? "to review"}.`,
+    `Wohnflaeche: ${parameters.wohnflaeche ?? "to review"}.`,
+    `LP 1-3 net: ${parameters.lp1_3Net ?? "to review"}.`,
+    `LP 4 net: ${parameters.lp4Net ?? "to review"}.`,
+    `Total net: ${parameters.totalNet ?? "to review"}.`,
+    `VAT 19%: ${parameters.vat ?? "to review"}.`,
+    `Total gross: ${parameters.totalGross ?? "to review"}.`,
+    `Payment plan net: ${parameters.paymentPlan ?? "to review"}.`,
+    `Summary: KP V${input.version} received/uploaded commercial offer. Use this summary to compare what was received from the client against generated draft versions.`
   ];
-  const shortSummary = compactText(
-    source
-      ? `KP V${input.version} received; ${parameterLines.slice(1, 5).join("; ")}. ${source}`
-      : `KP V${input.version} received; ${input.label} for review.`,
-    420
-  );
-  const longSummary = [
-    ...parameterLines,
-    "",
-    `Incoming KP: ${input.label}. This is a received/uploaded offer, not a generated draft.`,
-    "This document has its own commercial-offer summary and does not update the lead summary.",
-    "Review the document values and update offer fields if needed.",
-    source ? `Parsed notes: ${compactText(source, 1200)}` : `File: ${input.fileName}`
-  ].join("\n");
+  const shortSummary = [
+    `KP V${input.version} received`,
+    `gross ${parameters.totalGross ?? "to review"}`,
+    `BGF ${parameters.bgf ?? "to review"}`,
+    `Wohnflaeche ${parameters.wohnflaeche ?? "to review"}`,
+    "received"
+  ].join(" | ");
+  const longSummary = parameterLines.join("\n");
   return { shortSummary, longSummary };
 }
 

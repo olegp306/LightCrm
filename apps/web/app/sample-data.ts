@@ -177,6 +177,7 @@ export const tables: Record<string, TableDefinition> = {
       { id: "phone", title: "Phone", width: 160 },
       { id: "website", title: "Website", width: 220, valueKind: "link" },
       { id: "linkedinUrl", title: "LinkedIn", width: 220 },
+      { id: "preferredLanguage", title: "Language", width: 120 },
       { id: "notesResearch", title: "Node Research", width: 360 },
       { id: "archivedLetters", title: "I Have Letters", width: 320 },
       { id: "status", title: "Status", width: 130, mobilePriority: 2 },
@@ -197,6 +198,7 @@ export const tables: Record<string, TableDefinition> = {
         { id: "email", label: "Email" },
         { id: "phone", label: "Phone" },
         { id: "website", label: "Website" },
+        { id: "preferredLanguage", label: "Language (blank/auto, de, ru, en)" },
         { id: "notesResearch", label: "Node Research", multiline: true },
         { id: "archivedLetters", label: "I Have Letters", multiline: true },
         { id: "linkedinUrl", label: "LinkedIn" }
