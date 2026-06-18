@@ -129,7 +129,7 @@ function readinessFieldSummary(readiness: ReturnType<typeof evaluateCommercialOf
   const summary =
     readiness.values.totalGross === null
       ? "Commercial offer cannot be generated until price-critical fields are filled."
-      : `Commercial offer V${version}d generated draft on ${formatDate(createdAt)}. Use this summary to compare what was promised to the client in this draft version.`;
+      : `KP V${version}d draft generated on ${formatDate(createdAt)}. Use this summary to compare what was promised to the client in this draft version.`;
   const valueLines = [
     `Pricing mode: ${readiness.pricingMode}.`,
     `BGF: ${formatAreaText(readiness.values.bgf)}.`,
@@ -142,7 +142,7 @@ function readinessFieldSummary(readiness: ReturnType<typeof evaluateCommercialOf
     `Payment plan net: 30% ${formatCurrencyText(readiness.values.ms1Net)}, 40% ${formatCurrencyText(readiness.values.ms2Net)}, 30% ${formatCurrencyText(readiness.values.ms3Net)}.`
   ];
   return [
-    `Version: V${version}d (generated draft).`,
+    `Version: KP V${version}d draft.`,
     `Price fields: ${requiredForPrice}.`,
     `Document fields: ${documentFields}.`,
     "Offer values:",
@@ -153,7 +153,7 @@ function readinessFieldSummary(readiness: ReturnType<typeof evaluateCommercialOf
 
 function generatedOfferShortSummary(readiness: ReturnType<typeof evaluateCommercialOfferReadiness>, version: number): string {
   const parts = [
-    `Commercial offer V${version}d draft`,
+    `KP V${version}d draft`,
     `gross ${formatCurrencyText(readiness.values.totalGross)}`,
     `BGF ${formatAreaText(readiness.values.bgf)}`,
     `Wohnflaeche ${formatAreaText(readiness.values.wohnflaeche)}`,
@@ -175,13 +175,12 @@ function projectTypeFromLead(project: string | null, description: string | null)
 }
 
 function nextCommercialOfferVersion(documents: DocumentFile[], leadId: string): number {
-  const activeLeadOffers = documents.filter(
-    (document) =>
-      document.leadId === leadId &&
-      document.archivedAt === null &&
-      document.shortSummary.toLocaleLowerCase().startsWith("commercial offer")
-  );
-  return activeLeadOffers.length + 1;
+  const versions = documents
+    .filter((document) => document.leadId === leadId && document.archivedAt === null)
+    .map((document) => [document.shortSummary, document.fileName].join(" ").match(/\b(?:kp|commercial offer)\s*V(\d+)/i))
+    .map((match) => (match ? Number(match[1]) : null))
+    .filter((value): value is number => value !== null && Number.isFinite(value));
+  return versions.length > 0 ? Math.max(...versions) + 1 : 1;
 }
 
 export async function evaluateCommercialOfferForLead(input: {
@@ -336,7 +335,7 @@ export async function maybeAutoGenerateCommercialOfferForLead(input: {
     (document) =>
       document.leadId === input.leadId &&
       !document.archivedAt &&
-      document.shortSummary.toLocaleLowerCase().startsWith("commercial offer ")
+      /^(?:kp|commercial offer)\s+v\d+d?\s+draft/i.test(document.shortSummary)
   );
   if (alreadyGenerated) {
     return { status: "skipped", reason: "commercial offer already exists" };

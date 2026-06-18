@@ -3,9 +3,13 @@ import type { DocumentFile, LeadIntakeAttachmentInput } from "@lightcrm/core";
 import { storeCrmFile } from "@lightcrm/storage";
 import { NextResponse } from "next/server";
 import { randomUUID } from "node:crypto";
-import { PDFParse } from "pdf-parse";
 import { defaultWorkspaceId, getCrm, handleRouteError } from "../../_shared";
 import { extractDocxText } from "../../settings/crm-settings-store";
+
+type PdfParseConstructor = new (options: { data: Uint8Array }) => {
+  destroy(): Promise<void> | void;
+  getText(): Promise<{ text?: string | null }>;
+};
 
 function textField(form: FormData, name: string): string | null {
   const value = form.get(name);
@@ -109,6 +113,10 @@ function isPdfFile(file: File): boolean {
 }
 
 async function extractPdfText(bytes: Uint8Array): Promise<string | null> {
+  const importPdfParse = new Function("specifier", "return import(specifier)") as (
+    specifier: string
+  ) => Promise<{ PDFParse: PdfParseConstructor }>;
+  const { PDFParse } = await importPdfParse("pdf-parse");
   const parser = new PDFParse({ data: bytes });
   try {
     const result = await parser.getText();
@@ -181,7 +189,7 @@ function commercialOfferSummary(input: {
   const source = [input.summary, input.longSummary].filter(Boolean).join("\n");
   const parameters = extractCommercialOfferParameters(source);
   const parameterLines = [
-    `KP V${input.version}`,
+    `Version: KP V${input.version} received.`,
     `Client: ${parameters.client ?? "to review"}`,
     `Project: ${parameters.project ?? "to review"}`,
     `Area / BGF: ${parameters.area ?? "to review"}`,
@@ -193,14 +201,15 @@ function commercialOfferSummary(input: {
   ];
   const shortSummary = compactText(
     source
-      ? `KP V${input.version}: ${input.label}; ${parameterLines.slice(1, 5).join("; ")}. ${source}`
-      : `KP V${input.version}: ${input.label} for review.`,
+      ? `KP V${input.version} received; ${parameterLines.slice(1, 5).join("; ")}. ${source}`
+      : `KP V${input.version} received; ${input.label} for review.`,
     420
   );
   const longSummary = [
     ...parameterLines,
     "",
-    `Incoming commercial offer: ${input.label}. This document has its own KP summary and does not update the lead summary.`,
+    `Incoming KP: ${input.label}. This is a received/uploaded offer, not a generated draft.`,
+    "This document has its own commercial-offer summary and does not update the lead summary.",
     "Review the document values and update offer fields if needed.",
     source ? `Parsed notes: ${compactText(source, 1200)}` : `File: ${input.fileName}`
   ].join("\n");

@@ -2,6 +2,30 @@
 
 All notable LightCrm releases are documented here. Starting with `0.2.0`, every version bump must include a changelog entry.
 
+## 0.3.42 - 2026-06-18
+
+### Added
+
+- Added Gmail send refresh-token handling so Today outreach `Send email` can continue sending through the authorized Gmail account after the short-lived access token expires.
+- Added a visible Today calendar completion confirmation for outreach touches, including the next scheduled touch date after `Mark sent`.
+- Added a shared incoming KP document parser so manually uploaded or replied commercial offers are saved as `KP Vn received` with KP-specific summaries and do not update the lead summary.
+
+### Changed
+
+- Renamed generated commercial offers to the compact `KP Vnd draft` convention while keeping manually uploaded returned offers as `KP Vn received`.
+- Improved lead details `Download KP` so the generated draft is immediately added to Downloads and opened in the foreground preview.
+
+### Fixed
+
+- Fixed DOC/DOCX lead document uploads failing with `DOCTYPE is not valid JSON` by lazy-loading the PDF parser only for PDF extraction.
+- Fixed Today manual completion for regular reminders/events so `Done` persists instead of showing a not-implemented alert.
+
+### Verification
+
+- `pnpm --filter @lightcrm/web typecheck`
+- `pnpm --filter @lightcrm/ui typecheck`
+- `git diff --check`
+
 ## 0.3.41 - 2026-06-18
 
 ### Added

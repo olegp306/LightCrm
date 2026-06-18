@@ -3871,6 +3871,7 @@ export function CrmTable({
             : item
         )
       );
+      setPreviewDocument(document);
     } catch (reason) {
       setCreateError(reason instanceof Error ? reason.message : "Commercial offer generation failed.");
     } finally {
@@ -5844,7 +5845,7 @@ export function CrmTable({
         </div>
       ) : null}
       {previewDocument ? (
-        <div className="documentModalBackdrop" role="presentation" onMouseDown={() => setPreviewDocument(null)}>
+        <div className="documentModalBackdrop documentPreviewBackdrop" role="presentation" onMouseDown={() => setPreviewDocument(null)}>
           <section className="documentModal" role="dialog" aria-modal="true" onMouseDown={(event) => event.stopPropagation()}>
             <header>
               <div>

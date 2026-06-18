@@ -2,6 +2,10 @@ import { summarizeLeadIntake } from "@lightcrm/orchestrator";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getCrm, handleRouteError, optionalText, parseJson, workspaceId } from "../_shared";
+import {
+  allCommercialOfferAttachments,
+  saveIncomingCommercialOfferAttachments
+} from "./commercial-offer-documents";
 
 const textItemSchema = z.object({
   sourceMessageId: optionalText,
@@ -36,6 +40,22 @@ const schema = z.object({
 export async function POST(request: Request) {
   try {
     const input = await parseJson(request, schema);
+    const attachments = input.attachments ?? [];
+    if (allCommercialOfferAttachments(attachments)) {
+      const { lead, documents } = await saveIncomingCommercialOfferAttachments({
+        crm: getCrm(),
+        workspaceId: input.workspaceId,
+        leadId: input.leadId,
+        attachments
+      });
+      return NextResponse.json({
+        lead,
+        documents,
+        leadSummary: null,
+        summary: documents.map((document) => document.shortSummary).join("\n"),
+        originalTakes: []
+      });
+    }
     const summary = summarizeLeadIntake(input);
     return NextResponse.json(
       await getCrm().ingestLeadIntake({

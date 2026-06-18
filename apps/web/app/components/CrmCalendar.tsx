@@ -1,7 +1,7 @@
 ﻿"use client";
 
 import type { FormEvent, ReactNode } from "react";
-import { ChevronLeft, ChevronRight, Mail, Send } from "lucide-react";
+import { ChevronLeft, ChevronRight, Mail, PartyPopper, Send } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
 type CalendarViewMode = "month" | "week" | "day" | "agenda";
@@ -64,6 +64,7 @@ const dayFormatter = new Intl.DateTimeFormat("en", { weekday: "short" });
 const monthFormatter = new Intl.DateTimeFormat("en", { month: "long", year: "numeric" });
 const dateFormatter = new Intl.DateTimeFormat("en", { month: "short", day: "numeric" });
 const fullDateFormatter = new Intl.DateTimeFormat("en", { weekday: "long", month: "long", day: "numeric", year: "numeric" });
+const scheduledDateFormatter = new Intl.DateTimeFormat("en", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
 const timeFormatter = new Intl.DateTimeFormat("en", { hour: "2-digit", minute: "2-digit" });
 const monthOptions = Array.from({ length: 12 }, (_, month) => ({
   value: month,
@@ -338,6 +339,8 @@ function CalendarInspector({
   items,
   styledEmailItems,
   emailDrafts,
+  celebratingDoneItems,
+  doneNotices,
   onToggleStyledEmail,
   onDraftChange,
   onSaveDraft,
@@ -350,6 +353,8 @@ function CalendarInspector({
   items: CalendarFeedItem[];
   styledEmailItems: Record<string, boolean>;
   emailDrafts: Record<string, EmailDraftEdit>;
+  celebratingDoneItems: Record<string, boolean>;
+  doneNotices: Record<string, string>;
   onToggleStyledEmail: (item: CalendarFeedItem) => void;
   onDraftChange: (item: CalendarFeedItem, patch: Partial<EmailDraftEdit>) => void;
   onSaveDraft: (item: CalendarFeedItem, patch?: Partial<EmailDraftEdit>) => void;
@@ -381,6 +386,8 @@ function CalendarInspector({
               };
             const canSendOutreachEmail =
               Boolean(item.outreach?.email && draft.subject.trim() && draft.body.trim()) && item.status !== "done";
+            const isDoneCelebrating = Boolean(celebratingDoneItems[item.id]);
+            const doneNotice = doneNotices[item.id];
             return (
               <article className="calendarTimelineItem" key={`${item.kind}-${item.id}`}>
                 <div className="calendarTimelineRail">
@@ -419,8 +426,14 @@ function CalendarInspector({
                           Open
                         </button>
                       )}
-                      <button type="button" disabled={item.status === "done"} onClick={() => onMarkSent(item)}>
-                        {item.status === "done" ? "Done" : item.outreach ? "Mark sent" : "Done"}
+                      <button
+                        className={`calendarMarkDoneButton ${isDoneCelebrating ? "celebrating" : ""}`}
+                        type="button"
+                        disabled={item.status === "done" && !isDoneCelebrating}
+                        onClick={() => onMarkSent(item)}
+                      >
+                        <span>{item.status === "done" ? "Done" : item.outreach ? "Mark sent" : "Done"}</span>
+                        {isDoneCelebrating ? <PartyPopper aria-hidden="true" size={14} strokeWidth={2.2} /> : null}
                       </button>
                       <button type="button" onClick={() => window.alert("Calendar rescheduling is not implemented yet.")}>
                         Move
@@ -456,6 +469,7 @@ function CalendarInspector({
                       </div>
                     ) : null}
                   </div>
+                  {doneNotice ? <div className="calendarDoneNotice">{doneNotice}</div> : null}
                 </div>
               </article>
             );
@@ -496,6 +510,8 @@ export function CrmCalendar({
   const [selectedOutreachCampaignId, setSelectedOutreachCampaignId] = useState("all");
   const [styledEmailItems, setStyledEmailItems] = useState<Record<string, boolean>>({});
   const [emailDrafts, setEmailDrafts] = useState<Record<string, EmailDraftEdit>>({});
+  const [celebratingDoneItems, setCelebratingDoneItems] = useState<Record<string, boolean>>({});
+  const [doneNotices, setDoneNotices] = useState<Record<string, string>>({});
   const [refreshToken, setRefreshToken] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [failed, setFailed] = useState(false);
@@ -750,9 +766,18 @@ export function CrmCalendar({
           returnTo: `${window.location.pathname}${window.location.search}`
         })
       });
-      const payload = (await response.json()) as { sent?: boolean; authRequired?: boolean; authUrl?: string; error?: string };
+      const payload = (await response.json()) as {
+        sent?: boolean;
+        authRequired?: boolean;
+        authUrl?: string;
+        error?: string;
+        description?: string;
+      };
       if (payload.authRequired && payload.authUrl) {
-        updateEmailDraft(item, { sendStatus: "auth", message: payload.error ?? "authorize Gmail, then press Send again" });
+        updateEmailDraft(item, {
+          sendStatus: "auth",
+          message: payload.description ?? payload.error ?? "Authorize Gmail, then press Send again."
+        });
         window.open(payload.authUrl, "_blank", "noopener,noreferrer");
         return;
       }
@@ -775,27 +800,86 @@ export function CrmCalendar({
     window.open(gmailComposeUrl(item.outreach.email, draft.subject, draft.body), "_blank", "noopener,noreferrer");
   }
 
-  async function markCalendarItemDone(item: CalendarFeedItem) {
-    if (!item.outreach || item.related.entity !== "coldTarget" || !item.related.id) {
-      window.alert("Calendar item completion is not implemented yet.");
-      return;
-    }
-    try {
-      const response = await fetch("/api/crm/outreach-campaigns/advance", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          workspaceId: "default",
-          coldTargetId: item.related.id,
-          campaignId: item.outreach.campaignId,
-          action: "mark_sent"
-        })
+  function celebrateCalendarItemDone(item: CalendarFeedItem, shouldRefresh = false, notice = "Marked done.") {
+    setItems((current) => current.map((candidate) => (candidate.id === item.id ? { ...candidate, status: "done" } : candidate)));
+    setDoneNotices((current) => ({ ...current, [item.id]: notice }));
+    setCelebratingDoneItems((current) => ({ ...current, [item.id]: true }));
+    window.setTimeout(() => {
+      setCelebratingDoneItems((current) => {
+        const next = { ...current };
+        delete next[item.id];
+        return next;
       });
-      const payload = (await response.json()) as { error?: string };
+      if (shouldRefresh) {
+        setRefreshToken((value) => value + 1);
+      }
+    }, 1200);
+  }
+
+  function nextTouchNotice(item: CalendarFeedItem, calendarItems?: CalendarFeedItem[]) {
+    if (!item.outreach) {
+      return "Marked done.";
+    }
+    const nextItem = calendarItems?.find((candidate) => candidate.id !== item.id && candidate.status !== "done");
+    if (!nextItem) {
+      return "Touch marked sent. No next touch remains in this campaign.";
+    }
+    return `Touch marked sent. Next touch scheduled for ${scheduledDateFormatter.format(new Date(nextItem.startsAt))}.`;
+  }
+
+  async function markCalendarItemDone(item: CalendarFeedItem) {
+    try {
+      const response =
+        item.outreach && item.related.entity === "coldTarget" && item.related.id
+          ? await fetch("/api/crm/outreach-campaigns/advance", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                workspaceId: "default",
+                coldTargetId: item.related.id,
+                campaignId: item.outreach.campaignId,
+                action: "mark_sent"
+              })
+            })
+          : item.kind === "reminder"
+            ? await fetch("/api/crm/reminders/upsert", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  id: item.id,
+                  workspaceId: "default",
+                  clientId: item.related.entity === "client" ? item.related.id : null,
+                  leadId: item.related.entity === "lead" ? item.related.id : null,
+                  coldTargetId: item.related.entity === "coldTarget" ? item.related.id : null,
+                  title: item.title,
+                  description: item.description,
+                  dueAt: item.startsAt,
+                  status: "done",
+                  sourceChannel: item.sourceChannel
+                })
+              })
+            : await fetch("/api/crm/calendar-events/upsert", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  id: item.id,
+                  workspaceId: "default",
+                  clientId: item.related.entity === "client" ? item.related.id : null,
+                  leadId: item.related.entity === "lead" ? item.related.id : null,
+                  coldTargetId: item.related.entity === "coldTarget" ? item.related.id : null,
+                  title: item.title,
+                  description: item.description,
+                  startsAt: item.startsAt,
+                  endsAt: item.endsAt ?? item.startsAt,
+                  location: item.location,
+                  syncStatus: "done"
+                })
+              });
+      const payload = (await response.json()) as { calendarItems?: CalendarFeedItem[]; error?: string };
       if (!response.ok) {
         throw new Error(payload.error ?? "Could not mark touch sent");
       }
-      setRefreshToken((value) => value + 1);
+      celebrateCalendarItemDone(item, Boolean(item.outreach), nextTouchNotice(item, payload.calendarItems));
     } catch (error) {
       window.alert(error instanceof Error ? error.message : "Could not mark touch sent");
     }
@@ -1065,6 +1149,8 @@ export function CrmCalendar({
             items={selectedItems}
             styledEmailItems={styledEmailItems}
             emailDrafts={emailDrafts}
+            celebratingDoneItems={celebratingDoneItems}
+            doneNotices={doneNotices}
             onToggleStyledEmail={toggleStyledEmail}
             onDraftChange={updateEmailDraft}
             onSaveDraft={saveEmailDraft}
