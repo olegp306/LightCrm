@@ -526,8 +526,29 @@ function extractZipFile(buffer: Buffer, targetName: string): Buffer {
 
 export function extractDocxPlaceholders(buffer: Buffer): string[] {
   const xml = extractZipFile(buffer, "word/document.xml").toString("utf8");
-  const text = xml.replace(/<[^>]+>/g, " ");
+  const text = xml.replace(/<[^>]+>/g, "");
   return Array.from(new Set(text.match(/\{\{[^}]+\}\}/g) ?? [])).sort();
+}
+
+export function extractDocxText(buffer: Buffer): string {
+  const xml = extractZipFile(buffer, "word/document.xml").toString("utf8");
+  return xml
+    .replace(/<w:tab\/>/g, "\t")
+    .replace(/<\/w:p>/g, "\n")
+    .replace(/<[^>]+>/g, "")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, "\"")
+    .replace(/&apos;/g, "'")
+    .replace(/\u00a0/g, " ")
+    .replace(/[ \t]+/g, " ")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 function xmlEscape(value: string): string {
@@ -537,6 +558,21 @@ function xmlEscape(value: string): string {
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&apos;");
+}
+
+function replaceDocxPlaceholder(xml: string, key: string, value: string): string {
+  const escapedValue = xmlEscape(value);
+  const exactTokens = [`{{${key}}}`, `{{{${key}}}}`];
+  let nextXml = xml;
+  for (const token of exactTokens) {
+    nextXml = nextXml.replaceAll(token, escapedValue);
+    const loosePattern = token
+      .split("")
+      .map((char) => escapeRegExp(char))
+      .join("(?:<[^>]+>)*");
+    nextXml = nextXml.replace(new RegExp(loosePattern, "g"), escapedValue);
+  }
+  return nextXml;
 }
 
 function buildZip(entries: ZipEntry[]): Buffer {
@@ -613,7 +649,7 @@ export function renderDocxTemplate(buffer: Buffer, values: Record<string, string
         if (value === null || value === undefined || value === "") {
           continue;
         }
-        xml = xml.replaceAll(`{{${key}}}`, xmlEscape(String(value)));
+        xml = replaceDocxPlaceholder(xml, key, String(value));
       }
       return { ...entry, content: Buffer.from(xml, "utf8") };
     })

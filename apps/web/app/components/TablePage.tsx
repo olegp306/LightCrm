@@ -26,6 +26,9 @@ type CrmSettingsResponse = {
       activeTemplate?: {
         placeholders?: string[];
       } | null;
+      activeFeeTable?: {
+        rows?: CrmTableProps["offerFeeRows"];
+      } | null;
     };
     outreachCampaigns?: {
       campaigns?: CrmTableProps["outreachCampaigns"];
@@ -34,6 +37,9 @@ type CrmSettingsResponse = {
   commercialOffers?: {
     activeTemplate?: {
       placeholders?: string[];
+    } | null;
+    activeFeeTable?: {
+      rows?: CrmTableProps["offerFeeRows"];
     } | null;
   };
 };
@@ -87,6 +93,7 @@ function TablePageLoading() {
 function LiveTablePage({ endpoint, rows: _sampleRows, columns, calendarFeedEndpoint, ...props }: LiveTablePageProps) {
   const [liveRows, setLiveRows] = useState<CrmTableRow[] | null>(null);
   const [offerTemplateFields, setOfferTemplateFields] = useState<string[]>([]);
+  const [offerFeeRows, setOfferFeeRows] = useState<CrmTableProps["offerFeeRows"]>([]);
   const [outreachCampaigns, setOutreachCampaigns] = useState<CrmTableProps["outreachCampaigns"]>([]);
   const [failed, setFailed] = useState(false);
   const [initialFocusRef, setInitialFocusRef] = useState<string | null>(null);
@@ -148,6 +155,7 @@ function LiveTablePage({ endpoint, rows: _sampleRows, columns, calendarFeedEndpo
   useEffect(() => {
     if (!props.offerGenerateEndpoint && !props.outreachStartEndpoint) {
       setOfferTemplateFields([]);
+      setOfferFeeRows([]);
       setOutreachCampaigns([]);
       return;
     }
@@ -159,6 +167,9 @@ function LiveTablePage({ endpoint, rows: _sampleRows, columns, calendarFeedEndpo
         }
         const settings = (await response.json()) as CrmSettingsResponse;
         setOutreachCampaigns(settings.settings?.outreachCampaigns?.campaigns ?? []);
+        setOfferFeeRows(
+          settings.settings?.commercialOffers?.activeFeeTable?.rows ?? settings.commercialOffers?.activeFeeTable?.rows ?? []
+        );
         return settings.settings?.commercialOffers?.activeTemplate?.placeholders ?? settings.commercialOffers?.activeTemplate?.placeholders ?? [];
       })
       .then((placeholders) => {
@@ -169,6 +180,7 @@ function LiveTablePage({ endpoint, rows: _sampleRows, columns, calendarFeedEndpo
           return;
         }
         setOfferTemplateFields([]);
+        setOfferFeeRows([]);
         setOutreachCampaigns([]);
       });
     return () => controller.abort();
@@ -200,6 +212,7 @@ function LiveTablePage({ endpoint, rows: _sampleRows, columns, calendarFeedEndpo
       rows={activeRows}
       initialFocusRowId={initialFocusRowId}
       offerTemplateFields={offerTemplateFields}
+      offerFeeRows={offerFeeRows}
       outreachCampaigns={outreachCampaigns}
     />
   );

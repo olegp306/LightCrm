@@ -1512,17 +1512,19 @@ input {
 }
 
 .leadFieldGuide summary::before {
-  color: var(--muted);
-  content: "вЂє";
+  border-bottom: 4px solid transparent;
+  border-left: 5px solid var(--muted);
+  border-top: 4px solid transparent;
+  content: "";
   display: inline-block;
-  font-size: 15px;
-  line-height: 1;
+  height: 0;
   transform: translateY(1px);
   transition: transform 140ms ease;
+  width: 0;
 }
 
 .leadFieldGuide[open] summary::before {
-  transform: rotate(90deg) translateX(1px);
+  transform: rotate(90deg) translateX(1px) translateY(1px);
 }
 
 .leadFieldGuide summary span {
@@ -2508,7 +2510,7 @@ input {
   border-radius: 5px;
   color: var(--muted);
   display: inline-flex;
-  font-size: 10px;
+  font-size: calc(10px * var(--table-font-scale, 1));
   font-weight: 700;
   margin-bottom: 7px;
   padding: 3px 6px;
@@ -2559,7 +2561,7 @@ input {
   cursor: pointer;
   display: inline-flex;
   font: inherit;
-  font-size: 12px;
+  font-size: calc(12px * var(--table-font-scale, 1));
   font-weight: 800;
   gap: 6px;
   min-height: 30px;
@@ -2577,7 +2579,7 @@ input {
   background: color-mix(in srgb, currentColor 14%, transparent);
   border-radius: 999px;
   display: inline-flex;
-  font-size: 10px;
+  font-size: calc(10px * var(--table-font-scale, 1));
   justify-content: center;
   min-width: 18px;
   padding: 1px 5px;
@@ -2601,6 +2603,16 @@ input {
 
 .detailsDrawerBody.coldTarget {
   grid-template-columns: minmax(320px, 0.4fr) minmax(520px, 0.6fr);
+}
+
+.detailsDrawerFieldsPanel {
+  display: grid;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.detailsDrawerFieldsPanel > summary {
+  display: none;
 }
 
 .detailsDrawerFields {
@@ -2683,13 +2695,13 @@ input {
 
 .detailsClientSection > header span {
   color: var(--muted);
-  font-size: 11px;
+  font-size: calc(11px * var(--table-font-scale, 1));
   font-weight: 700;
 }
 
 .detailsClientSection > header strong {
   color: var(--ink);
-  font-size: 13px;
+  font-size: calc(13px * var(--table-font-scale, 1));
   font-weight: 700;
   min-width: 0;
   overflow-wrap: anywhere;
@@ -2773,7 +2785,7 @@ input {
 
 .detailsClientOptions span {
   color: var(--muted);
-  font-size: 10px;
+  font-size: calc(10px * var(--table-font-scale, 1));
   font-weight: 700;
   line-height: 1.1;
   overflow: hidden;
@@ -2783,7 +2795,7 @@ input {
 
 .detailsClientOptions strong {
   color: var(--ink);
-  font-size: 12px;
+  font-size: calc(12px * var(--table-font-scale, 1));
   font-weight: 700;
   line-height: 1.2;
   overflow-wrap: anywhere;
@@ -2792,7 +2804,7 @@ input {
 .detailsClientOptions small,
 .detailsClientOptions p {
   color: var(--ink-soft);
-  font-size: 11px;
+  font-size: calc(11px * var(--table-font-scale, 1));
   line-height: 1.25;
   margin: 0;
   overflow-wrap: anywhere;
@@ -2817,7 +2829,7 @@ input {
   border-radius: 999px;
   color: var(--muted);
   display: inline-flex;
-  font-size: 9px;
+  font-size: calc(9px * var(--table-font-scale, 1));
   font-style: normal;
   height: 15px;
   justify-content: center;
@@ -2854,7 +2866,7 @@ input {
 
 .detailsHandoffSide {
   color: var(--muted);
-  font-size: 11px;
+  font-size: calc(11px * var(--table-font-scale, 1));
   font-weight: 700;
   text-align: center;
 }
@@ -2873,7 +2885,7 @@ input {
 
 .detailsHandoffTrack b {
   display: inline-flex;
-  font-size: 18px;
+  font-size: calc(18px * var(--table-font-scale, 1));
   left: var(--details-ball-x, 0%);
   line-height: 1;
   position: absolute;
@@ -2908,7 +2920,7 @@ input {
 }
 
 .detailsDrawerSection.offer {
-  background: color-mix(in srgb, #fff4d8 38%, var(--control));
+  background: color-mix(in srgb, var(--accent) 8%, var(--control));
   gap: 4px;
   padding: 6px 8px;
 }
@@ -2918,9 +2930,11 @@ input {
 }
 
 .detailsDrawerSectionHeader {
-  align-items: center;
-  display: flex;
-  gap: 8px;
+  align-items: start;
+  cursor: pointer;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: 12px minmax(0, 1fr) minmax(250px, 0.72fr);
   justify-content: space-between;
 }
 
@@ -2932,6 +2946,25 @@ input {
   display: grid;
   gap: 1px;
   min-width: 0;
+}
+
+.detailsDrawerToggle {
+  border-bottom: 4px solid transparent;
+  border-left: 5px solid color-mix(in srgb, var(--ink) 64%, var(--muted));
+  border-top: 4px solid transparent;
+  display: inline-block;
+  height: 0;
+  margin-top: 6px;
+  transition: transform 150ms ease, border-left-color 150ms ease;
+  width: 0;
+}
+
+.detailsDrawerSection[open] > .detailsDrawerSectionHeader .detailsDrawerToggle {
+  transform: rotate(90deg);
+}
+
+.detailsDrawerSectionHeader:hover .detailsDrawerToggle {
+  border-left-color: var(--accent);
 }
 
 .detailsDrawerSectionHeader span {
@@ -2946,6 +2979,10 @@ input {
   gap: 6px;
 }
 
+.detailsDrawerSectionHeader .detailsDrawerToggle {
+  display: inline-block;
+}
+
 .detailsDrawerSectionHeader strong {
   color: var(--ink);
   font-size: calc(11px * var(--table-font-scale, 1));
@@ -2953,10 +2990,26 @@ input {
 }
 
 .detailsDrawerSectionHeader .detailsOfferActions {
-  display: inline-flex;
+  align-self: start;
+  display: grid;
   gap: 6px;
-  justify-content: flex-end;
-  min-width: max-content;
+  grid-column: 3;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  justify-content: stretch;
+  min-width: 0;
+}
+
+.detailsOfferSummaryPreview {
+  color: var(--ink-soft);
+  display: -webkit-box;
+  font-size: calc(11px * var(--table-font-scale, 1));
+  font-weight: 500;
+  line-height: 1.25;
+  margin-top: 2px;
+  max-width: 100%;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
 }
 
 .detailsDrawerSectionHeader button,
@@ -2967,7 +3020,7 @@ input {
   color: var(--ink);
   cursor: pointer;
   font: inherit;
-  font-size: 12px;
+  font-size: calc(12px * var(--table-font-scale, 1));
   font-weight: 700;
   min-height: 28px;
   padding: 5px 10px;
@@ -2980,7 +3033,9 @@ input {
 
 .detailsOfferMissingEditor {
   display: grid;
-  gap: 4px;
+  gap: 10px;
+  grid-template-columns: minmax(0, 1fr) minmax(300px, 0.72fr);
+  align-items: start;
 }
 
 .detailsOfferMissingEditor section {
@@ -2990,36 +3045,146 @@ input {
 
 .detailsOfferMissingEditor section > span {
   color: color-mix(in srgb, var(--ink) 72%, var(--muted));
-  font-size: 11px;
+  font-size: calc(11px * var(--table-font-scale, 1));
   font-weight: 700;
 }
 
 .detailsOfferMissingEditor label {
+  align-items: center;
   display: grid;
-  gap: 2px;
+  gap: 6px;
+  grid-template-columns: 128px minmax(0, 1fr);
 }
 
 .detailsOfferMissingEditor label > span {
-  color: var(--ink);
-  font-size: 12px;
-  font-weight: 650;
+  color: var(--muted);
+  font-size: calc(12px * var(--table-font-scale, 1));
+  font-weight: 600;
 }
 
-.detailsOfferMissingEditor input {
+.detailsOfferMissingEditor input,
+.detailsOfferMissingEditor select {
   background: var(--panel);
   border: 1px solid var(--line);
   border-radius: 6px;
   color: var(--ink);
   font: inherit;
-  font-size: 12px;
+  font-size: calc(12px * var(--table-font-scale, 1));
   min-width: 0;
   padding: 4px 7px;
 }
 
+.detailsOfferMissingEditor select {
+  cursor: pointer;
+}
+
 .detailsOfferMissingEditor small {
   color: var(--ink-soft);
-  font-size: 10px;
+  font-size: calc(10px * var(--table-font-scale, 1));
+  grid-column: 2;
   line-height: 1.2;
+}
+
+.detailsOfferCalculatedPanel {
+  display: grid;
+  gap: 3px;
+}
+
+.detailsOfferCalculatedCard {
+  background: color-mix(in srgb, var(--panel-strong, var(--panel)) 74%, var(--line));
+  border: 1px solid color-mix(in srgb, var(--line) 78%, transparent);
+  border-radius: 8px;
+  display: grid;
+  gap: 7px;
+  padding: 9px;
+}
+
+.detailsOfferCalculatedList {
+  display: grid;
+  gap: 4px 10px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin: 0;
+}
+
+.detailsOfferCalculatedList > div {
+  align-items: baseline;
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.detailsOfferCalculatedList dt,
+.detailsOfferPaymentPlan > span,
+.detailsOfferTotalGross span {
+  color: var(--muted);
+  font-size: calc(10px * var(--table-font-scale, 1));
+  font-weight: 700;
+  line-height: 1.15;
+}
+
+.detailsOfferCalculatedList dd {
+  color: var(--ink);
+  font-size: calc(12px * var(--table-font-scale, 1));
+  font-weight: 700;
+  line-height: 1.2;
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.detailsOfferTotalGross {
+  align-items: center;
+  background: color-mix(in srgb, var(--accent) 10%, var(--panel));
+  border: 1px solid color-mix(in srgb, var(--accent) 40%, var(--line));
+  border-radius: 7px;
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 7px 9px;
+}
+
+.detailsOfferTotalGross strong {
+  color: var(--accent);
+  font-size: calc(17px * var(--table-font-scale, 1));
+  font-weight: 800;
+  line-height: 1.1;
+  white-space: nowrap;
+}
+
+.detailsOfferPaymentPlan {
+  border-top: 1px solid color-mix(in srgb, var(--line) 70%, transparent);
+  display: grid;
+  gap: 4px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  padding-top: 7px;
+}
+
+.detailsOfferPaymentPlan > span {
+  grid-column: 1 / -1;
+}
+
+.detailsOfferPaymentPlan div {
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+}
+
+.detailsOfferPaymentPlan strong {
+  color: var(--muted);
+  font-size: calc(10px * var(--table-font-scale, 1));
+  line-height: 1.1;
+}
+
+.detailsOfferPaymentPlan em {
+  color: var(--ink);
+  font-size: calc(12px * var(--table-font-scale, 1));
+  font-style: normal;
+  font-weight: 700;
+  line-height: 1.15;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .detailsOutreachPanel {
@@ -3358,6 +3523,71 @@ input {
   -webkit-line-clamp: 3;
 }
 
+.detailsDownloadsSection,
+.detailsSummarySection {
+  gap: 6px;
+}
+
+.detailsDownloadsHeader {
+  color: var(--muted);
+  font-size: calc(11px * var(--table-font-scale, 1));
+  font-weight: 700;
+}
+
+.detailsSummaryDetails {
+  display: grid;
+  gap: 6px;
+}
+
+.detailsSummaryDetails summary {
+  color: inherit;
+}
+
+.detailsSummaryDetails summary p {
+  color: var(--ink);
+  margin: 0;
+}
+
+.detailsExtraDownloads,
+.mobileLeadExtraDownloads {
+  display: grid;
+  gap: 5px;
+}
+
+.detailsExtraDownloads summary,
+.mobileLeadExtraDownloads summary {
+  align-items: center;
+  color: var(--accent);
+  cursor: pointer;
+  display: inline-flex;
+  font-size: calc(11px * var(--table-font-scale, 1));
+  font-weight: 700;
+  gap: 7px;
+  justify-self: start;
+  list-style: none;
+}
+
+.detailsExtraDownloads summary::-webkit-details-marker,
+.mobileLeadExtraDownloads summary::-webkit-details-marker {
+  display: none;
+}
+
+.detailsExtraDownloads summary i,
+.mobileLeadExtraDownloads summary i {
+  border-bottom: 4px solid transparent;
+  border-left: 5px solid currentColor;
+  border-top: 4px solid transparent;
+  display: inline-block;
+  height: 0;
+  transition: transform 160ms ease;
+  width: 0;
+}
+
+.detailsExtraDownloads[open] summary i,
+.mobileLeadExtraDownloads[open] summary i {
+  transform: rotate(90deg);
+}
+
 .detailsDrawerDetails {
   margin: 0;
 }
@@ -3373,7 +3603,7 @@ input {
 
 .detailsDrawerDetails p {
   color: var(--ink-soft);
-  font-size: 12px;
+  font-size: calc(12px * var(--table-font-scale, 1));
   line-height: 1.35;
   margin: 0;
   overflow-wrap: anywhere;
@@ -3398,19 +3628,19 @@ input {
 
 .detailsDrawerTimeline time {
   color: var(--muted);
-  font-size: 10.5px;
+  font-size: calc(10.5px * var(--table-font-scale, 1));
   font-weight: 700;
 }
 
 .detailsDrawerTimeline strong {
   color: var(--ink);
-  font-size: 12px;
+  font-size: calc(12px * var(--table-font-scale, 1));
   line-height: 1.25;
 }
 
 .detailsDrawerTimeline span {
   color: var(--muted);
-  font-size: 10.5px;
+  font-size: calc(10.5px * var(--table-font-scale, 1));
 }
 
 .detailsDrawerEmpty {
@@ -3418,13 +3648,13 @@ input {
   border: 1px dashed var(--line);
   border-radius: 8px;
   color: var(--muted);
-  font-size: 13px;
+  font-size: calc(13px * var(--table-font-scale, 1));
   margin: 0;
   padding: 12px;
 }
 
 .detailsDrawerEmpty.compact {
-  font-size: 12px;
+  font-size: calc(12px * var(--table-font-scale, 1));
   padding: 8px;
 }
 
@@ -3460,7 +3690,7 @@ input {
   border-radius: 5px;
   color: #fff;
   display: inline-flex;
-  font-size: 8px;
+  font-size: calc(8px * var(--table-font-scale, 1));
   font-weight: 800;
   height: 20px;
   justify-content: center;
@@ -3476,7 +3706,7 @@ input {
 
 .leadDocumentCardMain strong {
   color: var(--ink);
-  font-size: 12px;
+  font-size: calc(12px * var(--table-font-scale, 1));
   font-weight: 700;
   min-width: 0;
   overflow: hidden;
@@ -3485,46 +3715,57 @@ input {
 }
 
 .leadDocumentCardMain span,
+.leadDocumentCardMain em,
 .leadDocumentCardSummary {
   color: var(--muted);
-  font-size: 10px;
+  font-size: calc(10px * var(--table-font-scale, 1));
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
+.leadDocumentCardMain em {
+  font-style: normal;
+}
+
 .leadDocumentCardSummary {
-  font-size: 11px;
+  font-size: calc(11px * var(--table-font-scale, 1));
 }
 
 .detailsDocumentCard {
   align-items: start;
-  grid-template-columns: 18px minmax(92px, 0.34fr) minmax(0, 1fr);
-  min-height: 58px;
+  gap: 5px;
+  grid-template-columns: 18px minmax(64px, 0.24fr) minmax(0, 1fr);
+  min-height: 64px;
   padding: 6px 8px;
 }
 
 .detailsDocumentCard .leadDocumentCardBadge {
   border-radius: 4px;
-  font-size: 6px;
+  font-size: calc(6px * var(--table-font-scale, 1));
   height: 14px;
   margin-top: 2px;
   width: 14px;
 }
 
 .detailsDocumentCard .leadDocumentCardMain strong {
-  font-size: 11px;
+  font-size: calc(11px * var(--table-font-scale, 1));
 }
 
 .detailsDocumentCard .leadDocumentCardMain span {
-  font-size: 9px;
+  font-size: calc(9px * var(--table-font-scale, 1));
+  line-height: 1.15;
+}
+
+.detailsDocumentCard .leadDocumentCardMain {
+  gap: 0;
 }
 
 .detailsDocumentCardText {
   color: var(--ink-soft);
   display: grid;
-  font-size: 11px;
+  font-size: calc(11px * var(--table-font-scale, 1));
   gap: 2px;
   line-height: 1.25;
   min-width: 0;
@@ -3532,7 +3773,7 @@ input {
 
 .detailsDocumentCardText small {
   color: var(--muted);
-  font-size: 9px;
+  font-size: calc(9px * var(--table-font-scale, 1));
   line-height: 1.2;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -3764,7 +4005,7 @@ input {
 
 .mobileRowTitle {
   color: var(--ink);
-  font-size: 13px;
+  font-size: calc(13px * var(--table-font-scale, 1));
   font-weight: 700;
   line-height: 1.15;
   margin: 2px 0 1px;
@@ -3841,7 +4082,7 @@ input {
 
 .mobileLeadCardCode {
   color: color-mix(in srgb, var(--ink) 82%, var(--muted));
-  font-size: 10.5px;
+  font-size: calc(10.5px * var(--table-font-scale, 1));
   font-weight: 560;
   line-height: 1.15;
 }
@@ -3849,7 +4090,7 @@ input {
 .mobileLeadCardName {
   color: var(--ink);
   display: block;
-  font-size: 14px;
+  font-size: calc(14px * var(--table-font-scale, 1));
   font-weight: 650;
   line-height: 1.15;
   min-width: 0;
@@ -3861,7 +4102,7 @@ input {
   border: 1px solid color-mix(in srgb, var(--accent-line) 70%, transparent);
   border-radius: 999px;
   color: var(--accent);
-  font-size: 10px;
+  font-size: calc(10px * var(--table-font-scale, 1));
   font-weight: 650;
   justify-self: start;
   line-height: 1.1;
@@ -3880,9 +4121,9 @@ input {
 
 .mobileLeadCardFields span,
 .mobileLeadCardSection > span,
-.mobileLeadDownloads summary {
+.mobileLeadDownloadsHeader {
   color: var(--muted);
-  font-size: 10px;
+  font-size: calc(10px * var(--table-font-scale, 1));
   font-weight: 560;
   letter-spacing: 0;
   line-height: 1.2;
@@ -3891,7 +4132,7 @@ input {
 
 .mobileLeadCardFields strong {
   color: var(--ink);
-  font-size: 10.5px;
+  font-size: calc(10.5px * var(--table-font-scale, 1));
   font-weight: 560;
   line-height: 1.2;
   min-width: 0;
@@ -3907,33 +4148,36 @@ input {
 
 .mobileLeadCardSection p {
   color: var(--ink);
-  font-size: 11px;
+  font-size: calc(11px * var(--table-font-scale, 1));
   line-height: 1.28;
   margin: 3px 0 0;
   overflow-wrap: anywhere;
 }
 
 .mobileLeadMissingChips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
+  color: var(--ink);
+  display: block;
+  font-size: calc(11px * var(--table-font-scale, 1));
+  font-weight: 620;
+  line-height: 1.28;
   margin-top: 3px;
+  overflow-wrap: anywhere;
 }
 
 .mobileLeadMissingChips i {
-  background: color-mix(in srgb, #fff4d8 82%, var(--panel));
-  border: 1px solid color-mix(in srgb, #d9a441 56%, var(--line));
-  border-radius: 5px;
-  color: color-mix(in srgb, #8a5a00 42%, var(--ink));
-  font-size: 10px;
+  color: inherit;
+  font-size: inherit;
   font-style: normal;
-  line-height: 1.2;
-  padding: 2px 5px;
+  font-weight: inherit;
+}
+
+.mobileLeadMissingChips i:not(:last-child)::after {
+  content: ", ";
 }
 
 .mobileLeadMuted {
   color: var(--muted) !important;
-  font-size: 10.5px !important;
+  font-size: calc(10.5px * var(--table-font-scale, 1)) !important;
 }
 
 .mobileLeadCardSummaryText {
@@ -3954,13 +4198,12 @@ input {
 .mobileLeadFullSummary summary {
   color: color-mix(in srgb, var(--ink) 70%, var(--muted));
   cursor: pointer;
-  font-size: 10.5px;
+  font-size: calc(10.5px * var(--table-font-scale, 1));
   font-weight: 650;
   list-style: none;
 }
 
-.mobileLeadFullSummary summary::-webkit-details-marker,
-.mobileLeadDownloads summary::-webkit-details-marker {
+.mobileLeadFullSummary summary::-webkit-details-marker {
   display: none;
 }
 
@@ -3978,49 +4221,93 @@ input {
   border-radius: 6px;
   color: var(--ink);
   font: inherit;
-  font-size: 10.5px;
+  font-size: calc(10.5px * var(--table-font-scale, 1));
   font-weight: 650;
   margin-top: 5px;
   padding: 3px 7px;
 }
 
-.mobileLeadDownloads summary {
+.mobileLeadDownloadsHeader {
   align-items: center;
-  cursor: pointer;
   display: flex;
   justify-content: space-between;
+}
+
+.mobileLeadFullSummary summary {
   list-style: none;
 }
 
+.mobileLeadFullSummary summary p {
+  margin: 0;
+}
+
 .mobileLeadDownloads summary i {
-  color: color-mix(in srgb, var(--ink) 65%, var(--muted));
-  font-style: normal;
+  border-bottom: 4px solid transparent;
+  border-left: 5px solid color-mix(in srgb, var(--ink) 65%, var(--muted));
+  border-top: 4px solid transparent;
+  display: inline-block;
+  height: 0;
   transition: transform 160ms ease;
+  width: 0;
 }
 
 .mobileLeadDownloads[open] summary i {
-  transform: rotate(180deg);
+  transform: rotate(90deg);
 }
 
 .mobileLeadDownloads .leadDocumentCardList {
   gap: 5px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   padding-top: 5px;
 }
 
 .mobileLeadDocumentCard.leadDocumentCard {
-  grid-template-columns: 25px minmax(0, 1fr);
-  gap: 6px;
-  min-height: 30px;
-  padding: 4px 6px 4px 4px;
+  align-items: start;
+  gap: 3px 5px;
+  grid-template-columns: 24px minmax(0, 1fr);
+  min-height: 62px;
+  padding: 4px 5px;
 }
 
 .mobileLeadDocumentCard .leadDocumentCardBadge {
-  height: 20px;
-  width: 25px;
+  height: 18px;
+  width: 24px;
+}
+
+.mobileLeadDocumentCard .leadDocumentCardMain {
+  align-items: baseline;
+  display: flex;
+  gap: 4px;
+}
+
+.mobileLeadDocumentCard .leadDocumentCardMain strong {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+.mobileLeadDocumentCard .leadDocumentCardMain em {
+  flex: 1 1 auto;
+  min-width: 0;
+  text-align: right;
 }
 
 .mobileLeadDocumentCard .leadDocumentCardSummary {
-  grid-column: 2;
+  color: var(--ink-soft);
+  display: -webkit-box;
+  grid-column: 1 / -1;
+  line-height: 1.22;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  white-space: normal;
+}
+
+.mobileLeadExtraDownloads {
+  grid-column: 1 / -1;
+}
+
+.mobileLeadExtraDownloads .leadDocumentCardList {
+  grid-template-columns: 1fr;
 }
 
 .mobileTableRow .mobileField {
@@ -4083,7 +4370,7 @@ input {
 
 .mobileMiniCalendarHeader strong {
   color: var(--ink);
-  font-size: 12px;
+  font-size: calc(12px * var(--table-font-scale, 1));
   font-weight: 700;
   text-align: center;
 }
@@ -4096,7 +4383,7 @@ input {
 
 .mobileMiniCalendarWeekdays span {
   color: var(--muted);
-  font-size: 10px;
+  font-size: calc(10px * var(--table-font-scale, 1));
   font-weight: 700;
   text-align: center;
 }
@@ -4119,7 +4406,7 @@ input {
 
 .mobileMiniCalendarDay span {
   color: var(--ink);
-  font-size: 10px;
+  font-size: calc(10px * var(--table-font-scale, 1));
 }
 
 .mobileMiniCalendarDay.outside span {
@@ -4140,7 +4427,7 @@ input {
   border-radius: 999px;
   color: var(--accent-ink);
   display: inline-flex;
-  font-size: 8px;
+  font-size: calc(8px * var(--table-font-scale, 1));
   font-style: normal;
   height: 12px;
   justify-content: center;
@@ -4159,7 +4446,7 @@ input {
 
 .mobileCalendarInlineList > span {
   color: var(--muted);
-  font-size: 10px;
+  font-size: calc(10px * var(--table-font-scale, 1));
   font-weight: 700;
 }
 
@@ -4184,7 +4471,7 @@ input {
   color: var(--ink);
   cursor: pointer;
   font: inherit;
-  font-size: 11px;
+  font-size: calc(11px * var(--table-font-scale, 1));
   font-weight: 700;
   justify-self: start;
   margin-top: 5px;
@@ -4205,13 +4492,13 @@ input {
 .mobileDescriptionDetails summary {
   color: var(--accent);
   cursor: pointer;
-  font-size: 11px;
+  font-size: calc(11px * var(--table-font-scale, 1));
   font-weight: 700;
 }
 
 .mobileDescriptionDetails p {
   color: var(--ink);
-  font-size: 13px;
+  font-size: calc(13px * var(--table-font-scale, 1));
   line-height: 1.28;
   margin: 2px 0 0;
   overflow-wrap: anywhere;
@@ -4219,12 +4506,12 @@ input {
 
 .mobileTableRow span {
   color: var(--muted);
-  font-size: 11px;
+  font-size: calc(11px * var(--table-font-scale, 1));
 }
 
 .mobileTableRow strong {
   color: var(--ink);
-  font-size: 13px;
+  font-size: calc(13px * var(--table-font-scale, 1));
   font-weight: 600;
   min-width: 0;
   overflow-wrap: anywhere;
@@ -4285,7 +4572,7 @@ input {
 
 .mobileLeadSummary details {
   color: var(--ink-soft);
-  font-size: 12px;
+  font-size: calc(12px * var(--table-font-scale, 1));
   margin-top: 0;
 }
 
@@ -4327,7 +4614,7 @@ input {
 
 .leadSummaryComposer label span {
   color: var(--muted);
-  font-size: 11px;
+  font-size: calc(11px * var(--table-font-scale, 1));
   font-weight: 700;
 }
 
@@ -4349,7 +4636,7 @@ input {
   color: white;
   cursor: pointer;
   font: inherit;
-  font-size: 12px;
+  font-size: calc(12px * var(--table-font-scale, 1));
   font-weight: 700;
   justify-self: start;
   min-height: 30px;
@@ -4376,17 +4663,17 @@ input {
 
 .leadSummaryHistoryList article span {
   color: var(--muted);
-  font-size: 11px;
+  font-size: calc(11px * var(--table-font-scale, 1));
 }
 
 .leadSummaryHistoryList article strong {
   color: var(--ink);
-  font-size: 13px;
+  font-size: calc(13px * var(--table-font-scale, 1));
 }
 
 .leadSummaryHistoryList article p {
   color: var(--ink-soft);
-  font-size: 12px;
+  font-size: calc(12px * var(--table-font-scale, 1));
   line-height: 1.35;
   margin: 0;
 }
@@ -4399,7 +4686,7 @@ input {
   color: var(--muted);
   cursor: pointer;
   font: inherit;
-  font-size: 11px;
+  font-size: calc(11px * var(--table-font-scale, 1));
   font-weight: 700;
   justify-self: start;
   margin-top: 2px;
@@ -4425,7 +4712,7 @@ input {
 .status {
   border-radius: 999px;
   display: inline-flex;
-  font-size: 12px;
+  font-size: calc(12px * var(--table-font-scale, 1));
   padding: 2px 8px;
 }
 
@@ -4466,7 +4753,7 @@ input {
   border: 1px solid var(--line);
   border-radius: 999px;
   color: var(--muted);
-  font-size: 12px;
+  font-size: calc(12px * var(--table-font-scale, 1));
   min-width: 68px;
   padding: 5px 10px;
   text-align: center;
@@ -4496,7 +4783,7 @@ input {
 .settingsError {
   border: 1px solid var(--danger-line);
   border-radius: 8px;
-  font-size: 13px;
+  font-size: calc(13px * var(--table-font-scale, 1));
   padding: 10px 12px;
 }
 
@@ -4511,7 +4798,7 @@ input {
   border-radius: 999px;
   color: var(--muted);
   cursor: pointer;
-  font-size: 13px;
+  font-size: calc(13px * var(--table-font-scale, 1));
   min-height: 34px;
   padding: 7px 12px;
 }
@@ -4534,12 +4821,12 @@ input {
 
 .settingsSummary strong {
   color: var(--ink);
-  font-size: 13px;
+  font-size: calc(13px * var(--table-font-scale, 1));
 }
 
 .settingsSummary span {
   color: var(--muted);
-  font-size: 12px;
+  font-size: calc(12px * var(--table-font-scale, 1));
 }
 
 .placeholderGrid {
@@ -4553,7 +4840,7 @@ input {
   border: 1px solid var(--info-line);
   border-radius: 999px;
   color: var(--ink-soft);
-  font-size: 12px;
+  font-size: calc(12px * var(--table-font-scale, 1));
   padding: 5px 8px;
 }
 
@@ -4578,7 +4865,7 @@ input {
 
 .feePreview span,
 .feePreview strong {
-  font-size: 12px;
+  font-size: calc(12px * var(--table-font-scale, 1));
 }
 
 .versionPlanGrid {
@@ -4596,12 +4883,12 @@ input {
 }
 
 .versionPlanGrid strong {
-  font-size: 13px;
+  font-size: calc(13px * var(--table-font-scale, 1));
 }
 
 .versionPlanGrid span {
   color: var(--muted);
-  font-size: 12px;
+  font-size: calc(12px * var(--table-font-scale, 1));
   line-height: 1.35;
 }
 
@@ -4631,7 +4918,7 @@ input {
 }
 
 .presetCard span {
-  font-size: 14px;
+  font-size: calc(14px * var(--table-font-scale, 1));
   font-weight: 700;
 }
 
@@ -4642,7 +4929,7 @@ input {
 
 .presetCard small {
   color: var(--muted);
-  font-size: 12px;
+  font-size: calc(12px * var(--table-font-scale, 1));
   line-height: 1.35;
 }
 
@@ -4679,7 +4966,7 @@ input {
 
 .settingsPanelHeader p {
   color: var(--muted);
-  font-size: 12px;
+  font-size: calc(12px * var(--table-font-scale, 1));
   line-height: 1.35;
   margin: 4px 0 0;
 }
@@ -4694,7 +4981,7 @@ input {
   cursor: pointer;
   display: inline-flex;
   font: inherit;
-  font-size: 12px;
+  font-size: calc(12px * var(--table-font-scale, 1));
   font-weight: 700;
   min-height: 30px;
   padding: 6px 10px;
@@ -4710,7 +4997,7 @@ input {
   border: 1px solid color-mix(in srgb, var(--accent) 36%, var(--line));
   border-radius: 999px;
   color: var(--accent);
-  font-size: 11px;
+  font-size: calc(11px * var(--table-font-scale, 1));
   font-weight: 700;
   padding: 4px 8px;
   white-space: nowrap;
@@ -4730,7 +5017,7 @@ input {
   color: #fff;
   cursor: pointer;
   font: inherit;
-  font-size: 12px;
+  font-size: calc(12px * var(--table-font-scale, 1));
   font-weight: 800;
   min-height: 32px;
   padding: 7px 12px;
@@ -4743,7 +5030,7 @@ input {
 
 .settingsInlineNotice,
 .settingsInlineError {
-  font-size: 12px;
+  font-size: calc(12px * var(--table-font-scale, 1));
   font-weight: 700;
 }
 
@@ -4763,7 +5050,7 @@ input {
 .settingsPanel label > span,
 .switchRow span {
   color: var(--muted);
-  font-size: 12px;
+  font-size: calc(12px * var(--table-font-scale, 1));
 }
 
 .settingsPanel input:not([type="checkbox"]),
@@ -4778,7 +5065,7 @@ input {
 }
 
 .settingsPanel textarea {
-  font-size: 13px;
+  font-size: calc(13px * var(--table-font-scale, 1));
   line-height: 1.45;
   resize: vertical;
 }
@@ -4805,13 +5092,13 @@ input {
 
 .outreachTouchGrid article span {
   color: var(--accent);
-  font-size: 11px;
+  font-size: calc(11px * var(--table-font-scale, 1));
   font-weight: 800;
 }
 
 .outreachTouchGrid article strong {
   color: var(--ink);
-  font-size: 12px;
+  font-size: calc(12px * var(--table-font-scale, 1));
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -4820,7 +5107,7 @@ input {
 .outreachTouchGrid article small {
   color: var(--muted);
   display: -webkit-box;
-  font-size: 11px;
+  font-size: calc(11px * var(--table-font-scale, 1));
   line-height: 1.25;
   overflow: hidden;
   -webkit-box-orient: vertical;
@@ -4900,7 +5187,7 @@ input {
 
 .offerFieldHeader span {
   color: var(--muted);
-  font-size: 12px;
+  font-size: calc(12px * var(--table-font-scale, 1));
 }
 
 .settingsFieldGrid.compact {
@@ -4942,7 +5229,7 @@ input {
 .intentPill span,
 .nodeToggle span {
   color: var(--ink-soft);
-  font-size: 12px;
+  font-size: calc(12px * var(--table-font-scale, 1));
 }
 
 .nodeGrid {
@@ -4965,7 +5252,7 @@ input {
   color: white;
   cursor: pointer;
   font: inherit;
-  font-size: 13px;
+  font-size: calc(13px * var(--table-font-scale, 1));
   min-height: 32px;
   padding: 6px 10px;
 }
@@ -4977,7 +5264,7 @@ input {
 
 .tracePreviewToolbar span {
   color: var(--muted);
-  font-size: 12px;
+  font-size: calc(12px * var(--table-font-scale, 1));
 }
 
 .traceDecisionCard {
@@ -4998,14 +5285,14 @@ input {
 
 .traceDecisionCard span {
   color: var(--muted);
-  font-size: 11px;
+  font-size: calc(11px * var(--table-font-scale, 1));
   font-weight: 700;
   text-transform: uppercase;
 }
 
 .traceDecisionCard strong {
   color: var(--ink);
-  font-size: 13px;
+  font-size: calc(13px * var(--table-font-scale, 1));
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -5014,7 +5301,7 @@ input {
 
 .traceDecisionCard p {
   color: var(--ink-soft);
-  font-size: 12px;
+  font-size: calc(12px * var(--table-font-scale, 1));
   grid-column: 1 / -1;
   line-height: 1.35;
   margin: 0;
@@ -5062,25 +5349,25 @@ input {
 }
 
 .traceBubble strong {
-  font-size: 13px;
+  font-size: calc(13px * var(--table-font-scale, 1));
 }
 
 .traceBubble span {
   color: var(--muted);
   font-family: var(--mono-font, monospace);
-  font-size: 11px;
+  font-size: calc(11px * var(--table-font-scale, 1));
 }
 
 .traceBubble p {
   color: var(--ink-soft);
-  font-size: 12px;
+  font-size: calc(12px * var(--table-font-scale, 1));
   line-height: 1.4;
   margin: 0;
 }
 
 .traceBubble small {
   color: var(--muted);
-  font-size: 11px;
+  font-size: calc(11px * var(--table-font-scale, 1));
   line-height: 1.35;
 }
 
@@ -5348,12 +5635,14 @@ input {
 
   .detailsDrawerBackdrop {
     align-items: stretch;
-    padding: 10px;
+    padding: 0;
   }
 
   .detailsDrawer {
-    max-height: calc(100vh - 20px);
+    border-radius: 0;
+    max-height: none;
     max-width: 100%;
+    min-height: 100%;
     padding: 12px;
     width: 100%;
   }
@@ -5363,13 +5652,95 @@ input {
     overflow: auto;
   }
 
-  .detailsDrawerFields {
+  .detailsDrawerBody.lead,
+  .detailsDrawerBody.coldTarget {
     grid-template-columns: 1fr;
+  }
+
+  .detailsDrawerFieldsPanel {
+    background: color-mix(in srgb, var(--control) 70%, var(--panel));
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    order: 2;
     overflow: visible;
   }
 
-  .detailsDrawerSections {
+  .detailsDrawerFieldsPanel > summary {
+    align-items: center;
+    color: var(--muted);
+    cursor: pointer;
+    display: flex;
+    font-size: calc(12px * var(--table-font-scale, 1));
+    font-weight: 800;
+    justify-content: space-between;
+    list-style: none;
+    padding: 10px 11px;
+  }
+
+  .detailsDrawerFieldsPanel > summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .detailsDrawerFieldsPanel > summary strong {
+    color: var(--ink-soft);
+    font-size: calc(11px * var(--table-font-scale, 1));
+  }
+
+  .detailsDrawerFieldsPanel > summary::after {
+    border-bottom: 4px solid transparent;
+    border-left: 5px solid color-mix(in srgb, var(--ink) 65%, var(--muted));
+    border-top: 4px solid transparent;
+    content: "";
+    height: 0;
+    margin-left: 8px;
+    transition: transform 160ms ease;
+    width: 0;
+  }
+
+  .detailsDrawerFieldsPanel[open] > summary::after {
+    transform: rotate(90deg);
+  }
+
+  .detailsDrawerFields {
+    grid-template-columns: 1fr;
     overflow: visible;
+    padding: 0 10px 10px;
+  }
+
+  .detailsDrawerSections {
+    order: 1;
+    overflow: visible;
+  }
+
+  .detailsDrawerSection.offer {
+    padding: 9px 10px;
+  }
+
+  .detailsDrawerSectionHeader {
+    grid-template-columns: 12px minmax(0, 1fr);
+  }
+
+  .detailsDrawerSectionHeader .detailsOfferActions {
+    grid-column: 2;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    width: 100%;
+  }
+
+  .detailsOfferMissingEditor {
+    grid-template-columns: 1fr;
+  }
+
+  .detailsOfferMissingEditor label {
+    gap: 3px;
+    grid-template-columns: 1fr;
+  }
+
+  .detailsOfferMissingEditor small {
+    grid-column: 1;
+  }
+
+  .detailsDrawerSection.outreach {
+    padding: 10px;
   }
 
   .content {

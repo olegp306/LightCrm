@@ -2,6 +2,30 @@
 
 All notable LightCrm releases are documented here. Starting with `0.2.0`, every version bump must include a changelog entry.
 
+## 0.3.41 - 2026-06-18
+
+### Added
+
+- Added DOCX/PDF text extraction for lead intake uploads so returned commercial offers can be recognized from document contents and saved with KP-specific document summaries.
+- Added compact mobile lead Downloads cards that show the latest two files side by side, use `KP` labels for commercial offers, and keep the remaining documents behind an expandable list.
+
+### Changed
+
+- Refined lead details commercial-offer layout, including clearer `Download KP` / `Copy missing fields` actions, collapsible offer details, calculated fee display, and preserved offer fields before KP generation.
+- Moved mobile lead card Downloads above Summary, made Summary expandable into Full summary, and formatted summary dates as readable timestamps.
+- Made mobile table lists and details cards honor the table font-size control across Leads, Clients, and Call Target views.
+- Improved incoming commercial-offer handling so uploaded returned KP files get their own document summary without updating the lead summary.
+
+### Fixed
+
+- Fixed generated KP templates not filling client name and address values from the lead offer form.
+- Fixed mobile Missing for offer fields rendering as yellow chips instead of compact text.
+
+### Verification
+
+- `pnpm --filter @lightcrm/ui typecheck`
+- `pnpm --filter @lightcrm/web typecheck`
+
 ## 0.3.40 - 2026-06-17
 
 ### Added

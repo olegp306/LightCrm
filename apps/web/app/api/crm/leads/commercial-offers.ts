@@ -91,6 +91,15 @@ function formatCurrency(value: number | null): string | null {
   return value === null ? null : value.toLocaleString("de-DE", { maximumFractionDigits: 0 });
 }
 
+function formatCurrencyText(value: number | null): string {
+  const formatted = formatCurrency(value);
+  return formatted === null ? "n/a" : `${formatted} EUR`;
+}
+
+function formatAreaText(value: number | null): string {
+  return value === null ? "n/a" : `${value.toLocaleString("de-DE", { maximumFractionDigits: 0 })} m\u00B2`;
+}
+
 function formatDate(date: Date): string {
   return date.toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "numeric" });
 }
@@ -112,7 +121,7 @@ function readinessFieldSummary(readiness: ReturnType<typeof evaluateCommercialOf
   const requiredForPrice =
     readiness.priceMissingFields.length > 0
       ? `missing: ${readiness.priceMissingFields.map(humanOfferFieldName).join(", ")}`
-      : `ready: ${formatCurrency(readiness.values.totalGross)} EUR gross (${readiness.pricingMode})`;
+      : `ready: ${formatCurrencyText(readiness.values.totalGross)} gross (${readiness.pricingMode})`;
   const documentFields =
     readiness.documentMissingFields.length > 0
       ? `missing: ${readiness.documentMissingFields.map(humanOfferFieldName).join(", ")}`
@@ -121,12 +130,36 @@ function readinessFieldSummary(readiness: ReturnType<typeof evaluateCommercialOf
     readiness.values.totalGross === null
       ? "Commercial offer cannot be generated until price-critical fields are filled."
       : `Commercial offer V${version}d generated draft on ${formatDate(createdAt)}. Use this summary to compare what was promised to the client in this draft version.`;
+  const valueLines = [
+    `Pricing mode: ${readiness.pricingMode}.`,
+    `BGF: ${formatAreaText(readiness.values.bgf)}.`,
+    `Wohnflaeche: ${formatAreaText(readiness.values.wohnflaeche)}.`,
+    `LP 1-3 net: ${formatCurrencyText(readiness.values.lp1_3Net)}.`,
+    `LP 4 net: ${formatCurrencyText(readiness.values.lp4Net)}.`,
+    `Total net: ${formatCurrencyText(readiness.values.totalNet)}.`,
+    `VAT 19%: ${formatCurrencyText(readiness.values.mwst)}.`,
+    `Total gross: ${formatCurrencyText(readiness.values.totalGross)}.`,
+    `Payment plan net: 30% ${formatCurrencyText(readiness.values.ms1Net)}, 40% ${formatCurrencyText(readiness.values.ms2Net)}, 30% ${formatCurrencyText(readiness.values.ms3Net)}.`
+  ];
   return [
     `Version: V${version}d (generated draft).`,
     `Price fields: ${requiredForPrice}.`,
     `Document fields: ${documentFields}.`,
+    "Offer values:",
+    ...valueLines,
     `Summary: ${summary}`
   ].join("\n");
+}
+
+function generatedOfferShortSummary(readiness: ReturnType<typeof evaluateCommercialOfferReadiness>, version: number): string {
+  const parts = [
+    `Commercial offer V${version}d draft`,
+    `gross ${formatCurrencyText(readiness.values.totalGross)}`,
+    `BGF ${formatAreaText(readiness.values.bgf)}`,
+    `Wohnflaeche ${formatAreaText(readiness.values.wohnflaeche)}`,
+    readiness.pricingMode
+  ];
+  return parts.join(" | ");
 }
 
 function projectTypeFromLead(project: string | null, description: string | null): string | null {
@@ -166,6 +199,7 @@ export async function evaluateCommercialOfferForLead(input: {
   }
   const client = lead.clientId ? clients.find((item) => item.id === lead.clientId) ?? null : null;
   const settings = await getCrmRuntimeSettings();
+  const offerFields = readOfferFields(lead.notes);
   const project = readNoteField(lead.notes, noteFields.project) ?? lead.company ?? lead.name;
   const area = readNoteField(lead.notes, noteFields.area);
   const description = readNoteField(lead.notes, noteFields.description) ?? lead.notes;
@@ -173,12 +207,12 @@ export async function evaluateCommercialOfferForLead(input: {
   const manualTotalGross = readNumber(readNoteField(lead.notes, noteFields.budgetEur));
   const readiness = evaluateCommercialOfferReadiness(
     {
-      clientName: client?.name ?? null,
-      projectName: project,
-      projectAddress: address,
-      projectType: projectTypeFromLead(project, description),
+      clientName: offerFields.client_name ?? client?.name ?? null,
+      projectName: offerFields.project_name ?? project,
+      projectAddress: offerFields.project_address ?? address,
+      projectType: offerFields.project_type ?? projectTypeFromLead(project, description),
       bgf: readNumber(area),
-      manualTotalGross
+      manualTotalGross: readNumber(offerFields.manual_total_gross ?? null) ?? manualTotalGross
     },
     settings.commercialOffers.activeFeeTable?.rows ?? []
   );
@@ -231,11 +265,11 @@ export async function generateCommercialOfferForLead(input: {
   const values = {
     ...offerFields,
     date: formatDate(now),
-    client_name: client?.name ?? offerFields.client_name ?? null,
+    client_name: offerFields.client_name ?? client?.name ?? null,
     client_address_line_1: offerFields.client_address_line_1 ?? null,
     client_address_line_2: offerFields.client_address_line_2 ?? null,
-    project_name: project ?? offerFields.project_name ?? null,
-    project_address: address ?? offerFields.project_address ?? null,
+    project_name: offerFields.project_name ?? project ?? null,
+    project_address: offerFields.project_address ?? address ?? null,
     bgf: readiness.values.bgf,
     wohnflaeche: readiness.values.wohnflaeche,
     project_type: offerFields.project_type ?? projectTypeFromLead(project, description) ?? null,
@@ -268,7 +302,7 @@ export async function generateCommercialOfferForLead(input: {
     leadId: lead.id,
     clientId: lead.clientId,
     fileName: stored.fileName,
-    shortSummary: `Commercial offer V${offerVersion}d draft ${formatCurrency(readiness.values.totalGross)} EUR gross (${readiness.pricingMode})`,
+    shortSummary: generatedOfferShortSummary(readiness, offerVersion),
     longSummary: readinessFieldSummary(readiness, offerVersion, now),
     downloadUrl: stored.downloadUrl,
     storageProvider: stored.storageProvider,

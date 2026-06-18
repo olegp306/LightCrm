@@ -105,6 +105,17 @@ export type ClientOption = {
   whatsapp?: string | null;
 };
 
+export type OfferFeeTableRow = {
+  bgfFrom: number;
+  bgfTo: number;
+  wohnflaecheLabel: string;
+  lp1_3Net: number;
+  lp4Net: number;
+  totalNet: number;
+  vat: number;
+  totalGross: number;
+};
+
 export type OutreachCampaignTouchpoint = {
   id: string;
   touchNumber: number;
@@ -144,7 +155,7 @@ function clientPickerLabel(client: ClientOption | null, fallbackName?: string | 
     client.email?.trim()
   ]
     .filter(Boolean)
-    .join(" В· ");
+    .join(" | ");
 }
 
 export type ArchiveRecordEntity = "client" | "lead" | "coldTarget" | "reminder" | "calendarEvent" | "documentFile" | "leadSummary";
@@ -162,6 +173,7 @@ export type CrmTableProps = {
   updateRecordIdField?: string;
   offerGenerateEndpoint?: string;
   offerTemplateFields?: string[];
+  offerFeeRows?: OfferFeeTableRow[];
   outreachCampaigns?: OutreachCampaign[];
   outreachStartEndpoint?: string;
   outreachAdvanceEndpoint?: string;
@@ -302,10 +314,10 @@ function defaultPreferences(columns: CrmTableColumn[]): TablePreferences {
 }
 
 const handoffBallLabels: Record<HandoffBallType, { label: string; icon: string }> = {
-  football: { label: "Football", icon: "вљЅ" },
-  basketball: { label: "Basketball", icon: "рџЏЂ" },
-  volleyball: { label: "Volleyball", icon: "рџЏђ" },
-  potato: { label: "Hot potato", icon: "рџҐ”" }
+  football: { label: "Football", icon: "\u26BD" },
+  basketball: { label: "Basketball", icon: "\u{1F3C0}" },
+  volleyball: { label: "Volleyball", icon: "\u{1F3D0}" },
+  potato: { label: "Hot potato", icon: "\u{1F954}" }
 };
 
 const handoffSoundPresets: Record<HandoffBallType, HandoffSoundPreset> = {
@@ -321,6 +333,7 @@ const handoffBallIcons: Record<HandoffBallType, string> = {
   volleyball: "\u{1F3D0}",
   potato: "\u{1F954}"
 };
+const handoffInsightIcon = "\u{1F4A1}";
 
 function normalizedHandoffSide(value: CrmTableCellValue | undefined): "us" | "client" {
   const text = typeof value === "string" ? value.trim().toLowerCase() : "";
@@ -711,6 +724,20 @@ function calendarDayMonthLabel(value: string): string {
   return date.toLocaleDateString(undefined, { day: "2-digit", month: "short" });
 }
 
+function readableDateTimeLabel(value: string): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+  return date.toLocaleString(undefined, {
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    month: "short",
+    year: "numeric"
+  });
+}
+
 function compactCalendarTitle(value: string): string {
   const normalized = value.replace(/\s+/g, " ").trim();
   return normalized.length <= calendarTitleMaxLength ? normalized : `${normalized.slice(0, calendarTitleMaxLength)}...`;
@@ -1088,6 +1115,27 @@ const offerMissingFieldInputs: Record<string, OfferMissingFieldInput> = {
     columnId: "client.name",
     category: "document",
     placeholder: "Client name"
+  },
+  client_address_line_1: {
+    key: "client_address_line_1",
+    label: "Client address line 1",
+    columnId: "offerFields.client_address_line_1",
+    category: "document",
+    placeholder: "Street, city"
+  },
+  client_address_line_2: {
+    key: "client_address_line_2",
+    label: "Client address line 2",
+    columnId: "offerFields.client_address_line_2",
+    category: "document",
+    placeholder: "Optional"
+  },
+  project_type: {
+    key: "project_type",
+    label: "Project type",
+    columnId: "offerFields.project_type",
+    category: "document",
+    placeholder: "e.g. EFH Neubau"
   }
 };
 
@@ -1107,6 +1155,27 @@ const computedOfferTemplateFields = new Set([
   "pricing_mode",
   "offer_valid_until"
 ]);
+
+const primaryOfferFormFieldKeys = [
+  "client_name",
+  "client_address_line_1",
+  "client_address_line_2",
+  "project_name",
+  "project_address",
+  "bgf_or_manual_total_gross",
+  "project_type",
+  "manual_total_gross"
+];
+
+const offerProjectTypeOptions = [
+  { value: "EFH Neubau", label: "EFH Neubau / Einfamilienhaus", pricing: "auto" },
+  { value: "Private house", label: "Private house", pricing: "auto" },
+  { value: "Neubau", label: "Neubau", pricing: "auto" },
+  { value: "Interior / Wohnung", label: "Interior / Wohnung", pricing: "manual" },
+  { value: "Mehrfamilienhaus", label: "Mehrfamilienhaus", pricing: "manual" },
+  { value: "Holiday park / Developer project", label: "Holiday park / Developer project", pricing: "manual" },
+  { value: "Other", label: "Other", pricing: "manual" }
+] as const;
 
 function normalizeOfferTemplateField(value: string): string {
   return value.replace(/^\{\{\s*/, "").replace(/\s*\}\}$/, "").trim();
@@ -1142,13 +1211,38 @@ function offerMissingInputForField(field: string): OfferMissingFieldInput {
   );
 }
 
+function offerFormFieldLabel(field: OfferMissingFieldInput): string {
+  const labels: Record<string, string> = {
+    client_name: "Client name",
+    client_address_line_1: "Client address line 1",
+    client_address_line_2: "Client address line 2",
+    project_name: "Lead name",
+    project_address: "Project address",
+    bgf_or_manual_total_gross: "Project area / BGF",
+    project_type: "Project type",
+    manual_total_gross: "Manual gross price"
+  };
+  return labels[field.key] ?? field.label;
+}
+
+function offerProjectTypePricingHint(value: string | null | undefined): string {
+  const selected = offerProjectTypeOptions.find((option) => option.value === value);
+  if (selected?.pricing === "auto") {
+    return "Auto price: needs BGF inside the active Honorartabelle range.";
+  }
+  if (selected?.pricing === "manual") {
+    return "Manual price required for this project type.";
+  }
+  return "Choose a type: standard house types can use auto price; others need manual gross price.";
+}
+
 function formatOfferAreaInputValue(value: string): string {
   const trimmed = value.trim();
   if (!trimmed) {
     return "";
   }
   const numeric = trimmed
-    .replace(/\s*m(?:2|ВІ)?\s*$/i, "")
+    .replace(/\s*m(?:2|²)?\s*$/i, "")
     .replace(/[.\s']/g, "")
     .replace(",", ".");
   const parsed = Number(numeric);
@@ -1156,6 +1250,104 @@ function formatOfferAreaInputValue(value: string): string {
     return trimmed;
   }
   return formatAreaValue(parsed);
+}
+
+function parseOfferNumber(value: string | number | null | undefined): number | null {
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? value : null;
+  }
+  if (!value) {
+    return null;
+  }
+  const match = value.match(/\d[\d\s.,']*/);
+  if (!match) {
+    return null;
+  }
+  const raw = match[0].replace(/[\s']/g, "");
+  const normalized =
+    raw.includes(".") && raw.includes(",")
+      ? raw.replace(/\./g, "").replace(",", ".")
+      : raw.includes(".") && /^\d{1,3}(?:\.\d{3})+$/.test(raw)
+        ? raw.replace(/\./g, "")
+        : raw.replace(",", ".");
+  const numeric = Number(normalized);
+  return Number.isFinite(numeric) ? numeric : null;
+}
+
+function isStandardOfferProjectType(value: string | null | undefined): boolean {
+  const normalized = (value ?? "").toLocaleLowerCase();
+  return ["efh", "einfamilienhaus", "private house", "neubau", "haus"].some((token) => normalized.includes(token));
+}
+
+function roundOfferCurrency(value: number): number {
+  return Math.round(value);
+}
+
+function formatOfferCurrency(value: number | null | undefined): string {
+  if (value === null || value === undefined || !Number.isFinite(value)) {
+    return "-";
+  }
+  return `${value.toLocaleString("de-DE", { maximumFractionDigits: 0 })} \u20AC`;
+}
+
+function formatOfferNumber(value: number | null | undefined, suffix = ""): string {
+  if (value === null || value === undefined || !Number.isFinite(value)) {
+    return "-";
+  }
+  return `${value.toLocaleString("de-DE", { maximumFractionDigits: Number.isInteger(value) ? 0 : 1 })}${suffix}`;
+}
+
+function calculateOfferPreview(input: {
+  bgf: number | null;
+  projectType: string | null;
+  manualTotalGross: number | null;
+  feeRows: OfferFeeTableRow[];
+}) {
+  const wohnflaeche = input.bgf ? roundOfferCurrency(input.bgf * 0.75) : null;
+  if (input.manualTotalGross) {
+    const gross = roundOfferCurrency(input.manualTotalGross);
+    const totalNet = roundOfferCurrency(gross / 1.19);
+    return {
+      status: "manual" as const,
+      reason: "Manual gross price",
+      bgf: input.bgf,
+      wohnflaeche,
+      wohnflaecheLabel: wohnflaeche ? `~${wohnflaeche}` : null,
+      lp1_3Net: roundOfferCurrency(totalNet * 0.7),
+      lp4Net: roundOfferCurrency(totalNet * 0.3),
+      totalNet,
+      mwst: roundOfferCurrency(gross - totalNet),
+      totalGross: gross,
+      ms1Net: roundOfferCurrency(totalNet * 0.3),
+      ms2Net: roundOfferCurrency(totalNet * 0.4),
+      ms3Net: roundOfferCurrency(totalNet * 0.3)
+    };
+  }
+  if (!input.bgf) {
+    return { status: "missing" as const, reason: "Need BGF or manual gross price" };
+  }
+  if (!input.projectType || !isStandardOfferProjectType(input.projectType)) {
+    return { status: "missing" as const, reason: "Need standard project type or manual gross price", bgf: input.bgf, wohnflaeche };
+  }
+  const row = input.feeRows.find((candidate) => input.bgf && input.bgf >= candidate.bgfFrom && input.bgf <= candidate.bgfTo);
+  if (!row) {
+    return { status: "missing" as const, reason: "BGF is outside fee table; use manual gross price", bgf: input.bgf, wohnflaeche };
+  }
+  return {
+    status: "auto" as const,
+    reason: `Honorartabelle ${row.bgfFrom}-${row.bgfTo} m\u00B2`,
+    bgf: input.bgf,
+    wohnflaeche,
+    wohnflaecheLabel: row.wohnflaecheLabel,
+    lp1_3Net: row.lp1_3Net,
+    lp4Net: row.lp4Net,
+    totalNet: row.totalNet,
+    mwst: row.vat,
+    totalGross: row.totalGross,
+    ms1Net: roundOfferCurrency(row.totalNet * 0.3),
+    ms2Net: roundOfferCurrency(row.totalNet * 0.4),
+    ms3Net: roundOfferCurrency(row.totalNet * 0.3)
+  };
 }
 
 function humanOfferFieldName(value: string): string {
@@ -1166,7 +1358,10 @@ function humanOfferFieldName(value: string): string {
     manual_total_gross: "manual gross price",
     project_name: "lead name",
     project_address: "project address",
-    client_name: "client name"
+    project_type: "project type",
+    client_name: "client name",
+    client_address_line_1: "client address line 1",
+    client_address_line_2: "client address line 2"
   };
   return labels[value] ?? value.replace(/_/g, " ");
 }
@@ -1227,10 +1422,10 @@ function documentTypeIndex(documents: DocumentCellValue, documentIndex: number):
   if (!document) {
     return 0;
   }
-  const extension = documentExtensionLabel(document.fileName, document.mimeType);
+  const extension = commercialOfferDocument(document) ? "KP" : documentExtensionLabel(document.fileName, document.mimeType);
   return documents
     .slice(0, documentIndex)
-    .filter((previous) => documentExtensionLabel(previous.fileName, previous.mimeType) === extension).length;
+    .filter((previous) => (commercialOfferDocument(previous) ? "KP" : documentExtensionLabel(previous.fileName, previous.mimeType)) === extension).length;
 }
 
 function documentListDisplayLabel(documents: DocumentCellValue, documentIndex: number): string {
@@ -1238,7 +1433,30 @@ function documentListDisplayLabel(documents: DocumentCellValue, documentIndex: n
   if (!document) {
     return "File";
   }
+  if (commercialOfferDocument(document)) {
+    const version = document.shortSummary.match(/\bV(\d+)/i) ?? document.fileName.match(/\bV(\d+)/i);
+    return version ? `KP V${version[1]}` : "KP";
+  }
   return documentDisplayLabel(document.fileName, document.mimeType, documentTypeIndex(documents, documentIndex));
+}
+
+function documentCardSummary(document: DocumentCellItem): string {
+  const summary = document.shortSummary?.replace(/\s+/g, " ").trim();
+  if (!summary) {
+    return "No summary yet";
+  }
+  if (!commercialOfferDocument(document)) {
+    return summary;
+  }
+  return summary
+    .replace(/^(commercial offer|kp)\s+v\d+\s*[:\-]\s*/i, "")
+    .replace(/^(commercial offer|kp)\s*[:\-]\s*/i, "")
+    .trim() || summary;
+}
+
+function commercialOfferDocument(document: DocumentCellItem): boolean {
+  const haystack = [document.fileName, document.shortSummary, document.longSummary].filter(Boolean).join(" ").toLocaleLowerCase();
+  return /\b(kp|commercial offer|angebot|honorar|gesamthonorar)\b/.test(haystack);
 }
 
 function formatDocumentCreatedAt(value: string | null | undefined): string | null {
@@ -1258,7 +1476,21 @@ function formatDocumentCreatedAt(value: string | null | undefined): string | nul
   });
 }
 
+function formatDocumentCreatedAtShort(value: string | null | undefined): string | null {
+  if (!value) {
+    return null;
+  }
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+  return date.toLocaleDateString(undefined, { day: "2-digit", month: "short" });
+}
+
 function documentBadgeColor(extension: string): string {
+  if (extension === "KP") {
+    return "#7a6a46";
+  }
   if (extension === "PDF") {
     return "#8f4a45";
   }
@@ -1313,7 +1545,7 @@ const documentCellRenderer: CustomRenderer<DocumentsCustomCell> = {
     }
     for (const [index, document] of documents.entries()) {
       const hovered = hoveredAction?.type === "open" && hoveredAction.index === index;
-      const extension = documentExtensionLabel(document.fileName, document.mimeType);
+      const extension = commercialOfferDocument(document) ? "KP" : documentExtensionLabel(document.fileName, document.mimeType);
       ctx.fillStyle = hovered ? theme.bgHeaderHovered : theme.bgBubble;
       ctx.strokeStyle = hovered ? theme.accentColor : theme.borderColor;
       ctx.lineWidth = hovered ? 1.15 : 0.85;
@@ -1546,7 +1778,7 @@ const handoffCellRenderer: CustomRenderer<HandoffCustomCell> = {
       ctx.font = "700 12px Inter, sans-serif";
       ctx.textAlign = "left";
       ctx.textBaseline = "middle";
-      ctx.fillText("вњ¦", rect.x + 5, centerY - 1);
+      ctx.fillText(handoffInsightIcon, rect.x + 5, centerY - 1);
     }
 
     if (insightHover) {
@@ -1584,6 +1816,7 @@ export function CrmTable({
   updateRecordIdField = "leadId",
   offerGenerateEndpoint,
   offerTemplateFields = [],
+  offerFeeRows = [],
   outreachCampaigns = [],
   outreachStartEndpoint,
   outreachAdvanceEndpoint,
@@ -1662,6 +1895,7 @@ export function CrmTable({
   const [hoveredClientPickerCell, setHoveredClientPickerCell] = useState<Item | null>(null);
   const [clientOptions, setClientOptions] = useState<ClientOption[]>([]);
   const [detailsPanel, setDetailsPanel] = useState<DetailsPanelState | null>(null);
+  const [isCompactDetailsViewport, setIsCompactDetailsViewport] = useState(false);
   const [summaryHistoryTarget, setSummaryHistoryTarget] = useState<LeadSummaryHistoryTarget | null>(null);
   const [leadSummaryDraft, setLeadSummaryDraft] = useState<LeadSummaryDraft>({ shortSummary: "", longSummary: "", saving: false });
   const [longTextPreview, setLongTextPreview] = useState<LongTextPreview | null>(null);
@@ -1927,6 +2161,8 @@ export function CrmTable({
   );
   const detailsPanelRow = detailsPanel ? editableRows.find((row) => row.id === detailsPanel.rowId) ?? null : null;
   const detailsPanelDocuments = detailsPanelRow ? sortDocumentsByAdded(cellDocuments(detailsPanelRow.values.documents)) : [];
+  const detailsPanelVisibleDocuments = detailsPanelDocuments.slice(0, 3);
+  const detailsPanelExtraDocuments = detailsPanelDocuments.slice(3);
   const detailsPanelCalendarItems = detailsPanelRow ? sortCalendarItemsByStart(cellCalendarItems(detailsPanelRow.values.calendar)) : [];
   const detailsPanelSummary = detailsPanelRow ? mobileLeadSummary(detailsPanelRow) : null;
   const detailsPanelOfferMissingFields = detailsPanelRow ? offerMissingFieldChips(detailsPanelRow.values.offerMissingFields) : [];
@@ -1937,6 +2173,23 @@ export function CrmTable({
     ...offerTemplateFields.map(offerTemplateInputForField).filter((item): item is OfferMissingFieldInput => Boolean(item))
   ].filter((field, index, fields) => fields.findIndex((candidate) => candidate.key === field.key) === index);
   const detailsOfferFieldInputs = [...detailsOfferPriceInputs, ...detailsOfferDocumentInputs];
+  const detailsOfferFormInputs = [
+    ...primaryOfferFormFieldKeys.map(offerMissingInputForField),
+    ...detailsOfferFieldInputs
+  ].filter((field, index, fields) => fields.findIndex((candidate) => candidate.columnId === field.columnId) === index);
+  const detailsOfferPreview = detailsPanel
+    ? calculateOfferPreview({
+        bgf: parseOfferNumber(detailsPanel.values.area),
+        projectType:
+          detailsPanel.values["offerFields.project_type"] ||
+          detailsPanel.values.description ||
+          detailsPanel.values.projectName ||
+          detailsPanel.values.project ||
+          null,
+        manualTotalGross: parseOfferNumber(detailsPanel.values.budgetEur),
+        feeRows: offerFeeRows
+      })
+    : { status: "missing" as const, reason: "Open a lead to calculate offer" };
   const selectedOutreachCampaign =
     outreachCampaigns.find((campaign) => campaign.id === selectedOutreachCampaignId) ??
     outreachCampaigns.find((campaign) => campaign.status === "active") ??
@@ -2849,7 +3102,7 @@ export function CrmTable({
                     ...row,
                     values: {
                       ...row.values,
-                      documents: [...cellDocuments(row.values.documents), ...uploaded]
+                      documents: [...uploaded, ...cellDocuments(row.values.documents)]
                     }
                   }
                 : row
@@ -3051,7 +3304,7 @@ export function CrmTable({
     if (!detailsPanel || !detailsPanelRow || !updateRecordEndpoint || detailsPanel.saving) {
       return false;
     }
-    const offerDetailInputs = [...detailsOfferPriceInputs, ...detailsOfferDocumentInputs];
+    const offerDetailInputs = detailsOfferFormInputs;
     const saveColumns = [
       ...detailsEditableColumns.filter((column) => column.group !== "Client" && !column.id.startsWith("client.")),
       ...(["budgetEur"] as const).map((id) => ({ id, title: id }) as CrmTableColumn),
@@ -3142,8 +3395,7 @@ export function CrmTable({
     }
   }, [
     detailsEditableColumns,
-    detailsOfferDocumentInputs,
-    detailsOfferPriceInputs,
+    detailsOfferFormInputs,
     detailsPanel,
     detailsPanelRow,
     clientOptions,
@@ -3748,6 +4000,17 @@ export function CrmTable({
     [applyOutreachResponseToRow, detailsPanelRow, outreachDraftEndpoint, outreachDrafts, selectedOutreachCampaign]
   );
 
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    const media = window.matchMedia("(max-width: 760px)");
+    const sync = () => setIsCompactDetailsViewport(media.matches);
+    sync();
+    media.addEventListener("change", sync);
+    return () => media.removeEventListener("change", sync);
+  }, []);
+
   const startOutreachCampaignForDetailsRow = useCallback(async (planMode: "next" | "allDraft" = "next") => {
     if (!detailsPanelRow || !selectedOutreachCampaign || !outreachStartEndpoint || startingOutreachCampaign) {
       return;
@@ -4153,7 +4416,7 @@ export function CrmTable({
           <strong>Scheduled events</strong>
           {sortCalendarItemsByStart(calendarTooltip.items).map((item) => (
             <span key={`${item.kind}-${item.id}`}>
-              {calendarDayMonthLabel(item.startsAt)} {calendarTimeLabel(item.startsAt)} В· {item.title}
+              {calendarDayMonthLabel(item.startsAt)} {calendarTimeLabel(item.startsAt)} | {item.title}
             </span>
           ))}
         </div>
@@ -4206,7 +4469,7 @@ export function CrmTable({
                   <button type="button" key={client.id} onClick={() => void selectClientForLead(client)} disabled={clientPicker.saving}>
                     <span>{client.code ?? client.id}</span>
                     <strong>{client.name ?? "Unnamed client"}</strong>
-                    <small>{[client.phone, client.email].filter(Boolean).join(" В· ") || client.company || "No contact details"}</small>
+                    <small>{[client.phone, client.email].filter(Boolean).join(" | ") || client.company || "No contact details"}</small>
                   </button>
                 ))
               ) : (
@@ -4318,6 +4581,8 @@ export function CrmTable({
           const clientName = textCellValue(row.values["client.name"]) ?? textCellValue(row.values.name);
           const offerMissingFields = offerMissingFieldChips(row.values.offerMissingFields);
           const documents = sortDocumentsByAdded(cellDocuments(row.values.documents));
+          const visibleDocuments = documents.slice(0, 2);
+          const extraDocuments = documents.slice(2);
           if (isLeadTable) {
             return (
               <article
@@ -4400,49 +4665,25 @@ export function CrmTable({
                   )}
                 </section>
 
-                {hasSummary ? (
-                  <section className="mobileLeadCardSection">
-                    <span>Summary</span>
-                    <p className="mobileLeadCardSummaryText">{summary.short}</p>
-                    {summary.long ? (
-                      <details className="mobileLeadFullSummary" onClick={(event) => event.stopPropagation()}>
-                        <summary>Full summary</summary>
-                        <p>{summary.long}</p>
-                        {leadSummariesEndpoint ? (
-                          <button
-                            type="button"
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              openLeadSummaryHistory(row);
-                            }}
-                          >
-                            History
-                          </button>
-                        ) : null}
-                      </details>
-                    ) : null}
-                  </section>
-                ) : null}
-
-                <details className="mobileLeadDownloads" onClick={(event) => event.stopPropagation()}>
-                  <summary>
+                <section className="mobileLeadDownloads" onClick={(event) => event.stopPropagation()}>
+                  <div className="mobileLeadDownloadsHeader">
                     <span>
                       Downloads: {documents.length} {documents.length === 1 ? "item" : "items"}
                     </span>
-                    <i aria-hidden="true">вЊ„</i>
-                  </summary>
-                  {documents.length > 0 ? (
+                  </div>
+                  {visibleDocuments.length > 0 ? (
                     <div className="leadDocumentCardList">
-                      {documents.map((document, documentIndex) => {
-                        const extension = documentExtensionLabel(document.fileName, document.mimeType);
-                        const createdAt = formatDocumentCreatedAt(document.createdAt);
+                      {visibleDocuments.map((document, documentIndex) => {
+                        const extension = commercialOfferDocument(document) ? "KP" : documentExtensionLabel(document.fileName, document.mimeType);
+                        const createdAt = formatDocumentCreatedAtShort(document.createdAt);
                         const displayLabel = documentListDisplayLabel(documents, documentIndex);
+                        const summaryText = documentCardSummary(document);
                         return (
                           <button
                             type="button"
                             className="leadDocumentCard mobileLeadDocumentCard"
                             key={document.id}
-                            title={`${document.fileName}${document.shortSummary ? `\n${document.shortSummary}` : ""}`}
+                            title={`${document.fileName}${summaryText ? `\n${summaryText}` : ""}`}
                             onClick={(event) => {
                               event.stopPropagation();
                               setPreviewDocument(document);
@@ -4456,17 +4697,85 @@ export function CrmTable({
                             </span>
                             <span className="leadDocumentCardMain">
                               <strong>{displayLabel}</strong>
-                              <span>{createdAt ? `Added ${createdAt}` : "Added date unknown"}</span>
+                              <em>{createdAt ?? "Date unknown"}</em>
                             </span>
-                            <span className="leadDocumentCardSummary">{document.shortSummary || "No summary yet"}</span>
+                            <span className="leadDocumentCardSummary">{summaryText}</span>
                           </button>
                         );
                       })}
+                      {extraDocuments.length > 0 ? (
+                        <details className="mobileLeadExtraDownloads">
+                          <summary>
+                            Show all {documents.length} documents
+                            <i aria-hidden="true" />
+                          </summary>
+                          <div className="leadDocumentCardList">
+                            {extraDocuments.map((document, extraIndex) => {
+                              const documentIndex = extraIndex + 2;
+                              const extension = commercialOfferDocument(document) ? "KP" : documentExtensionLabel(document.fileName, document.mimeType);
+                              const createdAt = formatDocumentCreatedAtShort(document.createdAt);
+                              const displayLabel = documentListDisplayLabel(documents, documentIndex);
+                              const summaryText = documentCardSummary(document);
+                              return (
+                                <button
+                                  type="button"
+                                  className="leadDocumentCard mobileLeadDocumentCard"
+                                  key={document.id}
+                                  title={`${document.fileName}${summaryText ? `\n${summaryText}` : ""}`}
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    setPreviewDocument(document);
+                                  }}
+                                >
+                                  <span
+                                    className="leadDocumentCardBadge"
+                                    style={{ "--document-color": documentBadgeColor(extension) } as ComponentProps<"span">["style"]}
+                                  >
+                                    {extension.slice(0, 3)}
+                                  </span>
+                                  <span className="leadDocumentCardMain">
+                                    <strong>{displayLabel}</strong>
+                                    <em>{createdAt ?? "Date unknown"}</em>
+                                  </span>
+                                  <span className="leadDocumentCardSummary">{summaryText}</span>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </details>
+                      ) : null}
                     </div>
                   ) : (
                     <p className="mobileLeadMuted">No documents yet.</p>
                   )}
-                </details>
+                </section>
+
+                {hasSummary ? (
+                  <section className="mobileLeadCardSection">
+                    <span>Summary{summary.updatedAt ? ` | ${readableDateTimeLabel(summary.updatedAt)}` : ""}</span>
+                    {summary.long ? (
+                      <details className="mobileLeadFullSummary" onClick={(event) => event.stopPropagation()}>
+                        <summary>
+                          <p className="mobileLeadCardSummaryText">{summary.short}</p>
+                        </summary>
+                        <p>{summary.long}</p>
+                        {leadSummariesEndpoint ? (
+                          <button
+                            type="button"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              openLeadSummaryHistory(row);
+                            }}
+                          >
+                            History
+                          </button>
+                        ) : null}
+                      </details>
+                    ) : (
+                      <p className="mobileLeadCardSummaryText">{summary.short}</p>
+                    )}
+                  </section>
+                ) : null}
               </article>
             );
           }
@@ -4692,7 +5001,7 @@ export function CrmTable({
               ) : null}
               {hasSummary ? (
                 <div className="mobileLeadSummary">
-                  <span>Summary{summary.updatedAt ? ` В· ${mobileDisplayValue(summary.updatedAt)}` : ""}</span>
+                  <span>Summary{summary.updatedAt ? ` | ${mobileDisplayValue(summary.updatedAt)}` : ""}</span>
                   <strong>{summary.short}</strong>
                   {summary.long ? (
                     <details>
@@ -4728,7 +5037,12 @@ export function CrmTable({
             <div
               className={`detailsDrawerBody${hasDetailsSideSections ? "" : " single"}${isLeadTable ? " lead" : ""}${isColdTargetTable ? " coldTarget" : ""}`}
             >
-              <div className="detailsDrawerFields">
+              <details className="detailsDrawerFieldsPanel" open={!isCompactDetailsViewport}>
+                <summary>
+                  <span>{isLeadTable ? "Lead fields" : isColdTargetTable ? "Call target fields" : "Record fields"}</span>
+                  <strong>{isCompactDetailsViewport ? "Tap to edit" : "Fields"}</strong>
+                </summary>
+                <div className="detailsDrawerFields">
                 {isLeadTable ? (
                   <section className="detailsClientSection">
                     <span className="detailsFieldLabel">Client</span>
@@ -4762,7 +5076,7 @@ export function CrmTable({
                               <button type="button" key={client.id} onClick={() => selectClientInDetails(client)}>
                                 {visibleClientReference(client) ? <span>{visibleClientReference(client)}</span> : null}
                                 <strong>{client.name ?? "Unnamed client"}</strong>
-                                <small>{[client.phone, client.email].filter(Boolean).join(" В· ") || client.company || "No contact details"}</small>
+                                <small>{[client.phone, client.email].filter(Boolean).join(" | ") || client.company || "No contact details"}</small>
                               </button>
                             ))
                           ) : (
@@ -4852,70 +5166,159 @@ export function CrmTable({
                     </label>
                   );
                 })}
-              </div>
+                </div>
+              </details>
 
               {hasDetailsSideSections ? (
                 <div className="detailsDrawerSections">
                   {isLeadTable ? (
-                    <details className="detailsDrawerSection offer" open>
+                    <details className="detailsDrawerSection offer">
                       <summary className="detailsDrawerSectionHeader">
+                        <span className="detailsDrawerToggle" aria-hidden="true" />
                         <div>
                           <span>
-                            Missing for offer
+                            Commercial offer
                             <strong>
                             {detailsOfferFieldInputs.length > 0
                               ? `${detailsOfferFieldInputs.length} field${detailsOfferFieldInputs.length === 1 ? "" : "s"}`
                               : "Ready"}
                             </strong>
                           </span>
+                          <small className="detailsOfferSummaryPreview">
+                            {detailsOfferFieldInputs.length > 0
+                              ? detailsOfferFieldInputs.map((field) => field.label).join(", ")
+                              : detailsOfferPreview.status === "missing"
+                                ? detailsOfferPreview.reason
+                                : `${detailsOfferPreview.status === "manual" ? "Manual" : "Auto"} price: ${formatOfferCurrency(detailsOfferPreview.totalGross)}`}
+                          </small>
                         </div>
                         <div className="detailsOfferActions">
+                          <button
+                            type="button"
+                            onClick={(event) => {
+                              event.preventDefault();
+                              event.stopPropagation();
+                              void copyOfferMissingFields(detailsPanelRow);
+                            }}
+                            title="Copy the fields still needed for the commercial offer."
+                          >
+                            {copiedOfferFieldsRowId === detailsPanelRow.id ? "Copied" : "Copy missing fields"}
+                          </button>
                           {offerGenerateEndpoint ? (
-                            <button type="button" onClick={() => void generateOfferForDetailsRow()} disabled={isGeneratingOffer}>
-                              {isGeneratingOffer ? "..." : "KP"}
+                            <button
+                              type="button"
+                              onClick={(event) => {
+                                event.preventDefault();
+                                event.stopPropagation();
+                                void generateOfferForDetailsRow();
+                              }}
+                              disabled={isGeneratingOffer}
+                              title="Save current offer fields, generate a new KP draft, and add it to Downloads."
+                            >
+                              {isGeneratingOffer ? "Generating..." : "Download KP"}
                             </button>
                           ) : null}
-                          <button type="button" onClick={() => void copyOfferMissingFields(detailsPanelRow)}>
-                            {copiedOfferFieldsRowId === detailsPanelRow.id ? "Copied" : "Copy"}
-                          </button>
                         </div>
                       </summary>
-                      {detailsOfferFieldInputs.length > 0 ? (
-                        <div className="detailsOfferMissingEditor">
-                          {[
-                            ["", detailsOfferPriceInputs],
-                            ["Document fields", detailsOfferDocumentInputs]
-                          ].map(([groupTitle, groupInputs]) => {
-                            const inputs = groupInputs as OfferMissingFieldInput[];
-                            if (inputs.length === 0) {
-                              return null;
-                            }
-                            return (
-                              <section key={groupTitle as string}>
-                                {groupTitle ? <span>{groupTitle as string}</span> : null}
-                                {inputs.map((field) => (
-                                  <label key={field.key}>
-                                    <span>{field.label}</span>
-                                    <input
-                                      value={detailsPanel.values[field.columnId] ?? ""}
-                                      placeholder={field.placeholder}
-                                      onChange={(event) => setDetailsValue(field.columnId, event.target.value)}
-                                      onBlur={
-                                        field.columnId === "area"
-                                          ? (event) => setDetailsValue(field.columnId, formatOfferAreaInputValue(event.target.value))
-                                          : undefined
-                                      }
-                                    />
-                                    {field.hint ? <small>{field.hint}</small> : null}
-                                  </label>
-                                ))}
-                              </section>
-                            );
-                          })}
-                        </div>
-                      ) : (
-                        <p className="detailsDrawerEmpty compact">No missing fields detected.</p>
-                      )}
+                      <div className="detailsOfferMissingEditor">
+                        <section className="detailsOfferInputs">
+                          <span>Input fields</span>
+                          {detailsOfferFormInputs.map((field) => (
+                            <label key={field.columnId}>
+                              <span>{offerFormFieldLabel(field)}</span>
+                              {field.key === "project_type" ? (
+                                <select
+                                  value={detailsPanel.values[field.columnId] ?? ""}
+                                  onChange={(event) => setDetailsValue(field.columnId, event.target.value)}
+                                >
+                                  <option value="">Choose project type</option>
+                                  {offerProjectTypeOptions.map((option) => (
+                                    <option key={option.value} value={option.value}>
+                                      {option.label}
+                                    </option>
+                                  ))}
+                                </select>
+                              ) : (
+                                <input
+                                  value={detailsPanel.values[field.columnId] ?? ""}
+                                  placeholder={field.placeholder}
+                                  onChange={(event) => setDetailsValue(field.columnId, event.target.value)}
+                                  onBlur={
+                                    field.columnId === "area"
+                                      ? (event) => setDetailsValue(field.columnId, formatOfferAreaInputValue(event.target.value))
+                                      : undefined
+                                  }
+                                />
+                              )}
+                              {field.key === "project_type" ? (
+                                <small>{offerProjectTypePricingHint(detailsPanel.values[field.columnId])}</small>
+                              ) : field.hint ? (
+                                <small>{field.hint}</small>
+                              ) : null}
+                            </label>
+                          ))}
+                        </section>
+                        <section className="detailsOfferCalculatedPanel">
+                          <span>Calculated</span>
+                          <div className="detailsOfferCalculatedCard">
+                            <dl className="detailsOfferCalculatedList">
+                              <div>
+                                <dt>Mode</dt>
+                                <dd>
+                                  {detailsOfferPreview.status === "missing"
+                                    ? "Not ready"
+                                    : detailsOfferPreview.status === "manual"
+                                      ? "Manual"
+                                      : "Auto"}
+                                </dd>
+                              </div>
+                              <div>
+                                <dt>Basis</dt>
+                                <dd>{detailsOfferPreview.reason}</dd>
+                              </div>
+                              <div>
+                                <dt>Wohnfläche / m²</dt>
+                                <dd>{formatOfferNumber(detailsOfferPreview.wohnflaeche, " m\u00B2")}</dd>
+                              </div>
+                              <div>
+                                <dt>LP 1-3 net</dt>
+                                <dd>{formatOfferCurrency(detailsOfferPreview.lp1_3Net)}</dd>
+                              </div>
+                              <div>
+                                <dt>LP 4 net</dt>
+                                <dd>{formatOfferCurrency(detailsOfferPreview.lp4Net)}</dd>
+                              </div>
+                              <div>
+                                <dt>Total net</dt>
+                                <dd>{formatOfferCurrency(detailsOfferPreview.totalNet)}</dd>
+                              </div>
+                              <div>
+                                <dt>VAT 19%</dt>
+                                <dd>{formatOfferCurrency(detailsOfferPreview.mwst)}</dd>
+                              </div>
+                            </dl>
+                            <div className="detailsOfferTotalGross">
+                              <span>Total gross</span>
+                              <strong>{formatOfferCurrency(detailsOfferPreview.totalGross)}</strong>
+                            </div>
+                            <div className="detailsOfferPaymentPlan">
+                              <span>Payment plan</span>
+                              <div>
+                                <strong>30%</strong>
+                                <em>{formatOfferCurrency(detailsOfferPreview.ms1Net)}</em>
+                              </div>
+                              <div>
+                                <strong>40%</strong>
+                                <em>{formatOfferCurrency(detailsOfferPreview.ms2Net)}</em>
+                              </div>
+                              <div>
+                                <strong>30%</strong>
+                                <em>{formatOfferCurrency(detailsOfferPreview.ms3Net)}</em>
+                              </div>
+                            </div>
+                          </div>
+                        </section>
+                      </div>
                     </details>
                   ) : null}
 
@@ -5119,41 +5522,27 @@ export function CrmTable({
                     </section>
                   ) : null}
 
-                  {detailsPanelSummary ? (
-                    <section className="detailsDrawerSection">
-                      <span>Summary{detailsPanelSummary.updatedAt ? ` В· ${mobileDisplayValue(detailsPanelSummary.updatedAt)}` : ""}</span>
-                      <p className="detailsDrawerSummary">{detailsPanelSummary.short}</p>
-                      {detailsPanelSummary.long ? (
-                        <details className="detailsDrawerDetails">
-                          <summary>Full summary</summary>
-                          <p>{detailsPanelSummary.long}</p>
-                          {leadSummariesEndpoint ? (
-                            <button type="button" onClick={() => openLeadSummaryHistory(detailsPanelRow)}>
-                              History
-                            </button>
-                          ) : null}
-                        </details>
-                      ) : null}
-                    </section>
-                  ) : null}
-
                   {hasDetailsDocumentsSection ? (
-                    <details className="detailsDrawerDetails" open>
-                      <summary>
+                    <section className="detailsDrawerDetails detailsDownloadsSection">
+                      <div className="detailsDownloadsHeader">
                         Downloads: {detailsPanelDocuments.length} {detailsPanelDocuments.length === 1 ? "item" : "items"}
-                      </summary>
-                      {detailsPanelDocuments.length > 0 ? (
+                      </div>
+                      {detailsPanelVisibleDocuments.length > 0 ? (
                         <div className="leadDocumentCardList">
-                          {detailsPanelDocuments.map((document, documentIndex) => {
+                          {detailsPanelVisibleDocuments.map((document, documentIndex) => {
                             const extension = documentExtensionLabel(document.fileName, document.mimeType);
                             const createdAt = formatDocumentCreatedAt(document.createdAt);
                             const displayLabel = documentListDisplayLabel(detailsPanelDocuments, documentIndex);
                             return (
                               <button
                                 type="button"
-                                className="leadDocumentCard"
+                                className="leadDocumentCard detailsDocumentCard"
                                 key={document.id}
-                                title={`${document.fileName}${document.shortSummary ? `\n${document.shortSummary}` : ""}`}
+                                title={[
+                                  document.fileName,
+                                  createdAt ? `Added ${createdAt}` : "Added date unknown",
+                                  document.shortSummary || "No summary yet"
+                                ].join("\n")}
                                 onClick={() => setPreviewDocument(document)}
                               >
                                 <span
@@ -5166,15 +5555,77 @@ export function CrmTable({
                                   <strong>{displayLabel}</strong>
                                   <span>{createdAt ? `Added ${createdAt}` : "Added date unknown"}</span>
                                 </span>
-                                <span className="leadDocumentCardSummary">{document.shortSummary || "No summary yet"}</span>
+                                <span className="detailsDocumentCardSummary">{document.shortSummary || "No summary yet"}</span>
                               </button>
                             );
                           })}
+                          {detailsPanelExtraDocuments.length > 0 ? (
+                            <details className="detailsExtraDownloads">
+                              <summary>
+                                Show all {detailsPanelDocuments.length} documents
+                                <i aria-hidden="true" />
+                              </summary>
+                              <div className="leadDocumentCardList">
+                                {detailsPanelExtraDocuments.map((document, extraIndex) => {
+                                  const documentIndex = extraIndex + 3;
+                                  const extension = documentExtensionLabel(document.fileName, document.mimeType);
+                                  const createdAt = formatDocumentCreatedAt(document.createdAt);
+                                  const displayLabel = documentListDisplayLabel(detailsPanelDocuments, documentIndex);
+                                  return (
+                                    <button
+                                      type="button"
+                                      className="leadDocumentCard detailsDocumentCard"
+                                      key={document.id}
+                                      title={[
+                                        document.fileName,
+                                        createdAt ? `Added ${createdAt}` : "Added date unknown",
+                                        document.shortSummary || "No summary yet"
+                                      ].join("\n")}
+                                      onClick={() => setPreviewDocument(document)}
+                                    >
+                                      <span
+                                        className="leadDocumentCardBadge"
+                                        style={{ "--document-color": documentBadgeColor(extension) } as ComponentProps<"span">["style"]}
+                                      >
+                                        {extension.slice(0, 3)}
+                                      </span>
+                                      <span className="leadDocumentCardMain">
+                                        <strong>{displayLabel}</strong>
+                                        <span>{createdAt ? `Added ${createdAt}` : "Added date unknown"}</span>
+                                      </span>
+                                      <span className="detailsDocumentCardSummary">{document.shortSummary || "No summary yet"}</span>
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </details>
+                          ) : null}
                         </div>
                       ) : (
                         <p className="detailsDrawerEmpty">No documents linked to this record yet.</p>
                       )}
-                    </details>
+                    </section>
+                  ) : null}
+
+                  {detailsPanelSummary ? (
+                    <section className="detailsDrawerSection detailsSummarySection">
+                      <span>Summary{detailsPanelSummary.updatedAt ? ` | ${readableDateTimeLabel(detailsPanelSummary.updatedAt)}` : ""}</span>
+                      {detailsPanelSummary.long ? (
+                        <details className="detailsDrawerDetails detailsSummaryDetails">
+                          <summary>
+                            <p className="detailsDrawerSummary">{detailsPanelSummary.short}</p>
+                          </summary>
+                          <p>{detailsPanelSummary.long}</p>
+                          {leadSummariesEndpoint ? (
+                            <button type="button" onClick={() => openLeadSummaryHistory(detailsPanelRow)}>
+                              History
+                            </button>
+                          ) : null}
+                        </details>
+                      ) : (
+                        <p className="detailsDrawerSummary">{detailsPanelSummary.short}</p>
+                      )}
+                    </section>
                   ) : null}
 
                   {hasDetailsCalendarSection ? (
@@ -5188,7 +5639,7 @@ export function CrmTable({
                             <li key={`${item.kind}-${item.id}`}>
                               <time>{calendarDateLabel(item.startsAt)} {calendarTimeLabel(item.startsAt)}</time>
                               <strong>{item.title}</strong>
-                              <span>{[item.kind, item.status, item.sourceChannel].filter(Boolean).join(" В· ")}</span>
+                              <span>{[item.kind, item.status, item.sourceChannel].filter(Boolean).join(" | ")}</span>
                             </li>
                           ))}
                         </ul>
@@ -5249,7 +5700,7 @@ export function CrmTable({
             <p>
               {cellDeleteTarget.kind === "document"
                 ? cellDeleteTarget.item.fileName
-                : `${cellDeleteTarget.item.title} В· ${calendarDayMonthLabel(cellDeleteTarget.item.startsAt)} ${calendarTimeLabel(cellDeleteTarget.item.startsAt)}`}
+                : `${cellDeleteTarget.item.title} | ${calendarDayMonthLabel(cellDeleteTarget.item.startsAt)} ${calendarTimeLabel(cellDeleteTarget.item.startsAt)}`}
             </p>
             <footer>
               <button type="button" onClick={() => setCellDeleteTarget(null)}>
@@ -5348,7 +5799,7 @@ export function CrmTable({
                 <article key={summaryItem.id}>
                   <span>
                     {formatDocumentCreatedAt(summaryItem.createdAt) ?? summaryItem.createdAt}
-                    {summaryItem.source ? ` В· ${summaryItem.source}` : ""}
+                    {summaryItem.source ? ` | ${summaryItem.source}` : ""}
                   </span>
                   <strong>{summaryItem.shortSummary}</strong>
                   {summaryItem.longSummary ? <p>{summaryItem.longSummary}</p> : null}
@@ -5401,7 +5852,7 @@ export function CrmTable({
                 <h2>{previewDocument.fileName}</h2>
               </div>
               <button type="button" onClick={() => setPreviewDocument(null)} aria-label="Close document preview">
-                Р“вЂ”
+                <X size={18} />
               </button>
             </header>
             <p>{previewDocument.longSummary ?? previewDocument.shortSummary}</p>
@@ -5455,7 +5906,7 @@ export function CrmTable({
                 <h2>Add record</h2>
               </div>
               <button type="button" onClick={() => setIsCreateOpen(false)} aria-label="Close create form">
-                Р“вЂ”
+                <X size={18} />
               </button>
             </header>
             {createRecord.fields.map((field) => (
@@ -5505,7 +5956,7 @@ export function CrmTable({
                 <h2>Add documents</h2>
               </div>
               <button type="button" onClick={closeDocumentUpload} aria-label="Close upload form">
-                Р“вЂ”
+                <X size={18} />
               </button>
             </header>
             <div className="selectedUploadFiles">

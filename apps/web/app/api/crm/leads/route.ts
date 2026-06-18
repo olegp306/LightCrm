@@ -130,12 +130,12 @@ export async function GET(request: Request) {
         const notesSummary = readLatestLeadSummary(lead.notes);
         const offerReadiness = evaluateCommercialOfferReadiness(
           {
-            clientName: client?.name ?? null,
-            projectName: project,
-            projectAddress: address,
-            projectType: projectTypeFromLead(project, description),
+            clientName: offerFields.client_name ?? client?.name ?? null,
+            projectName: offerFields.project_name ?? project,
+            projectAddress: offerFields.project_address ?? address,
+            projectType: offerFields.project_type ?? projectTypeFromLead(project, description),
             bgf: readNumber(area),
-            manualTotalGross: readNumber(budgetEur)
+            manualTotalGross: readNumber(offerFields.manual_total_gross ?? null) ?? readNumber(budgetEur)
           },
           feeRows
         );
