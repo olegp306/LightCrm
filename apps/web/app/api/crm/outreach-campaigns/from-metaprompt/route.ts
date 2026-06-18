@@ -233,7 +233,8 @@ async function createCampaignWithLlm(metaprompt: string): Promise<z.infer<typeof
     "For email touchpoints also include subject and body.",
     "Use German business Sie tone when writing email bodies unless the metaprompt explicitly says otherwise.",
     "Keep email bodies review-ready, concise, and suitable for manual sending.",
-    "Do not invent facts about a target. Use {{salutation}} and {{persona_hook}} placeholders when personalization is needed."
+    "Do not invent facts about a target. Use {{salutation}} and {{persona_hook}} placeholders when personalization is needed.",
+    "Do not include an email signature in bodies. CRM appends the configured outreach email signature from Settings."
   ].join("\n");
   const user = [
     "Create one outreach campaign from this metaprompt.",
@@ -299,7 +300,7 @@ function campaignFromLlm(
           subject: touch.subject?.trim() || touch.title,
           body:
             touch.body?.trim() ||
-            "Guten Tag {{salutation}},\n\n{{persona_hook}}\n\nIch wollte kurz anfragen, ob ein kurzer Austausch fuer Sie sinnvoll waere."
+            "Guten Tag {{salutation}},\n\n{{persona_hook}}\n\nIch wollte kurz anfragen, ob ein kurzer Austausch für Sie sinnvoll wäre."
         });
       }
       return {

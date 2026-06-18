@@ -41,6 +41,15 @@ function calendarItemForReminder(reminder: {
   };
 }
 
+function draftSubjectFromDescription(description: string | null) {
+  return description?.match(/(?:^|\n)Subject:\s*([^\n]+)/)?.[1]?.trim() ?? "";
+}
+
+function draftBodyFromDescription(description: string | null) {
+  const match = description?.match(/(?:^|\n)Draft:\s*\n([\s\S]*)$/);
+  return match?.[1]?.trim() ?? "";
+}
+
 export async function POST(request: Request) {
   try {
     const input = draftCampaignSchema.parse(await request.json());
@@ -65,7 +74,7 @@ export async function POST(request: Request) {
 
     const dueAt = addDays(new Date(), touch.dayOffset);
     dueAt.setHours(9, 0, 0, 0);
-    const draft = draftForCampaign(campaign, coldTarget, touch);
+    const draft = draftForCampaign(campaign, coldTarget, touch, settings.outreachCampaigns.emailSignature);
     const title = `Touch ${touch.touchNumber}: ${touch.title} - ${coldTarget.company || coldTarget.name}`;
     const description = [
       campaign.name,
@@ -86,6 +95,26 @@ export async function POST(request: Request) {
       },
       orderBy: [{ dueAt: "asc" }]
     });
+    if (existingReminder && !input.force) {
+      const savedSubject = draftSubjectFromDescription(existingReminder.description);
+      const savedBody = draftBodyFromDescription(existingReminder.description);
+      return NextResponse.json({
+        draft: {
+          reminderId: existingReminder.id,
+          subject: savedSubject || draft.subject,
+          body: savedBody || draft.body,
+          channel: touch.channel,
+          dueAt: existingReminder.dueAt.toISOString(),
+          status: existingReminder.status,
+          action: touch.action,
+          email: coldTarget.email,
+          personaHook: draft.personaHook,
+          promptApplied: draft.promptApplied,
+          recreated: false
+        },
+        calendarItem: calendarItemForReminder(existingReminder, coldTarget.id)
+      });
+    }
     const reminder = existingReminder
       ? await prisma.reminder.update({
           where: { id: existingReminder.id },
@@ -105,6 +134,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({
       draft: {
+        reminderId: reminder.id,
         subject: draft.subject,
         body: draft.body,
         channel: touch.channel,

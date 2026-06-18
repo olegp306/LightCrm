@@ -1222,7 +1222,9 @@ input {
 }
 
 .calendarEmailPreview textarea {
+  max-height: 216px;
   min-height: 132px;
+  overflow: auto;
   resize: vertical;
 }
 
@@ -1241,8 +1243,10 @@ input {
 
 .calendarEmailStyledBody.editable {
   cursor: text;
+  max-height: 216px;
   min-height: 96px;
   outline: none;
+  overflow: auto;
 }
 
 .calendarEmailStyledBody.editable:focus {
@@ -3438,10 +3442,13 @@ input {
 .detailsOutreachDraftActions {
   display: grid;
   gap: 6px;
-  grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
 .detailsOutreachDraft textarea {
+  max-height: calc(13px * var(--table-font-scale, 1) * 18);
+  min-height: calc(13px * var(--table-font-scale, 1) * 12);
+  overflow: auto;
   resize: vertical;
 }
 
@@ -3478,9 +3485,21 @@ input {
   font-size: calc(13px * var(--table-font-scale, 1));
   gap: 8px;
   line-height: 1.42;
+  max-height: calc(13px * var(--table-font-scale, 1) * 18);
   min-height: 188px;
+  overflow: auto;
   padding: 9px 10px;
   white-space: pre-wrap;
+}
+
+.detailsOutreachEmailPreview.editable {
+  cursor: text;
+  outline: none;
+}
+
+.detailsOutreachEmailPreview.editable:focus {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--line));
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 14%, transparent);
 }
 
 .detailsOutreachEmailPreview p {

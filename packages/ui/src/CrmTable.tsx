@@ -268,6 +268,7 @@ type DetailsPanelState = {
 };
 
 type OutreachDraftState = {
+  reminderId?: string;
   subject: string;
   body: string;
   channel: OutreachCampaignTouchpoint["channel"];
@@ -276,7 +277,9 @@ type OutreachDraftState = {
   action: string;
   email: string | null;
   loading: boolean;
+  saving?: boolean;
   error: string | null;
+  message?: string | null;
   personaHook?: string;
   promptApplied?: boolean;
   recreated?: boolean;
@@ -3942,12 +3945,15 @@ export function CrmTable({
         [key]: {
           subject: existing?.subject ?? "",
           body: existing?.body ?? "",
+          reminderId: existing?.reminderId,
           channel: existing?.channel ?? touch.channel,
           dueAt: existing?.dueAt ?? null,
           status: existing?.status ?? null,
           action: existing?.action ?? touch.action,
           email: existing?.email ?? null,
           loading: true,
+          saving: false,
+          message: null,
           error: null
         }
       }));
@@ -3987,18 +3993,80 @@ export function CrmTable({
           [key]: {
             subject: existing?.subject ?? "",
             body: existing?.body ?? "",
+            reminderId: existing?.reminderId,
             channel: existing?.channel ?? touch.channel,
             dueAt: existing?.dueAt ?? null,
             status: existing?.status ?? null,
             action: existing?.action ?? touch.action,
             email: existing?.email ?? null,
             loading: false,
+            saving: false,
+            message: null,
             error: reason instanceof Error ? reason.message : "Draft creation failed."
           }
         }));
       }
     },
     [applyOutreachResponseToRow, detailsPanelRow, outreachDraftEndpoint, outreachDrafts, selectedOutreachCampaign]
+  );
+
+  const updateOutreachDraftForDetailsRow = useCallback(
+    (key: string, patch: Partial<OutreachDraftState>) => {
+      setOutreachDrafts((current) => ({
+        ...current,
+        [key]: {
+          ...current[key],
+          ...patch
+        } as OutreachDraftState
+      }));
+    },
+    []
+  );
+
+  const saveOutreachDraftForDetailsRow = useCallback(
+    async (key: string, patch?: Partial<Pick<OutreachDraftState, "subject" | "body">>) => {
+      if (!detailsPanelRow || !selectedOutreachCampaign || !outreachDraftEndpoint) {
+        return;
+      }
+      const draft = outreachDrafts[key] ? { ...outreachDrafts[key], ...patch } : undefined;
+      if (!draft?.reminderId) {
+        updateOutreachDraftForDetailsRow(key, { error: "Open this touch before saving the draft." });
+        return;
+      }
+      const updateEndpoint = `${outreachDraftEndpoint.replace(/\/$/, "")}/update`;
+      updateOutreachDraftForDetailsRow(key, { saving: true, error: null, message: null });
+      try {
+        const response = await fetch(updateEndpoint, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            workspaceId: "default",
+            reminderId: draft.reminderId,
+            coldTargetId: detailsPanelRow.id,
+            campaignId: selectedOutreachCampaign.id,
+            subject: draft.subject,
+            body: draft.body
+          })
+        });
+        const payload = (await response.json()) as { error?: string; outreach?: { subject: string; body: string } };
+        if (!response.ok) {
+          throw new Error(payload.error ?? "Draft save failed.");
+        }
+        updateOutreachDraftForDetailsRow(key, {
+          subject: payload.outreach?.subject ?? draft.subject,
+          body: payload.outreach?.body ?? draft.body,
+          saving: false,
+          error: null,
+          message: "Saved"
+        });
+      } catch (reason) {
+        updateOutreachDraftForDetailsRow(key, {
+          saving: false,
+          error: reason instanceof Error ? reason.message : "Draft save failed."
+        });
+      }
+    },
+    [detailsPanelRow, outreachDraftEndpoint, outreachDrafts, selectedOutreachCampaign, updateOutreachDraftForDetailsRow]
   );
 
   useEffect(() => {
@@ -5395,12 +5463,35 @@ export function CrmTable({
                                           <>
                                             <label>
                                               <span>Subject</span>
-                                              <input readOnly value={draft.subject || "(no subject)"} />
+                                              <input
+                                                value={draft.subject}
+                                                placeholder="No subject prepared"
+                                                onBlur={(event) =>
+                                                  void saveOutreachDraftForDetailsRow(key, { subject: event.currentTarget.value })
+                                                }
+                                                onChange={(event) =>
+                                                  updateOutreachDraftForDetailsRow(key, {
+                                                    subject: event.target.value,
+                                                    message: null
+                                                  })
+                                                }
+                                              />
                                             </label>
                                             <label>
                                               <span>Email</span>
                                               {isStyledDraft ? (
-                                                <div className="detailsOutreachEmailPreview">
+                                                <div
+                                                  className="detailsOutreachEmailPreview editable"
+                                                  contentEditable
+                                                  role="textbox"
+                                                  aria-label="Email body"
+                                                  suppressContentEditableWarning
+                                                  onBlur={(event) => {
+                                                    const body = event.currentTarget.innerText.trim();
+                                                    updateOutreachDraftForDetailsRow(key, { body, message: null });
+                                                    void saveOutreachDraftForDetailsRow(key, { body });
+                                                  }}
+                                                >
                                                   {emailBodyParagraphs(draft.body).map((paragraph, paragraphIndex, paragraphs) => (
                                                     <p
                                                       className={
@@ -5417,10 +5508,30 @@ export function CrmTable({
                                                   ))}
                                                 </div>
                                               ) : (
-                                                <textarea readOnly rows={7} value={draft.body} />
+                                                <textarea
+                                                  rows={12}
+                                                  value={draft.body}
+                                                  placeholder="No draft prepared"
+                                                  onBlur={(event) =>
+                                                    void saveOutreachDraftForDetailsRow(key, { body: event.currentTarget.value })
+                                                  }
+                                                  onChange={(event) =>
+                                                    updateOutreachDraftForDetailsRow(key, {
+                                                      body: event.target.value,
+                                                      message: null
+                                                    })
+                                                  }
+                                                />
                                               )}
                                             </label>
                                             <div className="detailsOutreachDraftActions">
+                                              <button
+                                                type="button"
+                                                onClick={() => void saveOutreachDraftForDetailsRow(key)}
+                                                disabled={draft.saving}
+                                              >
+                                                {draft.saving ? "Saving" : "Save draft"}
+                                              </button>
                                               <button
                                                 type="button"
                                                 onClick={() => void loadOutreachDraftForDetailsRow(touch, { force: true })}
@@ -5447,6 +5558,7 @@ export function CrmTable({
                                                 {draft.channel === "email" && draft.email ? "Send email" : "No email address"}
                                               </button>
                                             </div>
+                                            {draft.message ? <span className="detailsOutreachDraftStatus">{draft.message}</span> : null}
                                           </>
                                         ) : null}
                                       </div>

@@ -246,7 +246,7 @@ export async function POST(request: Request) {
     const now = new Date();
     const nextTouchAt = addDays(now, Math.max(1, nextTouch.dayOffset - currentTouch.dayOffset));
     nextTouchAt.setHours(9, 0, 0, 0);
-    const nextDraft = draftForCampaign(campaign, coldTarget, nextTouch);
+    const nextDraft = draftForCampaign(campaign, coldTarget, nextTouch, settings.outreachCampaigns.emailSignature);
     const nextActionTitle = `Touch ${nextTouch.touchNumber}: ${nextTouch.title}`;
     const nextTitle = `${nextActionTitle} - ${coldTarget.company || coldTarget.name}`;
     const existingNextReminder = await prisma.reminder.findFirst({

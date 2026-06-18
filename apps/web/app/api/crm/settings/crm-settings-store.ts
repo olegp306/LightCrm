@@ -54,6 +54,7 @@ export type CrmRuntimeSettings = {
     autoGenerateWhenReady: boolean;
   };
   outreachCampaigns: {
+    emailSignature: string;
     campaigns: OutreachCampaignSettings[];
   };
 };
@@ -116,13 +117,35 @@ const defaultCrmSettings: CrmRuntimeSettings = {
     autoGenerateWhenReady: true
   },
   outreachCampaigns: {
+    emailSignature: [
+      "Mit freundlichen Grüßen",
+      "Ekaterina Reyzbikh",
+      "Dipl. Architektin",
+      "BYAK Mitglied",
+      "",
+      "mobil: +49 157 33941791",
+      "e-mail: ekaterina.reyzbikh@gmail.com",
+      "website: www.reyzbikh-architect.com",
+      "",
+      "LinkedIn: https://de.linkedin.com/in/ekaterina-reyzbikh-7a257a1b6",
+      "Instagram: https://www.instagram.com/reyzbikh_architecture/",
+      "XING: https://www.xing.com/profile/Ekaterina_Reyzbikh/cv",
+      "",
+      "---",
+      "",
+      "Die in dieser E-Mail enthaltenen Nachrichten und Anhänge sind ausschließlich für den bezeichneten Adressaten bestimmt.",
+      "Sie können rechtlich geschützte, vertrauliche Informationen enthalten. Falls Sie nicht der bezeichnete Empfänger oder zum Empfang dieser E-Mail nicht berechtigt sind, ist die Verwendung, Vervielfältigung oder Weitergabe der Nachrichten und Anhänge untersagt. Falls Sie diese E-Mail irrtümlich erhalten haben, informieren Sie bitte unverzüglich den Absender und vernichten Sie die E-Mail.",
+      "",
+      "This e-mail message and any attachment are intended exclusively for the named addressee.",
+      "They may contain confidential information which may also be protected by professional secrecy. Unless you are the named addressee (or authorised to receive for the addressee) you may not copy or use this message or any attachment or disclose the contents to anyone else. If this e-mail was sent to you by mistake please notify the sender immediately and delete this e-mail."
+    ].join("\n"),
     campaigns: [
       {
         id: "c01-bautraeger-cold",
-        name: "C01 Bautraeger Cold Outreach",
+        name: "C01 Bauträger Cold Outreach",
         status: "active",
         goal:
-          "Warm up cold Bautraeger contacts over 6 weeks and move interested replies into Clients and Leads.",
+          "Warm up cold Bauträger contacts over 6 weeks and move interested replies into Clients and Leads.",
         summary:
           "8 touches over 42 days: intro email, follow-up, LinkedIn connect, planning insight, short call, coffee invite, Honorartabelle email, breakup email.",
         prompt: [
@@ -209,39 +232,39 @@ const defaultCrmSettings: CrmRuntimeSettings = {
         templates: [
           {
             id: "t1",
-            subject: "Architektenplanung fuer Ihre Projekte",
+            subject: "Architektenplanung für Ihre Projekte",
             body:
-              "Guten Tag {{salutation}},\n\n{{persona_hook}}\n\nWir unterstuetzen Bautraeger als externer Planungspartner fuer LP 1-4, wenn intern gerade Kapazitaeten fehlen oder ein Projekt schnell sauber vorbereitet werden soll.\n\nWaere ein kurzer Austausch in den naechsten Tagen sinnvoll?"
+              "Guten Tag {{salutation}},\n\n{{persona_hook}}\n\nWir unterstützen Bauträger als externer Planungspartner für LP 1-4, wenn intern gerade Kapazitäten fehlen oder ein Projekt schnell sauber vorbereitet werden soll.\n\nWäre ein kurzer Austausch in den nächsten Tagen sinnvoll?"
           },
           {
             id: "t2",
             subject: "Kurze Nachfrage zur Architektenplanung",
             body:
-              "Guten Tag {{salutation}},\n\nich wollte kurz nachfassen, ob externe Unterstuetzung in LP 1-4 fuer aktuelle oder kommende Projekte bei Ihnen grundsaetzlich interessant ist.\n\nFalls ja, schlage ich gern einen kurzen Termin vor."
+              "Guten Tag {{salutation}},\n\nich wollte kurz nachfassen, ob externe Unterstützung in LP 1-4 für aktuelle oder kommende Projekte bei Ihnen grundsätzlich interessant ist.\n\nFalls ja, schlage ich gern einen kurzen Termin vor."
           },
           {
             id: "t4",
-            subject: "Planungskapazitaet fuer Bautraegerprojekte",
+            subject: "Planungskapazität für Bauträgerprojekte",
             body:
-              "Guten Tag {{salutation}},\n\n{{persona_hook}}\n\nGerade bei fruehen Projektphasen kann eine externe LP 1-4-Unterstuetzung helfen, Varianten, Flaechen und Genehmigungsgrundlagen schneller belastbar zu machen.\n\nSollen wir kurz pruefen, ob das fuer Sie passt?"
+              "Guten Tag {{salutation}},\n\n{{persona_hook}}\n\nGerade bei frühen Projektphasen kann eine externe LP 1-4-Unterstützung helfen, Varianten, Flächen und Genehmigungsgrundlagen schneller belastbar zu machen.\n\nSollen wir kurz prüfen, ob das für Sie passt?"
           },
           {
             id: "t6",
             subject: "Kurzer Kaffee oder Projektabgleich?",
             body:
-              "Guten Tag {{salutation}},\n\nfalls es aktuell kein konkretes Projekt gibt, waere vielleicht ein kurzer Kennenlerntermin sinnvoll. Dann ist klar, wo wir bei Bedarf als Planungspartner helfen koennen.\n\nPasst ein kurzer Kaffee oder Call?"
+              "Guten Tag {{salutation}},\n\nfalls es aktuell kein konkretes Projekt gibt, wäre vielleicht ein kurzer Kennenlerntermin sinnvoll. Dann ist klar, wo wir bei Bedarf als Planungspartner helfen können.\n\nPasst ein kurzer Kaffee oder Call?"
           },
           {
             id: "t7",
             subject: "Honorartabelle und Planungsumfang LP 1-4",
             body:
-              "Guten Tag {{salutation}},\n\nwir arbeiten mit transparenten Leistungsphasen und koennen den Umfang fuer LP 1-4 projektbezogen schnell einordnen.\n\nWenn Sie moechten, schicken wir Ihnen einen kurzen Ansatz zur Orientierung."
+              "Guten Tag {{salutation}},\n\nwir arbeiten mit transparenten Leistungsphasen und können den Umfang für LP 1-4 projektbezogen schnell einordnen.\n\nWenn Sie möchten, schicken wir Ihnen einen kurzen Ansatz zur Orientierung."
           },
           {
             id: "t8",
-            subject: "Soll ich das Thema schliessen?",
+            subject: "Soll ich das Thema schließen?",
             body:
-              "Guten Tag {{salutation}},\n\nich moechte Sie nicht weiter stoeren. Wenn externe Architektenplanung fuer Ihre Projekte aktuell kein Thema ist, schliesse ich den Vorgang gern.\n\nFalls es spaeter relevant wird, melden Sie sich jederzeit."
+              "Guten Tag {{salutation}},\n\nich möchte Sie nicht weiter stören. Wenn externe Architektenplanung für Ihre Projekte aktuell kein Thema ist, schließe ich den Vorgang gern.\n\nFalls es später relevant wird, melden Sie sich jederzeit."
           }
         ]
       },
@@ -314,25 +337,25 @@ const defaultCrmSettings: CrmRuntimeSettings = {
             id: "t1",
             subject: "Kurzer Abgleich zur Architektenplanung",
             body:
-              "Guten Tag {{salutation}},\n\n{{persona_hook}}\n\nIch wollte kurz nachfragen, ob das Thema Architektenplanung bei Ihnen aktuell noch relevant ist oder ob es sich zeitlich verschoben hat.\n\nWenn es passt, koennen wir das in einem kurzen Austausch einordnen."
+              "Guten Tag {{salutation}},\n\n{{persona_hook}}\n\nIch wollte kurz nachfragen, ob das Thema Architektenplanung bei Ihnen aktuell noch relevant ist oder ob es sich zeitlich verschoben hat.\n\nWenn es passt, können wir das in einem kurzen Austausch einordnen."
           },
           {
             id: "t2",
             subject: "Ist das Projekt noch aktuell?",
             body:
-              "Guten Tag {{salutation}},\n\nich hake kurz nach: Gibt es bei Ihnen aktuell ein konkretes Projekt, bei dem externe Unterstuetzung in fruehen Planungsphasen sinnvoll sein koennte?\n\nEine kurze Rueckmeldung reicht vollkommen."
+              "Guten Tag {{salutation}},\n\nich hake kurz nach: Gibt es bei Ihnen aktuell ein konkretes Projekt, bei dem externe Unterstützung in frühen Planungsphasen sinnvoll sein könnte?\n\nEine kurze Rückmeldung reicht vollkommen."
           },
           {
             id: "t3",
             subject: "Planungskapazitaet bei Bedarf",
             body:
-              "Guten Tag {{salutation}},\n\n{{persona_hook}}\n\nWenn intern gerade Kapazitaeten fehlen, koennen wir bei Varianten, Flaechen, Genehmigungsgrundlagen und LP 1-4 strukturiert unterstuetzen.\n\nSoll ich Ihnen dazu einen kurzen Vorschlag fuer einen Abgleich schicken?"
+              "Guten Tag {{salutation}},\n\n{{persona_hook}}\n\nWenn intern gerade Kapazitäten fehlen, können wir bei Varianten, Flächen, Genehmigungsgrundlagen und LP 1-4 strukturiert unterstützen.\n\nSoll ich Ihnen dazu einen kurzen Vorschlag für einen Abgleich schicken?"
           },
           {
             id: "t5",
-            subject: "Soll ich das Thema vorerst schliessen?",
+            subject: "Soll ich das Thema vorerst schließen?",
             body:
-              "Guten Tag {{salutation}},\n\nich moechte das Thema nicht kuenstlich offenhalten. Wenn aktuell kein Bedarf besteht, schliesse ich den Vorgang gern und melde mich nicht weiter dazu.\n\nWenn es spaeter wieder relevant wird, bin ich jederzeit erreichbar."
+              "Guten Tag {{salutation}},\n\nich möchte das Thema nicht künstlich offenhalten. Wenn aktuell kein Bedarf besteht, schließe ich den Vorgang gern und melde mich nicht weiter dazu.\n\nWenn es später wieder relevant wird, bin ich jederzeit erreichbar."
           }
         ]
       }

@@ -2,6 +2,28 @@
 
 All notable LightCrm releases are documented here. Starting with `0.2.0`, every version bump must include a changelog entry.
 
+## 0.3.43 - 2026-06-18
+
+### Added
+
+- Added a configurable outreach email signature in Settings and append it automatically to generated outreach email drafts.
+- Added editable and persisted subject/body drafts for Cold Target outreach touch emails.
+
+### Changed
+
+- Preserved German UTF-8 characters in outreach metaprompts, generated drafts, fallback templates, signatures, and Gmail-bound email bodies.
+- Limited Today and Cold Target email editors to compact scrollable heights so long signatures do not stretch calendar or detail cards.
+
+### Fixed
+
+- Fixed existing Cold Target outreach drafts being regenerated and overwritten when reopening a touch; `Recreate` remains the explicit regeneration action.
+
+### Verification
+
+- `pnpm --filter @lightcrm/web typecheck`
+- `pnpm --filter @lightcrm/ui typecheck`
+- `git diff --check`
+
 ## 0.3.42 - 2026-06-18
 
 ### Added

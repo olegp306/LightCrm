@@ -67,7 +67,7 @@ export async function POST(request: Request) {
     const now = new Date();
     const nextTouchAt = addDays(now, touch.dayOffset);
     nextTouchAt.setHours(9, 0, 0, 0);
-    const draft = draftForCampaign(campaign, coldTarget, touch);
+    const draft = draftForCampaign(campaign, coldTarget, touch, settings.outreachCampaigns.emailSignature);
     const nextActionTitle = `Touch ${touch.touchNumber}: ${touch.title}`;
 
     const assignment = await prisma.outreachCampaignAssignment.upsert({
@@ -108,7 +108,7 @@ export async function POST(request: Request) {
     for (const plannedTouch of touchesToPlan) {
       const plannedTouchAt = addDays(now, plannedTouch.dayOffset);
       plannedTouchAt.setHours(9, 0, 0, 0);
-      const plannedDraft = draftForCampaign(campaign, coldTarget, plannedTouch);
+      const plannedDraft = draftForCampaign(campaign, coldTarget, plannedTouch, settings.outreachCampaigns.emailSignature);
       const plannedTitle = `Touch ${plannedTouch.touchNumber}: ${plannedTouch.title} - ${coldTarget.company || coldTarget.name}`;
       const existingReminder = await prisma.reminder.findFirst({
         where: {

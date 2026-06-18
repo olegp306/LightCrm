@@ -37,6 +37,7 @@ type CrmSettingsResponse = {
       autoGenerateWhenReady: boolean;
     };
     outreachCampaigns: {
+      emailSignature: string;
       campaigns: OutreachCampaignSettings[];
     };
   };
@@ -509,6 +510,39 @@ export function LangGraphSettingsPage() {
     }
   }
 
+  async function patchCrmOutreachSignature(emailSignature: string) {
+    if (!crmSettings) {
+      return;
+    }
+    const optimistic = {
+      ...crmSettings,
+      outreachCampaigns: {
+        ...crmSettings.outreachCampaigns,
+        emailSignature
+      }
+    };
+    setCrmSettings(optimistic);
+    setCrmStatus("saving");
+    try {
+      const response = await fetch("/api/crm/settings", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ outreachCampaigns: { emailSignature } })
+      });
+      const payload = (await response.json()) as CrmSettingsResponse & { error?: string };
+      if (!response.ok) {
+        throw new Error(payload.error ?? "CRM settings save failed");
+      }
+      setCrmSettings(payload.settings);
+      setCrmError(null);
+      setCrmStatus("saved");
+    } catch (reason) {
+      setCrmSettings(crmSettings);
+      setCrmError(reason instanceof Error ? reason.message : "CRM settings save failed");
+      setCrmStatus("error");
+    }
+  }
+
   async function createOutreachCampaignFromMetaprompt() {
     const metaprompt = newCampaignMetaprompt.trim();
     if (!metaprompt) {
@@ -726,6 +760,36 @@ export function LangGraphSettingsPage() {
         <>
           {crmError ? <div className="settingsError">{crmError}</div> : null}
           <div className="settingsGrid">
+            <section className="settingsPanel wide outreachCampaignPanel">
+              <div className="settingsPanelHeader">
+                <div>
+                  <h2>Email signature</h2>
+                  <p>This signature is appended to every generated outreach email draft.</p>
+                </div>
+                <span className="settingsPill">outreach</span>
+              </div>
+              <label>
+                <span>Signature</span>
+                <textarea
+                  rows={12}
+                  value={crmSettings?.outreachCampaigns.emailSignature ?? ""}
+                  onChange={(event) =>
+                    setCrmSettings((current) =>
+                      current
+                        ? {
+                            ...current,
+                            outreachCampaigns: {
+                              ...current.outreachCampaigns,
+                              emailSignature: event.target.value
+                            }
+                          }
+                        : current
+                    )
+                  }
+                  onBlur={(event) => patchCrmOutreachSignature(event.target.value)}
+                />
+              </label>
+            </section>
             <section className="settingsPanel wide outreachCampaignPanel">
               <div className="settingsPanelHeader">
                 <div>

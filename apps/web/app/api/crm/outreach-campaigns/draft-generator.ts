@@ -26,10 +26,6 @@ function hasCyrillic(value: string) {
   return /[\u0400-\u04ff]/.test(value);
 }
 
-function hasGermanBusinessTone(prompt: string) {
-  return /german|deutsch|sie|architectural|business/i.test(prompt);
-}
-
 function forbidsPraise(prompt: string) {
   return /no praise|keine lob|generic flattery|flattery/i.test(prompt);
 }
@@ -41,18 +37,18 @@ function splitSentences(value: string) {
     .filter(Boolean);
 }
 
-function normalizeAsciiGerman(value: string) {
+function normalizeGermanText(value: string) {
   return value
-    .replace(/[вЂњвЂќ]/g, "\"")
-    .replace(/[вЂвЂ™]/g, "'")
+    .replace(/[\u201c\u201d]/g, "\"")
+    .replace(/[\u2018\u2019]/g, "'")
     .replace(/\u00a0/g, " ")
-    .replace(/Гџ/g, "ss")
-    .replace(/Г¤/g, "ae")
-    .replace(/Г¶/g, "oe")
-    .replace(/Гј/g, "ue")
-    .replace(/Г„/g, "Ae")
-    .replace(/Г–/g, "Oe")
-    .replace(/Гњ/g, "Ue");
+    .replace(/\u00c3\u009f/g, "\u00df")
+    .replace(/\u00c3\u00a4/g, "\u00e4")
+    .replace(/\u00c3\u00b6/g, "\u00f6")
+    .replace(/\u00c3\u00bc/g, "\u00fc")
+    .replace(/\u00c3\u0084/g, "\u00c4")
+    .replace(/\u00c3\u0096/g, "\u00d6")
+    .replace(/\u00c3\u009c/g, "\u00dc");
 }
 
 function companySalutation(target: OutreachDraftTarget) {
@@ -68,16 +64,16 @@ function companySalutation(target: OutreachDraftTarget) {
 }
 
 function extractExperienceFact(research: string) {
-  const plusMatch = research.match(/(\d{1,2})\s*\+\s*(\d{1,2})\s*(?:jahre|years|Р»РµС‚)?/i);
+  const plusMatch = research.match(/(\d{1,2})\s*\+\s*(\d{1,2})\s*(?:jahre|years|Р В»Р ВµРЎвЂљ)?/i);
   if (plusMatch) {
     const total = Number(plusMatch[1]) + Number(plusMatch[2]);
     if (Number.isFinite(total) && total >= 10) {
-      return "Die Recherche nennt langjaehrige Erfahrung im Bau- und Immobilienumfeld; daran knuepfen wir mit frueher, belastbarer Planung an.";
+      return "Die Recherche nennt langjährige Erfahrung im Bau- und Immobilienumfeld; daran knüpfen wir mit früher, belastbarer Planung an.";
     }
   }
-  const yearsMatch = research.match(/(\d{2,})\s*(?:jahre|years|Р»РµС‚)/i);
+  const yearsMatch = research.match(/(\d{2,})\s*(?:jahre|years|Р В»Р ВµРЎвЂљ)/i);
   if (yearsMatch) {
-    return "Die Recherche zeigt langjaehrige Erfahrung im Projekt- und Bauumfeld; daran knuepfen wir mit belastbarer frueher Planung an.";
+    return "Die Recherche zeigt langjährige Erfahrung im Projekt- und Bauumfeld; daran knüpfen wir mit belastbarer früher Planung an.";
   }
   return "";
 }
@@ -85,28 +81,28 @@ function extractExperienceFact(research: string) {
 function extractLocationFact(research: string, target: OutreachDraftTarget) {
   const location = compactText(target.city) || compactText(target.country);
   if (location) {
-    return `Fuer Projekte mit Bezug zu ${location} kann eine sauber vorbereitete LP 1-4 die naechsten Entscheidungen entlasten.`;
+    return `Für Projekte mit Bezug zu ${location} kann eine sauber vorbereitete LP 1-4 die nächsten Entscheidungen entlasten.`;
   }
-  const cityMatch = research.match(/\b(Muenchen|Munich|Berlin|Hamburg|Frankfurt|Stuttgart|Koeln|Duesseldorf|Leipzig|Dresden|Nuernberg|Augsburg)\b/i);
+  const cityMatch = research.match(/\b(München|Muenchen|Munich|Berlin|Hamburg|Frankfurt|Stuttgart|Köln|Koeln|Düsseldorf|Duesseldorf|Leipzig|Dresden|Nürnberg|Nuernberg|Augsburg)\b/i);
   if (cityMatch?.[1]) {
-    return `Fuer Projekte mit Bezug zu ${cityMatch[1]} kann eine sauber vorbereitete LP 1-4 die naechsten Entscheidungen entlasten.`;
+    return `Für Projekte mit Bezug zu ${cityMatch[1]} kann eine sauber vorbereitete LP 1-4 die nächsten Entscheidungen entlasten.`;
   }
   return "";
 }
 
 function extractProjectFact(research: string) {
   const normalized = research.toLocaleLowerCase();
-  if (/bautraeger|developer|development|projektentwick/i.test(research)) {
-    return "Der Research-Kontext passt zu Bautraeger- und Projektentwicklungsaufgaben, bei denen fruehe Varianten und Genehmigungsgrundlagen entscheidend sind.";
+  if (/bautraeger|bautr\u00e4ger|developer|development|projektentwick/i.test(research)) {
+    return "Der Research-Kontext passt zu Bauträger- und Projektentwicklungsaufgaben, bei denen frühe Varianten und Genehmigungsgrundlagen entscheidend sind.";
   }
   if (/wohn|residential|mehrfamilien|apartment|housing/i.test(research)) {
-    return "Der Research-Kontext verweist auf Wohnungsbau; gerade dort helfen klare Flaechen, Varianten und Genehmigungsgrundlagen frueh im Prozess.";
+    return "Der Research-Kontext verweist auf Wohnungsbau; gerade dort helfen klare Flächen, Varianten und Genehmigungsgrundlagen früh im Prozess.";
   }
-  if (/office|buero|gewerbe|commercial/i.test(research)) {
-    return "Der Research-Kontext verweist auf gewerbliche Projekte; dafuer kann eine klare fruehe Planung die Abstimmung und Genehmigung strukturieren.";
+  if (/office|buero|b\u00fcro|gewerbe|commercial/i.test(research)) {
+    return "Der Research-Kontext verweist auf gewerbliche Projekte; dafür kann eine klare frühe Planung die Abstimmung und Genehmigung strukturieren.";
   }
   if (normalized.includes("architecture") || normalized.includes("architektur")) {
-    return "Der Research-Kontext zeigt Beruehrungspunkte mit Planung und Bau; unser Ansatz bleibt deshalb konkret bei LP 1-4 und belastbaren Entscheidungsgrundlagen.";
+    return "Der Research-Kontext zeigt Berührungspunkte mit Planung und Bau; unser Ansatz bleibt deshalb konkret bei LP 1-4 und belastbaren Entscheidungsgrundlagen.";
   }
   return "";
 }
@@ -127,7 +123,7 @@ function safeResearchSentence(research: string, noPraise: boolean) {
   if (!sentence) {
     return "";
   }
-  return normalizeAsciiGerman(sentence.replace(/^[+-]\s*/, ""));
+  return normalizeGermanText(sentence.replace(/^[+-]\s*/, ""));
 }
 
 function personaHookFromResearch(campaign: OutreachCampaignSettings, target: OutreachDraftTarget) {
@@ -135,7 +131,7 @@ function personaHookFromResearch(campaign: OutreachCampaignSettings, target: Out
   const research = compactText(target.notesResearch);
   const noPraise = forbidsPraise(prompt);
   if (!research) {
-    return "Ich habe mir den Kontakt kurz angesehen und sehe moeglichen Bedarf fuer externe Unterstuetzung in fruehen Planungsphasen.";
+    return "Ich habe mir den Kontakt kurz angesehen und sehe möglichen Bedarf für externe Unterstützung in frühen Planungsphasen.";
   }
 
   const facts = [extractExperienceFact(research), extractLocationFact(research, target), extractProjectFact(research)].filter(Boolean).slice(0, 2);
@@ -145,20 +141,44 @@ function personaHookFromResearch(campaign: OutreachCampaignSettings, target: Out
 
   const safeSentence = safeResearchSentence(research, noPraise);
   if (safeSentence) {
-    return `Aus der Recherche nehme ich vor allem diesen Anknuepfungspunkt mit: ${safeSentence}`;
+    return `Aus der Recherche nehme ich vor allem diesen Anknüpfungspunkt mit: ${safeSentence}`;
   }
 
-  return "Aus den Research-Notizen ergibt sich ein moeglicher Bezug zu fruehen Projektphasen; deshalb halte ich einen kurzen fachlichen Abgleich fuer sinnvoll.";
+  return "Aus den Research-Notizen ergibt sich ein möglicher Bezug zu frühen Projektphasen; deshalb halte ich einen kurzen fachlichen Abgleich für sinnvoll.";
 }
 
 function fillTemplate(value: string, replacements: Record<string, string>) {
   return value.replace(/\{\{([a-zA-Z0-9_]+)\}\}/g, (match, key: string) => replacements[key] || match);
 }
 
+function normalizeEmailSignature(signature: string | null | undefined) {
+  return (signature ?? "")
+    .replace(/\r\n/g, "\n")
+    .replace(/[ \t]+$/gm, "")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+function bodyHasSignature(body: string, signature: string) {
+  const normalizedBody = compactText(body).toLocaleLowerCase();
+  const firstSignatureLine = signature.split("\n").map((line) => line.trim()).find(Boolean);
+  return Boolean(firstSignatureLine && normalizedBody.includes(firstSignatureLine.toLocaleLowerCase()));
+}
+
+function appendSignature(body: string, signature: string | null | undefined) {
+  const cleanedSignature = normalizeEmailSignature(signature);
+  const cleanedBody = body.replace(/\s+$/g, "");
+  if (!cleanedSignature || bodyHasSignature(cleanedBody, cleanedSignature)) {
+    return cleanedBody;
+  }
+  return `${cleanedBody}\n\n${cleanedSignature}`;
+}
+
 export function draftForCampaign(
   campaign: OutreachCampaignSettings,
   coldTarget: OutreachDraftTarget,
-  touch: Pick<OutreachCampaignTouchpoint, "templateId" | "action" | "channel">
+  touch: Pick<OutreachCampaignTouchpoint, "templateId" | "action" | "channel">,
+  emailSignature?: string | null
 ): OutreachDraft {
   const promptApplied = Boolean(compactText(campaign.prompt));
   const template = campaign.templates.find((item) => item.id === touch.templateId);
@@ -167,7 +187,7 @@ export function draftForCampaign(
   if (!template) {
     return {
       subject: "",
-      body: `Manual action: prepare ${campaign.name} touch for ${salutation}.\n\nPersona hook: ${personaHook}`,
+      body: appendSignature(`Manual action: prepare ${campaign.name} touch for ${salutation}.\n\nPersona hook: ${personaHook}`, emailSignature),
       salutation,
       personaHook,
       promptApplied
@@ -175,11 +195,11 @@ export function draftForCampaign(
   }
   const replacements = {
     salutation,
-    persona_hook: hasGermanBusinessTone(campaign.prompt) ? personaHook : normalizeAsciiGerman(personaHook)
+    persona_hook: normalizeGermanText(personaHook)
   };
   return {
-    subject: normalizeAsciiGerman(fillTemplate(template.subject, replacements)),
-    body: normalizeAsciiGerman(fillTemplate(template.body, replacements)),
+    subject: normalizeGermanText(fillTemplate(template.subject, replacements)),
+    body: appendSignature(normalizeGermanText(fillTemplate(template.body, replacements)), emailSignature),
     salutation,
     personaHook,
     promptApplied
