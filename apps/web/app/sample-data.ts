@@ -215,6 +215,7 @@ export const tables: Record<string, TableDefinition> = {
     tableKey: "storage.v1",
     archiveEntity: "documentFile",
     columns: [
+      { id: "createdAt", title: "Added", width: 170, mobilePriority: 1 },
       { id: "shortSummary", title: "Summary", width: 220, mobilePriority: 1 },
       { id: "longSummary", title: "Full summary", width: 360, mobilePriority: 2 },
       { id: "downloadUrl", title: "Download", width: 280, mobilePriority: 3, valueKind: "link" },
@@ -233,6 +234,7 @@ export const tables: Record<string, TableDefinition> = {
         values: {
           shortSummary: "Initial project brief",
           longSummary: "Detailed request brief extracted from the first lead intake documents.",
+          createdAt: "2026-06-01T09:00:00.000Z",
           downloadUrl: "https://example.com/download/brief.pdf",
           relatedLabel: "Northwind house",
           relatedHref: "/leads?record=1",

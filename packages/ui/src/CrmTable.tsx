@@ -1490,6 +1490,18 @@ function formatDocumentCreatedAtShort(value: string | null | undefined): string 
   return date.toLocaleDateString(undefined, { day: "2-digit", month: "short" });
 }
 
+function formatDocumentHistoryTimestamp(value: string | null | undefined): string | null {
+  if (!value) {
+    return null;
+  }
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+  const pad = (part: number) => String(part).padStart(2, "0");
+  return `${pad(date.getDate())}.${pad(date.getMonth() + 1)}.${pad(date.getFullYear() % 100)} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
 function documentBadgeColor(extension: string): string {
   if (extension === "KP") {
     return "#7a6a46";
@@ -1868,12 +1880,13 @@ export function CrmTable({
   const [cellDeleteTarget, setCellDeleteTarget] = useState<CellDeleteTarget | null>(null);
   const [isDeletingCellItem, setIsDeletingCellItem] = useState(false);
   const uploadFileInputRef = useRef<HTMLInputElement | null>(null);
+  const pendingDocumentUploadRowIdRef = useRef<string | null>(null);
   const [uploadTarget, setUploadTarget] = useState<DocumentUploadTarget | null>(null);
-  const [uploadSummaries, setUploadSummaries] = useState<string[]>([]);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  const [uploadSuccess, setUploadSuccess] = useState<string | null>(null);
+  const [uploadProgress, setUploadProgress] = useState<{ rowId: string; fileCount: number; percent: number } | null>(null);
   const [pendingDocumentUploads, setPendingDocumentUploads] = useState<Record<string, number>>({});
   const [uploadPulse, setUploadPulse] = useState(0);
-  const [isUploading, setIsUploading] = useState(false);
   const [isGeneratingOffer, setIsGeneratingOffer] = useState(false);
   const [selectedOutreachCampaignId, setSelectedOutreachCampaignId] = useState<string>("");
   const [startingOutreachCampaign, setStartingOutreachCampaign] = useState(false);
@@ -2926,6 +2939,40 @@ export function CrmTable({
     [columns, createRecord, createValues]
   );
 
+  const renderDownloadsUploadInlineStatus = useCallback(
+    (rowId: string) => {
+      if (!uploadProgress || uploadProgress.rowId !== rowId) {
+        return null;
+      }
+      return (
+        <span
+          className="downloadsUploadInlineStatus"
+          title={`Adding ${uploadProgress.fileCount} ${uploadProgress.fileCount === 1 ? "file" : "files"}: ${uploadProgress.percent}%`}
+        >
+          <span className="downloadsUploadInlineDot" aria-hidden="true" />
+          <span>{uploadProgress.percent}%</span>
+        </span>
+      );
+    },
+    [uploadProgress]
+  );
+
+  const openDocumentUploadForRow = useCallback(
+    (rowId: string) => {
+      if (!documentUploadEndpoint) {
+        setCreateError("Document upload is not available for this table.");
+        return;
+      }
+      pendingDocumentUploadRowIdRef.current = rowId;
+      setUploadTarget({ rowId, files: [] });
+      setUploadError(null);
+      setUploadSuccess(null);
+      setCreateError(null);
+      window.setTimeout(() => uploadFileInputRef.current?.click(), 0);
+    },
+    [documentUploadEndpoint]
+  );
+
   const handleCellClicked = useCallback(
     ([columnIndex, rowIndex]: Item, event: Parameters<NonNullable<ComponentProps<typeof DataEditor>["onCellClicked"]>>[1]) => {
       const column = configuredColumns[columnIndex];
@@ -3022,38 +3069,11 @@ export function CrmTable({
         setPreviewDocument(documents[action.index] ?? null);
       }
       if (action?.type === "upload") {
-        setUploadTarget({ rowId: row.id, files: [] });
-        setUploadSummaries([]);
-        setUploadError(null);
-        window.setTimeout(() => uploadFileInputRef.current?.click(), 0);
+        openDocumentUploadForRow(row.id);
       }
     },
-    [configuredColumns, filteredRows, toggleHandoffBall]
+    [configuredColumns, filteredRows, openDocumentUploadForRow, toggleHandoffBall]
   );
-
-  const closeDocumentUpload = useCallback(() => {
-    setUploadTarget(null);
-    setUploadSummaries([]);
-    setUploadError(null);
-    if (uploadFileInputRef.current) {
-      uploadFileInputRef.current.value = "";
-    }
-  }, []);
-
-  const handleDocumentFileChange = useCallback((event: ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(event.target.files ?? []);
-    if (files.length === 0) {
-      setUploadTarget(null);
-      return;
-    }
-    setUploadTarget((current) => (current ? { ...current, files } : current));
-    setUploadSummaries(files.map(() => ""));
-    setUploadError(null);
-  }, []);
-
-  const updateUploadSummary = useCallback((index: number, value: string) => {
-    setUploadSummaries((current) => current.map((summary, summaryIndex) => (summaryIndex === index ? value : summary)));
-  }, []);
 
   const decrementPendingDocumentUploads = useCallback((rowId: string, count: number) => {
     setPendingDocumentUploads((current) => {
@@ -3068,59 +3088,118 @@ export function CrmTable({
     });
   }, []);
 
-  const submitDocumentUpload = useCallback(
-    async (event: FormEvent<HTMLFormElement>) => {
-      event.preventDefault();
-      if (!uploadTarget || !documentUploadEndpoint) {
+  const uploadDocumentsForRow = useCallback(
+    (rowId: string, files: File[]) => {
+      if (!documentUploadEndpoint) {
+        setCreateError("Document upload is not available for this table.");
         return;
       }
-      if (uploadTarget.files.length === 0) {
-        setUploadError("Choose at least one file.");
+      if (files.length === 0) {
         return;
       }
       const body = new FormData();
-      body.set("leadId", uploadTarget.rowId);
+      body.set("leadId", rowId);
       body.set("sourceChannel", "web");
-      uploadTarget.files.forEach((file, index) => {
+      files.forEach((file) => {
         body.append("files", file);
-        body.append("summaries", uploadSummaries[index] ?? "");
       });
-      const uploadRowId = uploadTarget.rowId;
-      const uploadCount = uploadTarget.files.length;
+      const uploadRowId = rowId;
+      const uploadCount = files.length;
       setPendingDocumentUploads((current) => ({ ...current, [uploadRowId]: (current[uploadRowId] ?? 0) + uploadCount }));
       setUploadError(null);
-      closeDocumentUpload();
-      try {
-        const response = await fetch(documentUploadEndpoint, { method: "POST", body });
-        const payload = (await response.json()) as { documents?: DocumentCellValue; error?: string };
-        if (!response.ok) {
-          throw new Error(payload.error ?? "Upload failed.");
-        }
-        const uploaded = payload.documents ?? [];
-        if (uploaded.length > 0) {
-          setEditableRows((current) =>
-            current.map((row) =>
-              row.id === uploadTarget.rowId
-                ? {
-                    ...row,
-                    values: {
-                      ...row.values,
-                      documents: [...uploaded, ...cellDocuments(row.values.documents)]
-                    }
-                  }
-                : row
-            )
-          );
-        }
-        closeDocumentUpload();
-      } catch (error) {
-        setCreateError(error instanceof Error ? `Upload failed: ${error.message}` : "Upload failed.");
-      } finally {
-        decrementPendingDocumentUploads(uploadRowId, uploadCount);
+      setUploadSuccess(null);
+      setCreateError(null);
+      setUploadProgress({ rowId: uploadRowId, fileCount: uploadCount, percent: 0 });
+      setUploadTarget(null);
+      pendingDocumentUploadRowIdRef.current = null;
+      if (uploadFileInputRef.current) {
+        uploadFileInputRef.current.value = "";
       }
+
+      const request = new XMLHttpRequest();
+      request.open("POST", documentUploadEndpoint);
+      request.upload.addEventListener("loadstart", () => {
+        setUploadProgress({ rowId: uploadRowId, fileCount: uploadCount, percent: 3 });
+      });
+      request.upload.addEventListener("progress", (event) => {
+        if (!event.lengthComputable || event.total === 0) {
+          return;
+        }
+        const percent = Math.min(92, Math.max(3, Math.round((event.loaded / event.total) * 90)));
+        setUploadProgress({ rowId: uploadRowId, fileCount: uploadCount, percent });
+      });
+      request.upload.addEventListener("load", () => {
+        setUploadProgress({ rowId: uploadRowId, fileCount: uploadCount, percent: 94 });
+      });
+      request.addEventListener("load", () => {
+        try {
+          let payload: { documents?: DocumentCellValue; error?: string } = {};
+          if (request.responseText.trim()) {
+            try {
+              payload = JSON.parse(request.responseText) as { documents?: DocumentCellValue; error?: string };
+            } catch {
+              throw new Error(request.status >= 200 && request.status < 300 ? "Upload returned an invalid response." : "Server returned a non-JSON response.");
+            }
+          }
+          if (request.status < 200 || request.status >= 300) {
+            throw new Error(payload.error ?? "Upload failed.");
+          }
+          const uploaded = payload.documents ?? [];
+          if (uploaded.length > 0) {
+            setEditableRows((current) =>
+              current.map((row) =>
+                row.id === uploadRowId
+                  ? {
+                      ...row,
+                      values: {
+                        ...row.values,
+                        documents: [...uploaded, ...cellDocuments(row.values.documents)]
+                      }
+                    }
+                  : row
+              )
+            );
+          }
+          setUploadProgress({ rowId: uploadRowId, fileCount: uploadCount, percent: 100 });
+          setUploadSuccess(
+            uploaded.length === 1
+              ? "Upload complete: 1 document added."
+              : `Upload complete: ${uploaded.length} documents added.`
+          );
+          window.setTimeout(() => setUploadProgress(null), 900);
+        } catch (error) {
+          setUploadProgress(null);
+          setUploadError(error instanceof Error ? `Upload failed: ${error.message}` : "Upload failed.");
+        } finally {
+          decrementPendingDocumentUploads(uploadRowId, uploadCount);
+        }
+      });
+      request.addEventListener("error", () => {
+        setUploadProgress(null);
+        setUploadError("Upload failed: network error.");
+        decrementPendingDocumentUploads(uploadRowId, uploadCount);
+      });
+      request.send(body);
     },
-    [closeDocumentUpload, decrementPendingDocumentUploads, documentUploadEndpoint, uploadSummaries, uploadTarget]
+    [decrementPendingDocumentUploads, documentUploadEndpoint]
   );
+
+  const handleDocumentFileChange = useCallback((event: ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(event.target.files ?? []);
+    if (files.length === 0) {
+      setUploadTarget(null);
+      return;
+    }
+    const rowId = uploadTarget?.rowId ?? pendingDocumentUploadRowIdRef.current;
+    if (!rowId) {
+      setCreateError("Upload failed: choose a Documents cell first.");
+      if (uploadFileInputRef.current) {
+        uploadFileInputRef.current.value = "";
+      }
+      return;
+    }
+    uploadDocumentsForRow(rowId, files);
+  }, [uploadDocumentsForRow, uploadTarget?.rowId]);
 
   const openMobileEdit = useCallback((row: CrmTableRow, column: CrmTableColumn) => {
     if (!updateRecordEndpoint || !isMobileEditableColumn(column)) {
@@ -4449,6 +4528,21 @@ export function CrmTable({
         </div>
       </header>
       {createError && !isCreateOpen ? <div className="tableNotice error">{createError}</div> : null}
+      {uploadProgress ? (
+        <div className="tableNotice uploadProgressNotice" role="status" aria-live="polite">
+          <div>
+            <strong>
+              Adding {uploadProgress.fileCount} {uploadProgress.fileCount === 1 ? "file" : "files"} to Downloads
+            </strong>
+            <span>{uploadProgress.percent}%</span>
+          </div>
+          <div className="uploadProgressTrack" aria-hidden="true">
+            <span style={{ width: `${uploadProgress.percent}%` }} />
+          </div>
+        </div>
+      ) : null}
+      {uploadSuccess && !uploadTarget ? <div className="tableNotice success">{uploadSuccess}</div> : null}
+      {uploadError && !uploadTarget ? <div className="tableNotice error">{uploadError}</div> : null}
       <div className="gridFrame" ref={gridFrameRef} onMouseLeave={() => {
         setRelatedTooltip(null);
         setDocumentTooltip(null);
@@ -4739,12 +4833,29 @@ export function CrmTable({
                     <span>
                       Downloads: {documents.length} {documents.length === 1 ? "item" : "items"}
                     </span>
+                    {documentUploadEndpoint ? (
+                      <div className="downloadsHeaderActions">
+                        {renderDownloadsUploadInlineStatus(row.id)}
+                        <button
+                          type="button"
+                          className="downloadsUploadButton"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            openDocumentUploadForRow(row.id);
+                          }}
+                          title="Upload documents to this lead"
+                        >
+                          <Plus size={13} aria-hidden="true" />
+                          <span>Add files</span>
+                        </button>
+                      </div>
+                    ) : null}
                   </div>
                   {visibleDocuments.length > 0 ? (
                     <div className="leadDocumentCardList">
                       {visibleDocuments.map((document, documentIndex) => {
                         const extension = commercialOfferDocument(document) ? "KP" : documentExtensionLabel(document.fileName, document.mimeType);
-                        const createdAt = formatDocumentCreatedAtShort(document.createdAt);
+                        const createdAt = formatDocumentHistoryTimestamp(document.createdAt);
                         const displayLabel = documentListDisplayLabel(documents, documentIndex);
                         const summaryText = documentCardSummary(document);
                         return (
@@ -4782,7 +4893,7 @@ export function CrmTable({
                             {extraDocuments.map((document, extraIndex) => {
                               const documentIndex = extraIndex + 2;
                               const extension = commercialOfferDocument(document) ? "KP" : documentExtensionLabel(document.fileName, document.mimeType);
-                              const createdAt = formatDocumentCreatedAtShort(document.createdAt);
+                              const createdAt = formatDocumentHistoryTimestamp(document.createdAt);
                               const displayLabel = documentListDisplayLabel(documents, documentIndex);
                               const summaryText = documentCardSummary(document);
                               return (
@@ -4873,7 +4984,7 @@ export function CrmTable({
                         <div className="leadDocumentCardList">
                           {documents.map((document, documentIndex) => {
                             const extension = documentExtensionLabel(document.fileName, document.mimeType);
-                            const createdAt = formatDocumentCreatedAt(document.createdAt);
+                            const createdAt = formatDocumentHistoryTimestamp(document.createdAt);
                             const displayLabel = documentListDisplayLabel(documents, documentIndex);
                             return (
                               <button
@@ -4897,7 +5008,7 @@ export function CrmTable({
                                   <strong>{displayLabel}</strong>
                                 </span>
                                 <span className="detailsDocumentCardText">
-                                  <small>{createdAt ? `Added ${createdAt}` : "Added date unknown"}</small>
+                                  <small>{createdAt ?? "Date unknown"}</small>
                                   <span className="detailsDocumentCardSummary">{document.shortSummary || "No summary yet"}</span>
                                 </span>
                               </button>
@@ -5638,13 +5749,29 @@ export function CrmTable({
                   {hasDetailsDocumentsSection ? (
                     <section className="detailsDrawerDetails detailsDownloadsSection">
                       <div className="detailsDownloadsHeader">
-                        Downloads: {detailsPanelDocuments.length} {detailsPanelDocuments.length === 1 ? "item" : "items"}
+                        <span>
+                          Downloads: {detailsPanelDocuments.length} {detailsPanelDocuments.length === 1 ? "item" : "items"}
+                        </span>
+                        {detailsPanelRow && documentUploadEndpoint ? (
+                          <div className="downloadsHeaderActions">
+                            {renderDownloadsUploadInlineStatus(detailsPanelRow.id)}
+                            <button
+                              type="button"
+                              className="downloadsUploadButton"
+                              onClick={() => openDocumentUploadForRow(detailsPanelRow.id)}
+                              title="Upload documents to this lead"
+                            >
+                              <Plus size={13} aria-hidden="true" />
+                              <span>Add files</span>
+                            </button>
+                          </div>
+                        ) : null}
                       </div>
                       {detailsPanelVisibleDocuments.length > 0 ? (
                         <div className="leadDocumentCardList">
                           {detailsPanelVisibleDocuments.map((document, documentIndex) => {
                             const extension = documentExtensionLabel(document.fileName, document.mimeType);
-                            const createdAt = formatDocumentCreatedAt(document.createdAt);
+                            const createdAt = formatDocumentHistoryTimestamp(document.createdAt);
                             const displayLabel = documentListDisplayLabel(detailsPanelDocuments, documentIndex);
                             return (
                               <button
@@ -5666,7 +5793,7 @@ export function CrmTable({
                                 </span>
                                 <span className="leadDocumentCardMain">
                                   <strong>{displayLabel}</strong>
-                                  <span>{createdAt ? `Added ${createdAt}` : "Added date unknown"}</span>
+                                  <span>{createdAt ?? "Date unknown"}</span>
                                 </span>
                                 <span className="detailsDocumentCardSummary">{document.shortSummary || "No summary yet"}</span>
                               </button>
@@ -5682,7 +5809,7 @@ export function CrmTable({
                                 {detailsPanelExtraDocuments.map((document, extraIndex) => {
                                   const documentIndex = extraIndex + 3;
                                   const extension = documentExtensionLabel(document.fileName, document.mimeType);
-                                  const createdAt = formatDocumentCreatedAt(document.createdAt);
+                                  const createdAt = formatDocumentHistoryTimestamp(document.createdAt);
                                   const displayLabel = documentListDisplayLabel(detailsPanelDocuments, documentIndex);
                                   return (
                                     <button
@@ -5704,7 +5831,7 @@ export function CrmTable({
                                       </span>
                                       <span className="leadDocumentCardMain">
                                         <strong>{displayLabel}</strong>
-                                        <span>{createdAt ? `Added ${createdAt}` : "Added date unknown"}</span>
+                                        <span>{createdAt ?? "Date unknown"}</span>
                                       </span>
                                       <span className="detailsDocumentCardSummary">{document.shortSummary || "No summary yet"}</span>
                                     </button>
@@ -5968,7 +6095,18 @@ export function CrmTable({
                 <X size={18} />
               </button>
             </header>
-            <p>{previewDocument.longSummary ?? previewDocument.shortSummary}</p>
+            <div className="documentPreviewSummaries">
+              <section>
+                <strong>Summary</strong>
+                <p>{previewDocument.shortSummary || "No summary yet."}</p>
+              </section>
+              {previewDocument.longSummary ? (
+                <section>
+                  <strong>Full summary</strong>
+                  <p>{previewDocument.longSummary}</p>
+                </section>
+              ) : null}
+            </div>
             {previewDocument.downloadUrl ? (
               <div className="documentPreviewFrame">
                 {previewDocument.mimeType?.startsWith("image/") ? (
@@ -6060,44 +6198,6 @@ export function CrmTable({
         multiple
         onChange={handleDocumentFileChange}
       />
-      {uploadTarget && uploadTarget.files.length > 0 ? (
-        <div className="documentModalBackdrop" role="presentation" onMouseDown={closeDocumentUpload}>
-          <form className="documentModal documentUploadForm" onSubmit={submitDocumentUpload} onMouseDown={(event) => event.stopPropagation()}>
-            <header>
-              <div>
-                <span>ADD</span>
-                <h2>Add documents</h2>
-              </div>
-              <button type="button" onClick={closeDocumentUpload} aria-label="Close upload form">
-                <X size={18} />
-              </button>
-            </header>
-            <div className="selectedUploadFiles">
-              {uploadTarget.files.map((file, index) => (
-                <label className="selectedUploadFile" key={`${file.name}-${file.size}-${index}`}>
-                  <span>File {index + 1}</span>
-                  <strong>{file.name}</strong>
-                  <textarea
-                    value={uploadSummaries[index] ?? ""}
-                    onChange={(event) => updateUploadSummary(index, event.target.value)}
-                    placeholder="Short file summary"
-                    rows={2}
-                  />
-                </label>
-              ))}
-            </div>
-            {uploadError ? <p className="documentUploadError">{uploadError}</p> : null}
-            <footer>
-              <button type="button" onClick={closeDocumentUpload}>
-                Cancel
-              </button>
-              <button type="submit" disabled={isUploading || !documentUploadEndpoint}>
-                {isUploading ? "Uploading" : `Upload ${uploadTarget.files.length}`}
-              </button>
-            </footer>
-          </form>
-        </div>
-      ) : null}
     </section>
   );
 }

@@ -2289,6 +2289,52 @@ input {
   color: var(--danger);
 }
 
+.tableNotice.success {
+  background: color-mix(in srgb, var(--success) 11%, var(--panel));
+  border: 1px solid color-mix(in srgb, var(--success) 34%, var(--line));
+  color: color-mix(in srgb, var(--success) 72%, var(--ink));
+}
+
+.uploadProgressNotice {
+  background: color-mix(in srgb, var(--accent) 9%, var(--panel));
+  border: 1px solid color-mix(in srgb, var(--accent) 28%, var(--line));
+  color: var(--ink);
+  display: grid;
+  gap: 7px;
+}
+
+.uploadProgressNotice > div:first-child {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.uploadProgressNotice strong,
+.uploadProgressNotice span {
+  font-size: calc(12px * var(--table-font-scale, 1));
+}
+
+.uploadProgressNotice span {
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.uploadProgressTrack {
+  background: color-mix(in srgb, var(--line) 66%, transparent);
+  border-radius: 999px;
+  height: 4px;
+  overflow: hidden;
+}
+
+.uploadProgressTrack span {
+  background: var(--accent);
+  border-radius: inherit;
+  display: block;
+  height: 100%;
+  transition: width 180ms ease;
+}
+
 .documentModalBackdrop {
   align-items: center;
   background: var(--backdrop);
@@ -3629,9 +3675,82 @@ input {
 }
 
 .detailsDownloadsHeader {
+  align-items: center;
   color: var(--muted);
+  display: flex;
   font-size: calc(11px * var(--table-font-scale, 1));
   font-weight: 700;
+  gap: 8px;
+  justify-content: space-between;
+  min-width: 0;
+}
+
+.downloadsHeaderActions {
+  align-items: center;
+  display: inline-flex;
+  flex: 0 0 auto;
+  gap: 6px;
+  justify-content: flex-end;
+  min-width: 132px;
+}
+
+.downloadsUploadInlineStatus {
+  align-items: center;
+  background: color-mix(in srgb, var(--accent) 9%, var(--control));
+  border: 1px solid color-mix(in srgb, var(--accent) 24%, var(--line));
+  border-radius: 999px;
+  color: var(--ink-soft);
+  display: inline-flex;
+  flex: 0 0 auto;
+  font-size: calc(10px * var(--table-font-scale, 1));
+  font-weight: 800;
+  gap: 4px;
+  height: 24px;
+  padding: 0 7px;
+}
+
+.downloadsUploadInlineDot {
+  animation: uploadPulse 900ms ease-in-out infinite;
+  background: var(--accent);
+  border-radius: 999px;
+  height: 6px;
+  width: 6px;
+}
+
+@keyframes uploadPulse {
+  0%,
+  100% {
+    opacity: 0.42;
+    transform: scale(0.86);
+  }
+
+  50% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.downloadsUploadButton {
+  align-items: center;
+  background: var(--control);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--ink-soft);
+  cursor: pointer;
+  display: inline-flex;
+  flex: 0 0 auto;
+  font: inherit;
+  font-size: calc(10px * var(--table-font-scale, 1));
+  font-weight: 700;
+  gap: 4px;
+  min-height: 24px;
+  padding: 3px 7px;
+}
+
+.downloadsUploadButton:hover {
+  background: var(--panel);
+  border-color: color-mix(in srgb, var(--accent) 42%, var(--line));
+  color: var(--accent);
 }
 
 .detailsSummaryDetails {
@@ -3836,7 +3955,7 @@ input {
 .detailsDocumentCard {
   align-items: start;
   gap: 5px;
-  grid-template-columns: 18px minmax(64px, 0.24fr) minmax(0, 1fr);
+  grid-template-columns: 18px minmax(74px, 0.22fr) minmax(0, 1fr);
   min-height: 64px;
   padding: 6px 8px;
 }
@@ -3856,6 +3975,7 @@ input {
 .detailsDocumentCard .leadDocumentCardMain span {
   font-size: calc(9px * var(--table-font-scale, 1));
   line-height: 1.15;
+  white-space: normal;
 }
 
 .detailsDocumentCard .leadDocumentCardMain {
@@ -3957,6 +4077,33 @@ input {
   justify-content: center;
 }
 
+.documentPreviewSummaries {
+  display: grid;
+  gap: 8px;
+}
+
+.documentPreviewSummaries section {
+  background: var(--file-surface);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: grid;
+  gap: 4px;
+  padding: 8px 10px;
+}
+
+.documentPreviewSummaries strong {
+  color: var(--muted);
+  font-size: calc(11px * var(--table-font-scale, 1));
+}
+
+.documentPreviewSummaries p {
+  color: var(--ink-soft);
+  font-size: calc(13px * var(--table-font-scale, 1));
+  line-height: 1.4;
+  margin: 0;
+  white-space: pre-wrap;
+}
+
 .documentModal footer {
   display: flex;
   gap: 8px;
@@ -4016,7 +4163,6 @@ input {
   color: var(--danger);
 }
 
-.documentUploadForm label,
 .recordCreateForm .formField {
   display: grid;
   gap: 6px;
@@ -4030,43 +4176,11 @@ input {
   width: 0;
 }
 
-.selectedUploadFile {
-  background: var(--file-surface);
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  display: grid;
-  gap: 4px;
-  padding: 10px 12px;
-}
-
-.selectedUploadFiles {
-  display: grid;
-  gap: 10px;
-  max-height: 360px;
-  overflow: auto;
-  padding-right: 2px;
-}
-
-.selectedUploadFile span {
-  color: var(--muted);
-  font-size: 12px;
-}
-
-.selectedUploadFile strong {
-  color: var(--ink);
-  font-size: 13px;
-  font-weight: 600;
-  overflow-wrap: anywhere;
-}
-
-.documentUploadForm label span,
 .recordCreateForm .formField span {
   color: var(--muted);
   font-size: 12px;
 }
 
-.documentUploadForm input,
-.documentUploadForm textarea,
 .recordCreateForm input,
 .recordCreateForm textarea {
   background: var(--control);
@@ -4331,6 +4445,57 @@ input {
   align-items: center;
   display: flex;
   justify-content: space-between;
+}
+
+.mobileLeadDownloadsHeader .downloadsHeaderActions {
+  gap: 4px;
+  min-width: 112px;
+}
+
+.mobileLeadDownloadsHeader .downloadsUploadButton {
+  padding-inline: 6px;
+}
+
+.mobileLeadDocumentCard {
+  align-items: start;
+  grid-template-columns: 20px minmax(0, 1fr);
+  grid-template-rows: auto auto auto;
+  row-gap: 3px;
+}
+
+.mobileLeadDocumentCard .leadDocumentCardBadge {
+  grid-column: 1;
+  grid-row: 1;
+  margin-top: 1px;
+}
+
+.mobileLeadDocumentCard .leadDocumentCardMain {
+  display: contents;
+}
+
+.mobileLeadDocumentCard .leadDocumentCardMain strong {
+  align-self: center;
+  grid-column: 2;
+  grid-row: 1;
+}
+
+.mobileLeadDocumentCard .leadDocumentCardMain em {
+  color: var(--muted);
+  font-size: calc(10px * var(--table-font-scale, 1));
+  font-weight: 650;
+  grid-column: 1 / -1;
+  grid-row: 2;
+  line-height: 1.2;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mobileLeadDocumentCard .leadDocumentCardSummary {
+  grid-column: 1 / -1;
+  grid-row: 3;
+  line-height: 1.25;
 }
 
 .mobileLeadFullSummary summary {

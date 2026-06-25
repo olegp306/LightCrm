@@ -2,6 +2,31 @@
 
 All notable LightCrm releases are documented here. Starting with `0.2.0`, every version bump must include a changelog entry.
 
+## 0.3.45 - 2026-06-25
+
+### Added
+
+- Added semantic short/full summaries for lead document uploads, including PDF, DOCX, audio transcription, and image vision analysis.
+- Added an `Added` column to StorageTable so uploaded files can be sorted by their upload timestamp.
+- Added inline Downloads upload progress next to `Add files` on lead cards.
+
+### Changed
+
+- Made lead Downloads `Add files` start uploading immediately after file selection, without opening a second upload modal.
+- Updated mobile lead Downloads cards so the file upload timestamp appears on its own full-width line in `dd.mm.yy hh:mm` format.
+- Kept Telegram Downloads summaries semantic and compact without adding truncation ellipses to document short summaries.
+
+### Fixed
+
+- Prevented audio files that mention KP/commercial offers from being misclassified as received commercial-offer documents.
+- Fixed local lead document uploads so added materials are stored as document history without changing the lead summary.
+
+### Verification
+
+- Created local test lead `L-2026-014` and sequentially uploaded audio, received KP PDF, plans PDF, and two JPG files to inspect generated summaries.
+- `pnpm --filter @lightcrm/web exec tsc -p tsconfig.check.json --noEmit`
+- `pnpm --filter @lightcrm/telegram-bot exec tsc -p tsconfig.json --noEmit`
+
 ## 0.3.43 - 2026-06-18
 
 ### Added

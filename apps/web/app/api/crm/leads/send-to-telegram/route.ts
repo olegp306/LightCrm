@@ -45,6 +45,17 @@ function compactLine(value: string, maxLength: number): string {
   return compacted.length <= maxLength ? compacted : `${compacted.slice(0, Math.max(0, maxLength - 1)).trimEnd()}...`;
 }
 
+function compactSemanticLine(value: string, maxLength: number): string {
+  const compacted = value.replace(/\s+/g, " ").trim();
+  if (compacted.length <= maxLength) {
+    return compacted;
+  }
+  const slice = compacted.slice(0, maxLength).trimEnd();
+  const boundary = Math.max(slice.lastIndexOf(". "), slice.lastIndexOf("; "), slice.lastIndexOf(", "), slice.lastIndexOf(" "));
+  const semanticCut = boundary > Math.floor(maxLength * 0.65) ? slice.slice(0, boundary) : slice;
+  return semanticCut.trimEnd().replace(/[,:;.-]+$/u, "");
+}
+
 function htmlLeadField(label: string, value: string | number | null | undefined, maxLength = 120): string | null {
   if (value === null || value === undefined || value === "") {
     return null;
@@ -161,7 +172,7 @@ function documentsQuote(
     const linkedLabel = downloadUrl
       ? `<a href="${escapeHtml(downloadUrl)}">${escapeHtml(label)}</a>`
       : escapeHtml(label);
-    const summary = compactLine(document.shortSummary || document.longSummary || "No summary yet.", 82);
+    const summary = compactSemanticLine(document.shortSummary || document.longSummary || "No summary yet.", 220);
     return `${linkedLabel} - ${escapeHtml(summary)}`;
   });
   const title = `Downloads: ${documents.length} ${documents.length === 1 ? "item" : "items"}`;

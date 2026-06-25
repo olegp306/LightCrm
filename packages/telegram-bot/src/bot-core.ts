@@ -1230,6 +1230,17 @@ function compactLine(value: string, maxLength: number): string {
   return `${compacted.slice(0, Math.max(0, maxLength - 1)).trimEnd()}...`;
 }
 
+function compactSemanticLine(value: string, maxLength: number): string {
+  const compacted = value.replace(/\s+/g, " ").trim();
+  if (compacted.length <= maxLength) {
+    return compacted;
+  }
+  const slice = compacted.slice(0, maxLength).trimEnd();
+  const boundary = Math.max(slice.lastIndexOf(". "), slice.lastIndexOf("; "), slice.lastIndexOf(", "), slice.lastIndexOf(" "));
+  const semanticCut = boundary > Math.floor(maxLength * 0.65) ? slice.slice(0, boundary) : slice;
+  return semanticCut.trimEnd().replace(/[,:;.-]+$/u, "");
+}
+
 const telegramSummaryShortMax = 220;
 const telegramSummaryFullMax = 420;
 
@@ -1322,7 +1333,7 @@ function telegramLeadDownloadsQuote(documents: TelegramLeadDocument[]): string |
       : escapeHtml(labels[index] ?? documentKindLabel(document));
     return [
       label,
-      escapeHtml(compactLine(summary, documents.length === 1 ? 120 : 80)),
+      escapeHtml(compactSemanticLine(summary, 220)),
       createdAt ? escapeHtml(createdAt) : null
     ]
       .filter((line): line is string => Boolean(line))
@@ -2088,12 +2099,16 @@ async function maybeCreateReminder(
     return { handled: false, reminder: null };
   }
   if (!result.facts.dueAt) {
-    await deps.sendMessage(message.chat.id, "reminder date is missing");
+    if (options.notify ?? true) {
+      await deps.sendMessage(message.chat.id, "reminder date is missing");
+    }
     return { handled: true, reminder: null };
   }
   const dueAt = normalizeReminderDueAt(result.facts.dueAt, undefined, messageReferenceDate(message));
   if (!dueAt) {
-    await deps.sendMessage(message.chat.id, `reminder date is invalid: ${result.facts.dueAt}`);
+    if (options.notify ?? true) {
+      await deps.sendMessage(message.chat.id, `reminder date is invalid: ${result.facts.dueAt}`);
+    }
     return { handled: true, reminder: null };
   }
   const reminder = await deps.createReminder({
@@ -2140,12 +2155,16 @@ async function maybeCreateCalendarEvent(
     return { handled: false, event: null };
   }
   if (!result.facts.dueAt) {
-    await deps.sendMessage(message.chat.id, "calendar event date is missing");
+    if (options.notify ?? true) {
+      await deps.sendMessage(message.chat.id, "calendar event date is missing");
+    }
     return { handled: true, event: null };
   }
   const startsAt = normalizeReminderDueAt(result.facts.dueAt, undefined, messageReferenceDate(message));
   if (!startsAt) {
-    await deps.sendMessage(message.chat.id, `calendar event date is invalid: ${result.facts.dueAt}`);
+    if (options.notify ?? true) {
+      await deps.sendMessage(message.chat.id, `calendar event date is invalid: ${result.facts.dueAt}`);
+    }
     return { handled: true, event: null };
   }
   const event = await deps.createCalendarEvent({
@@ -2445,7 +2464,7 @@ export async function handleTelegramUpdate(
     return null;
   }
   let result = activeLead
-    ? !text.trim() && attachments.length > 0
+    ? (deps.forceAttachToActiveLead && attachments.length > 0) || (!text.trim() && attachments.length > 0)
       ? attachmentUpdateOrchestrationResult(deps.workspaceId, message, text, author, attachments, activeLead)
       : await orchestrate({
           workspaceId: deps.workspaceId,
@@ -2493,19 +2512,20 @@ export async function handleTelegramUpdate(
     return null;
   }
   const shouldCreateLead = hasAutoAction(result, "create_lead");
+  const hasAttachments = attachments.length > 0;
   const resolvedTargetLead = replyLeadId
     ? null
     : deps.forceCreateNewLead
       ? null
       : await resolveLeadFromDirectorText(text.trim() || result.facts.contactName || "", deps);
   const targetLeadId = replyLeadId ?? resolvedTargetLead?.id ?? null;
-  const standaloneCalendarEvent = shouldCreateLead
+  const standaloneCalendarEvent = shouldCreateLead || hasAttachments
     ? { handled: false, event: null }
     : await maybeCreateCalendarEvent(message, orchestrationText, result, targetLeadId, deps);
   if (standaloneCalendarEvent.handled) {
     return replyLeadId ? { id: replyLeadId, name: "replied lead" } : resolvedTargetLead ? { id: resolvedTargetLead.id, name: resolvedTargetLead.name } : null;
   }
-  const standaloneReminder = shouldCreateLead
+  const standaloneReminder = shouldCreateLead || hasAttachments
     ? { handled: false, reminder: null }
     : await maybeCreateReminder(message, orchestrationText, result, targetLeadId, deps);
   if (standaloneReminder.handled) {
