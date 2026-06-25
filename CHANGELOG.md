@@ -2,6 +2,16 @@
 
 All notable LightCrm releases are documented here. Starting with `0.2.0`, every version bump must include a changelog entry.
 
+## 0.3.47 - 2026-06-25
+
+### Changed
+
+- Wrapped desktop table Address cells onto two lines and added an ellipsis when the address still does not fit.
+
+### Verification
+
+- `pnpm --filter @lightcrm/web exec tsc -p tsconfig.check.json --noEmit`
+
 ## 0.3.46 - 2026-06-25
 
 ### Added

@@ -555,6 +555,10 @@ function isInlineLongTextColumn(column: CrmTableColumn | undefined): boolean {
   return column?.id === "description";
 }
 
+function isWrappedAddressColumn(column: CrmTableColumn | undefined): boolean {
+  return column?.id === "address";
+}
+
 function wrappedCanvasLines(ctx: CanvasRenderingContext2D, text: string, maxWidth: number, maxLines: number): { lines: string[]; overflow: boolean } {
   const words = text.replace(/\s+/g, " ").trim().split(" ").filter(Boolean);
   if (words.length === 0) {
@@ -584,13 +588,26 @@ function wrappedCanvasLines(ctx: CanvasRenderingContext2D, text: string, maxWidt
   return { lines, overflow };
 }
 
-function drawWrappedTextCell(args: DrawCellArgs, text: string): void {
+function fitTextWithEllipsis(ctx: CanvasRenderingContext2D, text: string, maxWidth: number): string {
+  if (ctx.measureText(text).width <= maxWidth) {
+    return text;
+  }
+  const ellipsis = "...";
+  let clipped = text.trimEnd();
+  while (clipped.length > 0 && ctx.measureText(`${clipped}${ellipsis}`).width > maxWidth) {
+    clipped = clipped.slice(0, -1).trimEnd();
+  }
+  return clipped ? `${clipped}${ellipsis}` : ellipsis;
+}
+
+function drawWrappedTextCell(args: DrawCellArgs, text: string, options: { maxLines?: number; ellipsis?: boolean } = {}): void {
   const { ctx, rect, theme } = args;
   const fontSize = fontSizeFromTheme(theme, 13);
   const fontFamily = theme.fontFamily ?? "Inter, sans-serif";
   const padding = theme.cellHorizontalPadding ?? 8;
   const lineHeight = Math.round(fontSize * 1.28);
   const maxLines = Math.max(1, Math.floor((rect.height - 10) / lineHeight));
+  const preferredMaxLines = options.maxLines ?? 3;
 
   ctx.save();
   ctx.beginPath();
@@ -599,13 +616,17 @@ function drawWrappedTextCell(args: DrawCellArgs, text: string): void {
   ctx.font = `${theme.baseFontStyle ?? `${fontSize}px`} ${fontFamily}`;
   ctx.fillStyle = theme.textDark;
   ctx.textBaseline = "top";
-  const { lines, overflow } = wrappedCanvasLines(ctx, text, Math.max(10, rect.width - padding * 2), Math.min(3, maxLines));
+  const textWidth = Math.max(10, rect.width - padding * 2);
+  const { lines, overflow } = wrappedCanvasLines(ctx, text, textWidth, Math.min(preferredMaxLines, maxLines));
+  if (overflow && options.ellipsis && lines.length > 0) {
+    lines[lines.length - 1] = fitTextWithEllipsis(ctx, lines[lines.length - 1], textWidth);
+  }
   const totalHeight = lines.length * lineHeight;
   const startY = rect.y + Math.max(5, (rect.height - totalHeight) / 2);
   lines.forEach((line, index) => {
     ctx.fillText(line, rect.x + padding, startY + index * lineHeight, rect.width - padding * 2);
   });
-  if (overflow) {
+  if (overflow && !options.ellipsis) {
     const label = "more";
     const labelWidth = ctx.measureText(label).width + 10;
     const labelHeight = Math.max(14, fontSize + 2);
@@ -2079,7 +2100,7 @@ export function CrmTable({
     [isDarkMode, tableFontScale]
   );
   const tableRowHeight = useMemo(
-    () => (columns.some((column) => column.id === "description") ? Math.round(48 * tableFontScale) : undefined),
+    () => (columns.some((column) => column.id === "description" || column.id === "address") ? Math.round(48 * tableFontScale) : undefined),
     [columns, tableFontScale]
   );
   const activeRelatedTableHeaderTheme = useMemo(
@@ -3908,6 +3929,21 @@ export function CrmTable({
         mutableCell.displayData = originalDisplayData;
         mutableCell.data = originalData;
         drawWrappedTextCell(args, text);
+        drawSearchMatchHighlight(args, query, isDarkMode);
+        return;
+      }
+
+      if (isWrappedAddressColumn(column) && args.cell.kind === GridCellKind.Text) {
+        const text = args.cell.displayData || args.cell.data || "";
+        const mutableCell = args.cell as typeof args.cell & { displayData?: string; data?: string };
+        const originalDisplayData = mutableCell.displayData;
+        const originalData = mutableCell.data;
+        mutableCell.displayData = "";
+        mutableCell.data = "";
+        drawContent();
+        mutableCell.displayData = originalDisplayData;
+        mutableCell.data = originalData;
+        drawWrappedTextCell(args, text, { maxLines: 2, ellipsis: true });
         drawSearchMatchHighlight(args, query, isDarkMode);
         return;
       }

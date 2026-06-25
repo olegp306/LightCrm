@@ -1,6 +1,6 @@
 {
   "name": "lightcrm",
-  "version": "0.3.46",
+  "version": "0.3.47",
   "private": true,
   "packageManager": "pnpm@10.33.4",
   "scripts": {
