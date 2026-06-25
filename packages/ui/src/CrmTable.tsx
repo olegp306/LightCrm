@@ -180,6 +180,7 @@ export type CrmTableProps = {
   outreachDraftEndpoint?: string;
   sendToTelegramEndpoint?: string;
   clientOptionsEndpoint?: string;
+  clientLinkEndpoint?: string;
   archiveEntity?: ArchiveRecordEntity;
   createRecord?: CreateRecordConfig;
 };
@@ -550,6 +551,76 @@ function fontSizeFromTheme(theme: { baseFontStyle?: string }, fallback: number):
   return Number.isFinite(fontSize) ? fontSize : fallback;
 }
 
+function isInlineLongTextColumn(column: CrmTableColumn | undefined): boolean {
+  return column?.id === "description";
+}
+
+function wrappedCanvasLines(ctx: CanvasRenderingContext2D, text: string, maxWidth: number, maxLines: number): { lines: string[]; overflow: boolean } {
+  const words = text.replace(/\s+/g, " ").trim().split(" ").filter(Boolean);
+  if (words.length === 0) {
+    return { lines: [], overflow: false };
+  }
+  const lines: string[] = [];
+  let currentLine = "";
+  let overflow = false;
+
+  for (let index = 0; index < words.length; index += 1) {
+    const word = words[index];
+    const candidate = currentLine ? `${currentLine} ${word}` : word;
+    if (ctx.measureText(candidate).width <= maxWidth || !currentLine) {
+      currentLine = candidate;
+      continue;
+    }
+    lines.push(currentLine);
+    currentLine = word;
+    if (lines.length === maxLines - 1) {
+      overflow = index < words.length - 1 || ctx.measureText(currentLine).width > maxWidth;
+      break;
+    }
+  }
+  if (currentLine && lines.length < maxLines) {
+    lines.push(currentLine);
+  }
+  return { lines, overflow };
+}
+
+function drawWrappedTextCell(args: DrawCellArgs, text: string): void {
+  const { ctx, rect, theme } = args;
+  const fontSize = fontSizeFromTheme(theme, 13);
+  const fontFamily = theme.fontFamily ?? "Inter, sans-serif";
+  const padding = theme.cellHorizontalPadding ?? 8;
+  const lineHeight = Math.round(fontSize * 1.28);
+  const maxLines = Math.max(1, Math.floor((rect.height - 10) / lineHeight));
+
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(rect.x + 2, rect.y + 1, rect.width - 4, rect.height - 2);
+  ctx.clip();
+  ctx.font = `${theme.baseFontStyle ?? `${fontSize}px`} ${fontFamily}`;
+  ctx.fillStyle = theme.textDark;
+  ctx.textBaseline = "top";
+  const { lines, overflow } = wrappedCanvasLines(ctx, text, Math.max(10, rect.width - padding * 2), Math.min(3, maxLines));
+  const totalHeight = lines.length * lineHeight;
+  const startY = rect.y + Math.max(5, (rect.height - totalHeight) / 2);
+  lines.forEach((line, index) => {
+    ctx.fillText(line, rect.x + padding, startY + index * lineHeight, rect.width - padding * 2);
+  });
+  if (overflow) {
+    const label = "more";
+    const labelWidth = ctx.measureText(label).width + 10;
+    const labelHeight = Math.max(14, fontSize + 2);
+    const labelX = rect.x + rect.width - padding - labelWidth;
+    const labelY = rect.y + rect.height - labelHeight - 3;
+    ctx.fillStyle = theme.bgCell;
+    ctx.fillRect(labelX - 4, labelY - 1, labelWidth + 6, labelHeight + 2);
+    ctx.fillStyle = theme.textMedium;
+    ctx.font = `600 ${Math.max(9, fontSize - 3)}px ${fontFamily}`;
+    ctx.textBaseline = "middle";
+    ctx.fillText(label, labelX + 5, labelY + labelHeight / 2);
+  }
+  ctx.restore();
+}
+
 function drawSearchMatchHighlight(args: DrawCellArgs, query: string, isDarkMode: boolean): void {
   const needle = query.trim();
   if (!needle || args.row < 0 || args.cell.kind !== GridCellKind.Text) {
@@ -788,6 +859,17 @@ function actionTone(value: CrmTableCellValue | undefined): { fill: string; strok
 
 function sortCalendarItemsByStart(items: CalendarCellValue): CalendarCellValue {
   return [...items].sort((left, right) => left.startsAt.localeCompare(right.startsAt));
+}
+
+function visibleCalendarCellItems(items: CalendarCellValue): CalendarCellValue {
+  const now = Date.now();
+  return sortCalendarItemsByStart(items).filter((item) => {
+    const startsAt = calendarDate(item.startsAt);
+    if (!startsAt) {
+      return true;
+    }
+    return startsAt.getTime() >= now;
+  });
 }
 
 function mobileCalendarTitle(item: CalendarCellItem): string {
@@ -1412,12 +1494,39 @@ function isDetailsEditableColumn(column: CrmTableColumn): boolean {
   return (
     column.valueKind !== "documents" &&
     column.valueKind !== "calendar" &&
-    !["code", "summaryShort", "summaryLong", "summaryUpdatedAt", "offerMissingFields", "campaignName", "campaignTouch", "campaignStatus", "nextAction"].includes(column.id)
+    ![
+      "code",
+      "summaryShort",
+      "summaryLong",
+      "summaryUpdatedAt",
+      "offerMissingFields",
+      "campaignName",
+      "campaignTouch",
+      "campaignStatus",
+      "nextAction"
+    ].includes(column.id)
   );
+}
+
+const leadSecondaryFieldIds = new Set(["status"]);
+
+function isLeadSecondaryColumn(column: CrmTableColumn): boolean {
+  return leadSecondaryFieldIds.has(column.id);
 }
 
 function isMobileMultilineColumn(columnId: string): boolean {
   return ["description", "todo", "address", "notes", "rawInput"].includes(columnId);
+}
+
+function detailsTextareaRows(columnId: string, value: string | null | undefined): number {
+  if (!isMobileMultilineColumn(columnId)) {
+    return 1;
+  }
+  const text = String(value ?? "");
+  const softWrapRows = Math.ceil(text.length / 72);
+  const hardWrapRows = text.split(/\r\n|\r|\n/).length;
+  const desiredRows = Math.max(2, softWrapRows, hardWrapRows);
+  return Math.min(columnId === "address" ? 5 : 7, desiredRows);
 }
 
 function documentTypeIndex(documents: DocumentCellValue, documentIndex: number): number {
@@ -1838,6 +1947,7 @@ export function CrmTable({
   outreachDraftEndpoint,
   sendToTelegramEndpoint,
   clientOptionsEndpoint,
+  clientLinkEndpoint,
   archiveEntity,
   createRecord
 }: CrmTableProps) {
@@ -1967,6 +2077,10 @@ export function CrmTable({
   const activeTableTheme = useMemo(
     () => scaledTableTheme(isDarkMode ? darkTableTheme : lightTableTheme, tableFontScale),
     [isDarkMode, tableFontScale]
+  );
+  const tableRowHeight = useMemo(
+    () => (columns.some((column) => column.id === "description") ? Math.round(48 * tableFontScale) : undefined),
+    [columns, tableFontScale]
   );
   const activeRelatedTableHeaderTheme = useMemo(
     () => relatedTableHeaderTheme(linkedTableColor, isDarkMode),
@@ -2175,6 +2289,14 @@ export function CrmTable({
       ),
     [configuredColumns]
   );
+  const detailsPrimaryColumns = useMemo(
+    () => detailsModalColumns.filter((column) => !(isLeadTable && isLeadSecondaryColumn(column))),
+    [detailsModalColumns, isLeadTable]
+  );
+  const detailsSecondaryColumns = useMemo(
+    () => (isLeadTable ? detailsModalColumns.filter(isLeadSecondaryColumn) : []),
+    [detailsModalColumns, isLeadTable]
+  );
   const detailsPanelRow = detailsPanel ? editableRows.find((row) => row.id === detailsPanel.rowId) ?? null : null;
   const detailsPanelDocuments = detailsPanelRow ? sortDocumentsByAdded(cellDocuments(detailsPanelRow.values.documents)) : [];
   const detailsPanelVisibleDocuments = detailsPanelDocuments.slice(0, 3);
@@ -2282,7 +2404,7 @@ export function CrmTable({
       const isFlashing = record?.id === flashRowId;
       const themeOverride = isFlashing ? activeDraftRowTheme.flash : isDraftRow ? activeDraftRowTheme.idle : undefined;
       if (column?.valueKind === "calendar") {
-        const items = cellCalendarItems(value);
+        const items = visibleCalendarCellItems(cellCalendarItems(value));
         return {
           kind: GridCellKind.Custom,
           data: { kind: "calendar-cell", items },
@@ -2333,12 +2455,13 @@ export function CrmTable({
       }
       if (column?.valueKind === "longText") {
         const displayData = String(value ?? "");
+        const isInlineText = isInlineLongTextColumn(column);
         return {
           kind: GridCellKind.Text,
           data: displayData,
           displayData,
-          allowOverlay: false,
-          readonly: true,
+          allowOverlay: isInlineText,
+          readonly: !isInlineText,
           themeOverride: textThemeOverride(activeTableTheme, themeOverride, column.textStyle)
         };
       }
@@ -2444,7 +2567,7 @@ export function CrmTable({
         return;
       }
       if (column?.valueKind === "calendar" && row) {
-        const items = cellCalendarItems(row.values[column.id]);
+        const items = visibleCalendarCellItems(cellCalendarItems(row.values[column.id]));
         const relativeTop = args.bounds.y - frameBounds.top;
         const showBelow = relativeTop < 76;
         setRelatedTooltip(null);
@@ -3027,7 +3150,7 @@ export function CrmTable({
       }
       if (column.valueKind === "calendar") {
         event.preventDefault();
-        const items = cellCalendarItems(row.values[column.id]);
+        const items = visibleCalendarCellItems(cellCalendarItems(row.values[column.id]));
         const relativeX =
           event.localEventX <= event.bounds.width ? event.localEventX - 8 : event.localEventX - event.bounds.x - 8;
         const top = Math.floor((event.bounds.height - calendarChipHeight) / 2);
@@ -3045,7 +3168,7 @@ export function CrmTable({
         window.location.assign(`/today?leadId=${encodeURIComponent(rowPublicRef(row))}`);
         return;
       }
-      if (column.valueKind === "longText") {
+      if (column.valueKind === "longText" && !isInlineLongTextColumn(column)) {
         const text = textCellValue(row.values[column.id]);
         if (text) {
           event.preventDefault();
@@ -3491,20 +3614,31 @@ export function CrmTable({
 
   const selectClientForLead = useCallback(
     async (client: ClientOption) => {
-      if (!clientPicker || !updateRecordEndpoint || clientPicker.saving) {
+      if (!clientPicker || (!clientLinkEndpoint && !updateRecordEndpoint) || clientPicker.saving) {
         return;
       }
       setClientPicker((current) => (current ? { ...current, saving: true, error: null } : current));
       try {
-        const response = await fetch(updateRecordEndpoint, {
+        const endpoint = clientLinkEndpoint ?? updateRecordEndpoint;
+        if (!endpoint) {
+          return;
+        }
+        const body = clientLinkEndpoint
+          ? {
+              workspaceId: "default",
+              leadId: clientPicker.rowId,
+              clientId: client.id
+            }
+          : {
+              workspaceId: "default",
+              leadId: clientPicker.rowId,
+              patch: { clientId: client.id },
+              source: { channel: "web-client-picker" }
+            };
+        const response = await fetch(endpoint, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            workspaceId: "default",
-            leadId: clientPicker.rowId,
-            patch: { clientId: client.id },
-            source: { channel: "web-client-picker" }
-          })
+          body: JSON.stringify(body)
         });
         const payload = (await response.json()) as { error?: string };
         if (!response.ok) {
@@ -3517,6 +3651,7 @@ export function CrmTable({
                   ...row,
                   values: {
                     ...row.values,
+                    clientId: client.id,
                     "client.name": client.name ?? "n/a",
                     "client.phone": client.phone ?? "n/a",
                     "client.email": client.email ?? "n/a",
@@ -3540,7 +3675,7 @@ export function CrmTable({
         );
       }
     },
-    [clientPicker, updateRecordEndpoint]
+    [clientLinkEndpoint, clientPicker, updateRecordEndpoint]
   );
 
   const openLeadSummaryHistory = useCallback(async (row: CrmTableRow) => {
@@ -3758,6 +3893,21 @@ export function CrmTable({
         ctx.textBaseline = "middle";
         ctx.fillText(text, chipX + 19, rect.y + rect.height / 2, chipWidth - 24);
         ctx.restore();
+        drawSearchMatchHighlight(args, query, isDarkMode);
+        return;
+      }
+
+      if (isInlineLongTextColumn(column) && args.cell.kind === GridCellKind.Text) {
+        const text = args.cell.displayData || args.cell.data || "";
+        const mutableCell = args.cell as typeof args.cell & { displayData?: string; data?: string };
+        const originalDisplayData = mutableCell.displayData;
+        const originalData = mutableCell.data;
+        mutableCell.displayData = "";
+        mutableCell.data = "";
+        drawContent();
+        mutableCell.displayData = originalDisplayData;
+        mutableCell.data = originalData;
+        drawWrappedTextCell(args, text);
         drawSearchMatchHighlight(args, query, isDarkMode);
         return;
       }
@@ -4704,6 +4854,7 @@ export function CrmTable({
           maxColumnWidth={520}
           width="100%"
           height="100%"
+          rowHeight={tableRowHeight}
           rowMarkerWidth={rowMarkerWidth}
           rowMarkers={{ kind: "both", checkboxStyle: "square", width: rowMarkerWidth }}
           theme={activeTableTheme}
@@ -4746,6 +4897,14 @@ export function CrmTable({
           const documents = sortDocumentsByAdded(cellDocuments(row.values.documents));
           const visibleDocuments = documents.slice(0, 2);
           const extraDocuments = documents.slice(2);
+          const mobileLeadWorkFields = [
+            { label: "Interest", value: textCellValue(row.values.interest) },
+            { label: "Urgency", value: textCellValue(row.values.urgency) },
+            { label: "Todo", value: textCellValue(row.values.todo) }
+          ].filter((field) => Boolean(field.value));
+          const mobileSecondaryFields = [
+            { label: "Status", value: textCellValue(row.values.status) }
+          ].filter((field) => Boolean(field.value));
           if (isLeadTable) {
             return (
               <article
@@ -4812,6 +4971,20 @@ export function CrmTable({
                   <section className="mobileLeadCardSection">
                     <span>Description</span>
                     <p>{description}</p>
+                  </section>
+                ) : null}
+
+                {mobileLeadWorkFields.length > 0 ? (
+                  <section className="mobileLeadCardSection">
+                    <span>Lead work</span>
+                    <div className="mobileLeadWorkFields">
+                      {mobileLeadWorkFields.map((field) => (
+                        <span key={field.label}>
+                          <i>{field.label}</i>
+                          <strong>{field.value}</strong>
+                        </span>
+                      ))}
+                    </div>
                   </section>
                 ) : null}
 
@@ -4954,6 +5127,17 @@ export function CrmTable({
                     ) : (
                       <p className="mobileLeadCardSummaryText">{summary.short}</p>
                     )}
+                  </section>
+                ) : null}
+
+                {mobileSecondaryFields.length > 0 ? (
+                  <section className="mobileLeadSecondaryFields" aria-label="Secondary lead fields">
+                    {mobileSecondaryFields.map((field) => (
+                      <span key={field.label}>
+                        <i>{field.label}</i>
+                        <strong>{field.value}</strong>
+                      </span>
+                    ))}
                   </section>
                 ) : null}
               </article>
@@ -5267,7 +5451,7 @@ export function CrmTable({
                     </div>
                   </section>
                 ) : null}
-                {detailsModalColumns.map((column) => {
+                {detailsPrimaryColumns.map((column) => {
                   const canEdit = detailsEditableColumns.some((editableColumn) => editableColumn.id === column.id);
                   const displayValue =
                     column.valueKind === "area"
@@ -5333,7 +5517,7 @@ export function CrmTable({
                       </span>
                       {isMobileMultilineColumn(column.id) ? (
                         <textarea
-                          rows={3}
+                          rows={detailsTextareaRows(column.id, detailsPanel.values[column.id] ?? detailsPanelRow.values[column.id])}
                           value={detailsPanel.values[column.id] ?? ""}
                           onChange={(event) => setDetailsValue(column.id, event.target.value)}
                         />
@@ -5346,6 +5530,32 @@ export function CrmTable({
                     </label>
                   );
                 })}
+                {detailsSecondaryColumns.length > 0 ? (
+                  <section className="detailsSecondaryFields" aria-label="Secondary lead fields">
+                    <header>
+                      <span>Secondary status fields</span>
+                      <small>Readonly for now</small>
+                    </header>
+                    <div>
+                      {detailsSecondaryColumns.map((column) => {
+                        const displayValue =
+                          column.valueKind === "area"
+                            ? formatAreaValue(detailsPanelRow.values[column.id])
+                            : mobileDisplayValue(detailsPanelRow.values[column.id]);
+                        const guide = guideForColumn(column);
+                        return (
+                          <div className="detailsSecondaryField" key={column.id}>
+                            <span className="detailsFieldLabel">
+                              {column.title}
+                              {guide ? <i title={`${guide.source}: ${guide.meaning}`}>?</i> : null}
+                            </span>
+                            <strong>{displayValue || "n/a"}</strong>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </section>
+                ) : null}
                 </div>
               </details>
 

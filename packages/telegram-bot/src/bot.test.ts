@@ -2806,6 +2806,91 @@ describe("telegram bot core", () => {
     expect(prepareAttachment).toHaveBeenCalledWith(expect.objectContaining({ leadId: "lead-active" }));
   });
 
+  it("does not reroute a forced active attachment callback into a missing calendar date", async () => {
+    const sendMessage = vi.fn();
+    const createLead = vi.fn();
+    const prepareAttachment = vi.fn().mockResolvedValue({
+      kind: "pdf",
+      fileName: "meeting-files.pdf",
+      storageProvider: "local",
+      storageBucket: null,
+      storageKey: "workspaces/default/leads/lead-active/meeting-files.pdf",
+      downloadUrl: null,
+      mimeType: "application/pdf",
+      sizeBytes: 123
+    });
+    const orchestrate = vi.fn().mockResolvedValue({
+      workspaceId: "default",
+      normalizedText: "add this to the meeting",
+      intent: "create_meeting",
+      risk: "auto",
+      explanations: ["The text looks like a meeting request, but has no date."],
+      settings: DEFAULT_LANGGRAPH_SETTINGS,
+      facts: {
+        contactName: null,
+        projectName: null,
+        projectType: null,
+        location: null,
+        areaM2: null,
+        phone: null,
+        budgetEur: null,
+        dueAt: null,
+        sourceMessageId: "304",
+        evidence: {
+          sourceMessageId: "304",
+          author: "Katya",
+          sourceChannel: "telegram",
+          textSnippet: "add this to the meeting"
+        }
+      },
+      actions: [{ type: "create_meeting", risk: "auto", reason: "Calendar event needs a date.", payload: {} }]
+    });
+    const pendingMessage = {
+      message_id: 304,
+      caption: "add this to the meeting",
+      chat: { id: 111111 },
+      from: { first_name: "Katya" },
+      document: {
+        file_id: "file-meeting-files",
+        file_unique_id: "unique-meeting-files",
+        file_name: "meeting-files.pdf",
+        mime_type: "application/pdf",
+        file_size: 123
+      }
+    };
+    const takePendingAttachmentDecision = vi.fn().mockReturnValue({
+      message: pendingMessage,
+      activeLead: { id: "lead-active", name: "Active lead" }
+    });
+
+    const lead = await handleTelegramUpdate(
+      {
+        update_id: 11,
+        callback_query: {
+          id: "callback-attach-active-caption",
+          data: "attachment_active:pending-caption",
+          message: { chat: { id: 111111 }, message_id: 903 }
+        }
+      },
+      {
+        allowedChatIds: new Set([111111]),
+        workspaceId: "default",
+        crmAppBaseUrl: "http://localhost:4900",
+        sendMessage,
+        orchestrate,
+        createLead,
+        prepareAttachment,
+        takePendingAttachmentDecision
+      }
+    );
+
+    expect(lead).toEqual({ id: "lead-active", name: "Active lead" });
+    expect(orchestrate).not.toHaveBeenCalled();
+    expect(createLead).not.toHaveBeenCalled();
+    expect(prepareAttachment).toHaveBeenCalledWith(expect.objectContaining({ leadId: "lead-active" }));
+    expect(sendMessage).not.toHaveBeenCalledWith(111111, "calendar event date is missing");
+  });
+
   it("creates a new lead from pending attachment-only intake after explicit callback choice", async () => {
     const sendMessage = vi.fn();
     const createLead = vi.fn().mockResolvedValue({ id: "lead-new", name: "Draft lead" });
@@ -2954,6 +3039,99 @@ describe("telegram bot core", () => {
         }
       }
     );
+  });
+
+  it("keeps multi-file active lead intake from being preempted by a missing calendar date", async () => {
+    const sendMessage = vi.fn();
+    const createLead = vi.fn();
+    const createCalendarEvent = vi.fn();
+    const prepareAttachment = vi.fn().mockImplementation((input) =>
+      Promise.resolve({
+        kind: input.attachment.kind,
+        fileName: input.attachment.fileName,
+        storageProvider: "local",
+        storageBucket: null,
+        storageKey: `workspaces/default/leads/${input.leadId}/${input.attachment.fileName}`,
+        downloadUrl: null,
+        mimeType: input.attachment.mimeType,
+        sizeBytes: input.attachment.sizeBytes
+      })
+    );
+    const orchestrate = vi.fn().mockResolvedValue({
+      workspaceId: "default",
+      normalizedText: "add these meeting files",
+      intent: "create_meeting",
+      risk: "auto",
+      explanations: ["The message looks like a meeting request, but the date is missing."],
+      settings: DEFAULT_LANGGRAPH_SETTINGS,
+      facts: {
+        contactName: null,
+        projectName: null,
+        projectType: null,
+        location: null,
+        areaM2: null,
+        phone: null,
+        budgetEur: null,
+        dueAt: null,
+        sourceMessageId: "407",
+        evidence: {
+          sourceMessageId: "407",
+          author: "Katya",
+          sourceChannel: "telegram",
+          textSnippet: "add these meeting files"
+        }
+      },
+      actions: [{ type: "create_meeting", risk: "auto", reason: "Calendar date is missing.", payload: {} }]
+    });
+
+    const lead = await handleTelegramUpdate(
+      {
+        update_id: 16,
+        message: {
+          message_id: 407,
+          text: "add these meeting files",
+          chat: { id: 111111 },
+          from: { first_name: "Katya" },
+          groupedAttachments: [
+            {
+              fileId: "file-one",
+              uniqueId: "unique-one",
+              kind: "pdf",
+              fileName: "one.pdf",
+              mimeType: "application/pdf",
+              sizeBytes: 123
+            },
+            {
+              fileId: "file-two",
+              uniqueId: "unique-two",
+              kind: "image",
+              fileName: "two.jpg",
+              mimeType: "image/jpeg",
+              sizeBytes: 456
+            }
+          ]
+        }
+      },
+      {
+        allowedChatIds: new Set([111111]),
+        workspaceId: "default",
+        crmAppBaseUrl: "http://localhost:4900",
+        activeLead: { id: "lead-active", name: "Active lead" },
+        sendMessage,
+        orchestrate,
+        createLead,
+        createCalendarEvent,
+        prepareAttachment
+      }
+    );
+
+    expect(lead).toEqual({ id: "lead-active", name: "Active lead" });
+    expect(createLead).not.toHaveBeenCalled();
+    expect(createCalendarEvent).not.toHaveBeenCalled();
+    expect(prepareAttachment).toHaveBeenCalledTimes(2);
+    expect(prepareAttachment).toHaveBeenCalledWith(expect.objectContaining({ leadId: "lead-active" }));
+    expect(sendMessage).toHaveBeenCalledWith(111111, "reviewing the files, back shortly");
+    expect(sendMessage).not.toHaveBeenCalledWith(111111, "calendar event date is missing");
   });
 
   it("asks for review before attaching text-only follow-ups to the active lead", async () => {
@@ -3636,5 +3814,54 @@ describe("telegram bot core", () => {
       summary: "Obernsees development property",
       longSummary: "The file contains a visible development-property brief."
     });
+  });
+
+  it("uploads from an independent copy when attachment analysis detaches the downloaded bytes", async () => {
+    const downloadedBytes = new Uint8Array([7, 8, 9]);
+    const uploadBytes = Uint8Array.from(downloadedBytes);
+    structuredClone(downloadedBytes.buffer, { transfer: [downloadedBytes.buffer] });
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        documents: [
+          {
+            fileName: "voice.ogg",
+            storageProvider: "local",
+            storageBucket: null,
+            storageKey: "workspaces/default/leads/lead-1/voice.ogg",
+            downloadUrl: "/api/crm/storage/local/workspaces%2Fdefault%2Fleads%2Flead-1%2Fvoice.ogg",
+            mimeType: "audio/ogg",
+            sizeBytes: 3
+          }
+        ]
+      })
+    });
+
+    await uploadTelegramAttachmentToWeb({
+      crmApiBase: "http://localhost:4900",
+      workspaceId: "default",
+      leadId: "lead-1",
+      sourceChannel: "telegram",
+      sourceThreadId: "111111",
+      sourceMessageId: "201",
+      text: "",
+      author: "Katya",
+      attachment: {
+        fileId: "file-voice",
+        uniqueId: "unique-voice",
+        kind: "voice",
+        fileName: "voice.ogg",
+        mimeType: "audio/ogg",
+        sizeBytes: 3
+      },
+      bytes: uploadBytes,
+      summary: null,
+      longSummary: null,
+      fetchImpl
+    });
+
+    const form = fetchImpl.mock.calls[0][1].body as FormData;
+    const file = form.get("file") as File;
+    expect(new Uint8Array(await file.arrayBuffer())).toEqual(new Uint8Array([7, 8, 9]));
   });
 });

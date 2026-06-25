@@ -436,12 +436,14 @@ function formatOfferDocumentCaption(version: number | undefined, readiness: Gene
 async function prepareAttachment(input: PrepareTelegramAttachmentInput): Promise<LeadIntakeAttachmentInput> {
   const fileInfo = await getFile(input.attachment.fileId);
   const bytes = await downloadTelegramFile(fileInfo.file_path);
+  const analysisBytes = Uint8Array.from(bytes);
+  const uploadBytes = Uint8Array.from(bytes);
   const analysisSettings = await getAttachmentAnalysisSettings();
   const analysis =
     analysisSettings.enabled && process.env.OPENAI_API_KEY
       ? await analyzeTelegramAttachment({
           attachment: input.attachment,
-          bytes,
+          bytes: analysisBytes,
           text: input.text ?? input.message.caption ?? input.message.text ?? "",
           author: input.author ?? null,
           apiKey: process.env.OPENAI_API_KEY,
@@ -467,7 +469,7 @@ async function prepareAttachment(input: PrepareTelegramAttachmentInput): Promise
     text: input.text ?? input.message.caption ?? input.message.text ?? "",
     author: input.author ?? null,
     attachment: input.attachment,
-    bytes,
+    bytes: uploadBytes,
     summary: analysis?.summary ?? null,
     longSummary: analysis?.longSummary ?? null,
     fetchImpl: fetch

@@ -2,6 +2,29 @@
 
 All notable LightCrm releases are documented here. Starting with `0.2.0`, every version bump must include a changelog entry.
 
+## 0.3.46 - 2026-06-25
+
+### Added
+
+- Added a Client address field across the client model, API, importers, backup model, default client columns, and client create/edit flows.
+
+### Changed
+
+- Made lead Description render as wrapped multiline text in the desktop table and remain inline-editable.
+- Kept Interest, Urgency, and Todo visible/editable in lead cards while grouping Status as a quieter secondary field.
+- Updated lead mobile cards to show work fields more clearly and keep secondary lead metadata visually separated.
+- Limited lead calendar table badges to future/upcoming events and sorted them by nearest event first.
+
+### Fixed
+
+- Fixed the Leads table client dropdown so linking a client uses the dedicated `link-client` API and persists after page refresh.
+- Fixed Telegram attachment upload bytes so attachment analysis cannot detach the buffer used for the actual file upload.
+
+### Verification
+
+- Verified `POST /api/crm/leads/link-client` persists the selected client and a fresh `/api/crm/leads` read returns the updated `clientId`.
+- `pnpm --filter @lightcrm/web exec tsc -p tsconfig.check.json --noEmit`
+
 ## 0.3.45 - 2026-06-25
 
 ### Added

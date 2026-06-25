@@ -325,6 +325,7 @@ async function main() {
           phone: text(row?.Phone),
           whatsapp: null,
           company: text(row?.Type),
+          address: text(row?.Address),
           status: text(row?.Status) ?? "active",
           notes: buildClientNotes(row ?? {}, row ? [] : ["Created from lead CSV to keep lead-client links."]),
           sourceChannel: text(row?.Source) ?? "import",

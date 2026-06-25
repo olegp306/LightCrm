@@ -431,6 +431,7 @@ export function createCrmService(repository: CrmRepository) {
       phone: nullable(input.phone ?? existing?.phone),
       whatsapp: nullable(input.whatsapp ?? existing?.whatsapp),
       company: nullable(input.company ?? existing?.company),
+      address: nullable(input.address ?? existing?.address),
       status: input.status ?? existing?.status ?? "active",
       notes: nullable(input.notes ?? existing?.notes),
       sourceChannel: nullable(input.sourceChannel ?? existing?.sourceChannel),

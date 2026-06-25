@@ -32,6 +32,7 @@ export type Client = BaseRecord & {
   phone: string | null;
   whatsapp: string | null;
   company: string | null;
+  address: string | null;
   status: ClientStatus;
   notes: string | null;
   sourceChannel: string | null;
@@ -179,6 +180,7 @@ export type UpsertClientInput = {
   phone?: string | null;
   whatsapp?: string | null;
   company?: string | null;
+  address?: string | null;
   status?: ClientStatus;
   notes?: string | null;
   sourceChannel?: string | null;

@@ -21,9 +21,10 @@ export const tables: Record<string, TableDefinition> = {
       { id: "company", title: "Company", width: 180, mobilePriority: 2 },
       { id: "email", title: "Email", width: 230, mobilePriority: 3 },
       { id: "phone", title: "Phone", width: 150, mobilePriority: 4 },
-      { id: "status", title: "Status", width: 120, mobilePriority: 5 },
+      { id: "address", title: "Address", width: 220, mobilePriority: 5 },
+      { id: "status", title: "Status", width: 120, mobilePriority: 6 },
       { id: "sourceChannel", title: "Source", width: 140, defaultVisible: false },
-      { id: "notes", title: "Notes", width: 260, mobilePriority: 6 }
+      { id: "notes", title: "Notes", width: 260, mobilePriority: 7 }
     ],
     createRecord: {
       endpoint: "/api/crm/clients/upsert",
@@ -33,12 +34,13 @@ export const tables: Record<string, TableDefinition> = {
         { id: "company", label: "Company" },
         { id: "email", label: "Email" },
         { id: "phone", label: "Phone" },
+        { id: "address", label: "Address", multiline: true },
         { id: "notes", label: "Notes", multiline: true }
       ]
     },
     rows: [
-      { id: "1", values: { code: "C-2026-001", name: "Ada Lovelace", company: "Analytical Studio", email: "ada@example.com", phone: "+33 600 000 001", status: "active", sourceChannel: "referral", notes: "Prefers WhatsApp" } },
-      { id: "2", values: { code: "C-2026-002", name: "Grace Hopper", company: "Compiler Works", email: "grace@example.com", phone: "+33 600 000 002", status: "warm", sourceChannel: "website", notes: "Interested in June rollout" } }
+      { id: "1", values: { code: "C-2026-001", name: "Ada Lovelace", company: "Analytical Studio", email: "ada@example.com", phone: "+33 600 000 001", address: "Paris", status: "active", sourceChannel: "referral", notes: "Prefers WhatsApp" } },
+      { id: "2", values: { code: "C-2026-002", name: "Grace Hopper", company: "Compiler Works", email: "grace@example.com", phone: "+33 600 000 002", address: "Munich", status: "warm", sourceChannel: "website", notes: "Interested in June rollout" } }
     ]
   },
   leads: {

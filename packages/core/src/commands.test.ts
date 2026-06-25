@@ -11,13 +11,15 @@ describe("createCrmService", () => {
     const client = await crm.upsertClient({
       workspaceId: "workspace-1",
       name: "Ada Lovelace",
-      email: "ada@example.com"
+      email: "ada@example.com",
+      address: "Paris"
     });
 
     expect(client.id).toMatch(/^client_/);
     expect(client.code).toBe(`C-${currentYear}-001`);
     expect(client.status).toBe("active");
     expect(client.email).toBe("ada@example.com");
+    expect(client.address).toBe("Paris");
 
     const auditLogs = await repository.listAuditLogs("workspace-1");
     expect(auditLogs).toHaveLength(1);

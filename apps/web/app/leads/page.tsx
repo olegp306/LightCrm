@@ -14,6 +14,7 @@ export default function LeadsPage() {
       offerGenerateEndpoint="/api/crm/leads/generate-offer"
       sendToTelegramEndpoint="/api/crm/leads/send-to-telegram"
       clientOptionsEndpoint="/api/crm/clients"
+      clientLinkEndpoint="/api/crm/leads/link-client"
     />
   );
 }

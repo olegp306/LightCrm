@@ -24,6 +24,7 @@ describe("createCrmBackupModel", () => {
       phone: null,
       whatsapp: "+491234",
       company: "Watcher GmbH",
+      address: "Munich",
       status: "active",
       notes: null,
       sourceChannel: "telegram",

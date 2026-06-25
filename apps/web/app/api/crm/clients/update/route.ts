@@ -9,6 +9,7 @@ const ClientPatch = z
     phone: optionalText,
     whatsapp: optionalText,
     company: optionalText,
+    address: optionalText,
     status: z.enum(["active", "warm", "paused", "archived"]).optional(),
     notes: optionalText,
     sourceChannel: optionalText

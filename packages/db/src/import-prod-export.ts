@@ -281,6 +281,7 @@ async function main() {
           phone: text(row.phone),
           whatsapp: text(row.whatsapp),
           company: text(row.clientType),
+          address: text(row.address),
           status: text(row.status) ?? "active",
           notes: buildClientNotes(row),
           sourceChannel: text(row.source),
