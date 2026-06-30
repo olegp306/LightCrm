@@ -6,12 +6,16 @@ import {
   documentDisplayLabel,
   documentExtensionLabel,
   formatAreaValue,
+  leadProgressReward,
+  leadProgressSteps,
   nextActionStateForTodo,
   recordToRow,
   recordsToRows,
+  shouldWrapTableColumn,
   sortRows,
   toCsv,
-  updateRowCell
+  updateRowCell,
+  wrapMeasuredTextLines
 } from "./table-model";
 import type { CrmTableColumn, CrmTableRow } from "./CrmTable";
 
@@ -196,6 +200,47 @@ describe("table-model", () => {
   it("derives next action state from editable Todo text", () => {
     expect(nextActionStateForTodo("manual review")).toBe("crm");
     expect(nextActionStateForTodo("   ")).toBe("neutral");
+  });
+
+  it("detects columns that should render with wrapped table text", () => {
+    expect(shouldWrapTableColumn({ id: "client.name", title: "Client", wrapText: true })).toBe(true);
+    expect(shouldWrapTableColumn({ id: "status", title: "Status" })).toBe(false);
+  });
+
+  it("fills the final wrapped table line before reporting overflow", () => {
+    const measureTextWidth = (value: string) => value.length;
+
+    expect(wrapMeasuredTextLines("aaaa bbbb cc dd", 10, 2, measureTextWidth)).toEqual({
+      lines: ["aaaa bbbb", "cc dd"],
+      overflow: false
+    });
+    expect(wrapMeasuredTextLines("aaaa bbbb cc dd eeeeeeeee", 10, 2, measureTextWidth)).toEqual({
+      lines: ["aaaa bbbb", "cc dd"],
+      overflow: true
+    });
+  });
+
+  it("derives lead progress steps and reward from existing lead fields", () => {
+    const row: CrmTableRow = {
+      id: "lead-1",
+      values: {
+        projectName: "Villa brief",
+        "client.name": "Ada",
+        description: "New private house",
+        source: "telegram",
+        status: "contacted",
+        ball: "client",
+        budgetEur: "125000"
+      }
+    };
+
+    expect(leadProgressSteps(row).map((step) => [step.id, step.done])).toEqual([
+      ["lead-filled", true],
+      ["first-message", true],
+      ["client-replied", true],
+      ["reward", true]
+    ]);
+    expect(leadProgressReward(row, 148750)).toBe("148.750 €");
   });
 
   it("exports visible columns and sorted rows to CSV", () => {

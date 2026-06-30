@@ -3,6 +3,7 @@ node_modules
 .next-dev-*.log
 .telegram-bot*.log
 .local-storage
+.local-backups
 .superpowers
 .tmp/
 local-imports/

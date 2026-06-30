@@ -50,13 +50,13 @@ export const tables: Record<string, TableDefinition> = {
     archiveEntity: "lead",
     columns: [
       { id: "code", title: "Lead ID", width: 120, mobilePriority: 1 },
-      { id: "client.name", title: "Client", width: 190, mobilePriority: 2, group: "Client" },
-      { id: "projectName", title: "Lead name", width: 230, mobilePriority: 3 },
+      { id: "client.name", title: "Client", width: 190, mobilePriority: 2, group: "Client", wrapText: true },
+      { id: "projectName", title: "Lead name", width: 230, mobilePriority: 3, wrapText: true },
       { id: "area", title: "Area", width: 120, mobilePriority: 4, valueKind: "area" },
       { id: "description", title: "Description", width: 280, mobilePriority: 5, valueKind: "longText" },
       { id: "interest", title: "Interest", width: 120, mobilePriority: 6 },
       { id: "urgency", title: "Urgency", width: 120, mobilePriority: 7 },
-      { id: "todo", title: "Todo", width: 180 },
+      { id: "todo", title: "Todo", width: 180, wrapText: true },
       { id: "ballSide", title: "Ball", width: 96, valueKind: "handoff" },
       { id: "address", title: "Address", width: 210 },
       { id: "client.phone", title: "Phone", width: 150, group: "Client" },
@@ -92,13 +92,13 @@ export const tables: Record<string, TableDefinition> = {
       },
       fields: [
         { id: "client.name", label: "Client", required: true },
-        { id: "projectName", label: "Lead name" },
+        { id: "projectName", label: "Lead name", multiline: true },
         { id: "area", label: "Area" },
         { id: "description", label: "Description", multiline: true },
         { id: "client.phone", label: "Phone" },
         { id: "client.email", label: "Email" },
         { id: "address", label: "Address" },
-        { id: "todo", label: "Todo" }
+        { id: "todo", label: "Todo", multiline: true }
       ]
     },
     rows: [

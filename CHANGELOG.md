@@ -2,6 +2,17 @@
 
 All notable LightCrm releases are documented here. Starting with `0.2.0`, every version bump must include a changelog entry.
 
+## 0.3.48 - 2026-06-30
+
+- Added a two-row lead progress HUD prototype with cropped achievement artwork from the provided sketch.
+- Added clickable grey-to-color achievement states with glow, burst, spin, and staged feedback effects.
+- Added local per-lead progress state for testing without writing prototype achievement data to the CRM backend.
+- Added wrapped desktop table rendering for Client, Lead name, and Todo columns.
+- Fixed multiline table wrapping so the final visible line fills available width before overflow.
+- Made the selected-row Details button larger, squarer, and more visible.
+- Imported production CSV backup data into the local test database with a guarded importer and document-link report.
+- Drafted the Telegram News/touch workflow design: touch age column, News button, voice transcript to Todo, no document upload.
+
 ## 0.3.47 - 2026-06-25
 
 ### Changed

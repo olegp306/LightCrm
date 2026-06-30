@@ -181,6 +181,107 @@ export function nextActionStateForTodo(value: string): string {
   return value.trim() ? "crm" : "neutral";
 }
 
+export function shouldWrapTableColumn(column: CrmTableColumn | undefined): boolean {
+  return Boolean(column?.wrapText);
+}
+
+export function wrapMeasuredTextLines(
+  text: string,
+  maxWidth: number,
+  maxLines: number,
+  measureTextWidth: (value: string) => number
+): { lines: string[]; overflow: boolean } {
+  const words = text.replace(/\s+/g, " ").trim().split(" ").filter(Boolean);
+  const lineLimit = Math.max(1, Math.floor(maxLines));
+  if (words.length === 0) {
+    return { lines: [], overflow: false };
+  }
+  const lines: string[] = [];
+  let currentLine = "";
+  let overflow = false;
+
+  for (let index = 0; index < words.length; index += 1) {
+    const word = words[index];
+    const candidate = currentLine ? `${currentLine} ${word}` : word;
+    if (measureTextWidth(candidate) <= maxWidth || !currentLine) {
+      currentLine = candidate;
+      continue;
+    }
+    if (lines.length >= lineLimit - 1) {
+      overflow = true;
+      break;
+    }
+    lines.push(currentLine);
+    currentLine = word;
+  }
+  if (currentLine && lines.length < lineLimit) {
+    lines.push(currentLine);
+  }
+  return { lines, overflow };
+}
+
+export type LeadProgressStep = {
+  id: "lead-filled" | "first-message" | "client-replied" | "reward";
+  label: string;
+  done: boolean;
+};
+
+function cellText(value: CrmTableCellValue | undefined): string | null {
+  if (typeof value === "string" && value.trim()) {
+    return value.trim();
+  }
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return String(value);
+  }
+  return null;
+}
+
+function parseCurrencyLikeValue(value: CrmTableCellValue | undefined): number | null {
+  const text = cellText(value);
+  if (!text) {
+    return null;
+  }
+  const match = text.match(/\d[\d\s.,']*/);
+  if (!match) {
+    return null;
+  }
+  const raw = match[0].replace(/[\s']/g, "");
+  const normalized =
+    raw.includes(".") && raw.includes(",")
+      ? raw.replace(/\./g, "").replace(",", ".")
+      : raw.includes(".") && /^\d{1,3}(?:\.\d{3})+$/.test(raw)
+        ? raw.replace(/\./g, "")
+        : raw.replace(",", ".");
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+export function leadProgressReward(row: CrmTableRow, offerTotalGross?: number | null): string {
+  const value = offerTotalGross ?? parseCurrencyLikeValue(row.values.budgetEur);
+  if (!value) {
+    return "—";
+  }
+  return `${Math.round(value).toLocaleString("de-DE", { maximumFractionDigits: 0 })} €`;
+}
+
+export function leadProgressSteps(row: CrmTableRow, offerTotalGross?: number | null): LeadProgressStep[] {
+  const hasLeadIdentity = Boolean(
+    cellText(row.values.projectName) ?? cellText(row.values.name) ?? cellText(row.values["client.name"])
+  );
+  const hasLeadBrief = Boolean(cellText(row.values.description) ?? cellText(row.values.area) ?? cellText(row.values.address));
+  const status = cellText(row.values.status)?.toLocaleLowerCase() ?? "";
+  const source = cellText(row.values.source);
+  const handoffSide = cellText(row.values.ball)?.toLocaleLowerCase();
+  const hasReward = leadProgressReward(row, offerTotalGross) !== "—";
+
+  return [
+    { id: "lead-filled", label: "Lead filled", done: hasLeadIdentity && hasLeadBrief },
+    { id: "first-message", label: "First message", done: Boolean(source) || /contact|sent|message|outreach/.test(status) },
+    { id: "client-replied", label: "Client replied", done: handoffSide === "client" || /reply|respond|qualified|warm|hot/.test(status) },
+    { id: "reward", label: "Reward", done: hasReward }
+  ];
+}
+
 export function recordToRow(record: ApiRecord, columns: CrmTableColumn[]): CrmTableRow {
   return {
     id: record.id,

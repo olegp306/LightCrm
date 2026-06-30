@@ -15,7 +15,24 @@ import {
   type Item,
   type Theme
 } from "@glideapps/glide-data-grid";
-import { Check, Columns3, Download, FileText, Italic, Merge, Palette, Plus, Search, Send, Trash2, Volume2, VolumeX, X } from "lucide-react";
+import {
+  Check,
+  Columns3,
+  Download,
+  FileText,
+  Italic,
+  Merge,
+  MessageCircle,
+  Palette,
+  Plus,
+  Reply,
+  Search,
+  Send,
+  Trash2,
+  Volume2,
+  VolumeX,
+  X
+} from "lucide-react";
 import type { ChangeEvent, ComponentProps, CSSProperties, FormEvent } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -25,11 +42,14 @@ import {
   documentDisplayLabel,
   documentExtensionLabel,
   formatAreaValue,
+  leadProgressReward,
   nextActionStateForTodo,
   recordToRow,
+  shouldWrapTableColumn,
   sortRows,
   toCsv,
   updateRowCell,
+  wrapMeasuredTextLines,
   type ApiRecord,
   type ColumnTextStyle,
   type CreateRecordFieldValue,
@@ -49,6 +69,7 @@ export type CrmTableColumn = {
   mobilePriority?: number;
   group?: string;
   valueKind?: "text" | "link" | "documents" | "calendar" | "area" | "longText" | "action" | "handoff";
+  wrapText?: boolean;
   textStyle?: ColumnTextStyle;
 };
 
@@ -339,6 +360,57 @@ const handoffBallIcons: Record<HandoffBallType, string> = {
 };
 const handoffInsightIcon = "\u{1F4A1}";
 
+type LeadAchievement = {
+  id: string;
+  label: string;
+  color: string;
+  image: string;
+  effect: "soft" | "bounce" | "wiggle" | "money";
+};
+
+type LeadAchievementSet = {
+  id: string;
+  title: string;
+  achievements: LeadAchievement[];
+};
+
+const leadProgressStorageKey = "lightcrm.leadProgressDemo.v1";
+
+const leadAchievementSets: LeadAchievementSet[] = [
+  {
+    id: "funnel",
+    title: "Набор A",
+    achievements: [
+      { id: "mail-sent", label: "Письмо отправлено", color: "#f59e0b", image: "/lead-progress/01-mail-sent.png", effect: "soft" },
+      { id: "lead-replied", label: "Лид ответил", color: "#ef4444", image: "/lead-progress/02-lead-replied.png", effect: "bounce" },
+      { id: "client-written", label: "Написали клиенту", color: "#3b82f6", image: "/lead-progress/03-client-written.png", effect: "wiggle" },
+      { id: "proposal-sent", label: "КП отправлено", color: "#8b5cf6", image: "/lead-progress/04-proposal-sent.png", effect: "bounce" },
+      { id: "proposal-reworked", label: "КП доработано", color: "#06b6d4", image: "/lead-progress/05-proposal-reworked.png", effect: "wiggle" },
+      { id: "meeting-booked", label: "Встреча назначена", color: "#22c55e", image: "/lead-progress/06-meeting-booked.png", effect: "bounce" },
+      { id: "call-done", label: "Созвон состоялся", color: "#14b8a6", image: "/lead-progress/07-call-done.png", effect: "wiggle" },
+      { id: "client-agreed", label: "Клиент согласился", color: "#ec4899", image: "/lead-progress/08-client-agreed.png", effect: "bounce" },
+      { id: "client-thanks", label: "Спасибо от клиента", color: "#f97316", image: "/lead-progress/09-client-thanks.png", effect: "bounce" },
+      { id: "money-received", label: "Деньги получены", color: "#eab308", image: "/lead-progress/10-money-received.png", effect: "money" }
+    ]
+  },
+  {
+    id: "momentum",
+    title: "Набор B",
+    achievements: [
+      { id: "needs-detail", label: "Нужно уточнение", color: "#64748b", image: "/lead-progress/11-needs-detail.png", effect: "soft" },
+      { id: "deep-work", label: "Упорная работа", color: "#7c3aed", image: "/lead-progress/12-deep-work.png", effect: "wiggle" },
+      { id: "study-details", label: "Изучаю детали", color: "#0ea5e9", image: "/lead-progress/13-study-details.png", effect: "wiggle" },
+      { id: "in-progress", label: "В работе", color: "#2563eb", image: "/lead-progress/14-in-progress.png", effect: "bounce" },
+      { id: "almost-ready", label: "Почти готово", color: "#f59e0b", image: "/lead-progress/15-almost-ready.png", effect: "bounce" },
+      { id: "great-work", label: "Отличная работа!", color: "#f97316", image: "/lead-progress/16-great-work.png", effect: "bounce" },
+      { id: "under-control", label: "Всё под контролем", color: "#111827", image: "/lead-progress/17-under-control.png", effect: "soft" },
+      { id: "new-task", label: "Новая задача", color: "#eab308", image: "/lead-progress/18-new-task.png", effect: "bounce" },
+      { id: "good-news", label: "Отличные новости!", color: "#ef4444", image: "/lead-progress/19-good-news.png", effect: "wiggle" },
+      { id: "money-received-alt", label: "Деньги получены!", color: "#16a34a", image: "/lead-progress/20-money-received-alt.png", effect: "money" }
+    ]
+  }
+];
+
 function normalizedHandoffSide(value: CrmTableCellValue | undefined): "us" | "client" {
   const text = typeof value === "string" ? value.trim().toLowerCase() : "";
   return text === "client" || text === "customer" || text === "them" ? "client" : "us";
@@ -552,7 +624,7 @@ function fontSizeFromTheme(theme: { baseFontStyle?: string }, fallback: number):
 }
 
 function isInlineLongTextColumn(column: CrmTableColumn | undefined): boolean {
-  return column?.id === "description";
+  return shouldWrapTableColumn(column) || column?.id === "description";
 }
 
 function isWrappedAddressColumn(column: CrmTableColumn | undefined): boolean {
@@ -560,32 +632,7 @@ function isWrappedAddressColumn(column: CrmTableColumn | undefined): boolean {
 }
 
 function wrappedCanvasLines(ctx: CanvasRenderingContext2D, text: string, maxWidth: number, maxLines: number): { lines: string[]; overflow: boolean } {
-  const words = text.replace(/\s+/g, " ").trim().split(" ").filter(Boolean);
-  if (words.length === 0) {
-    return { lines: [], overflow: false };
-  }
-  const lines: string[] = [];
-  let currentLine = "";
-  let overflow = false;
-
-  for (let index = 0; index < words.length; index += 1) {
-    const word = words[index];
-    const candidate = currentLine ? `${currentLine} ${word}` : word;
-    if (ctx.measureText(candidate).width <= maxWidth || !currentLine) {
-      currentLine = candidate;
-      continue;
-    }
-    lines.push(currentLine);
-    currentLine = word;
-    if (lines.length === maxLines - 1) {
-      overflow = index < words.length - 1 || ctx.measureText(currentLine).width > maxWidth;
-      break;
-    }
-  }
-  if (currentLine && lines.length < maxLines) {
-    lines.push(currentLine);
-  }
-  return { lines, overflow };
+  return wrapMeasuredTextLines(text, maxWidth, maxLines, (value) => ctx.measureText(value).width);
 }
 
 function fitTextWithEllipsis(ctx: CanvasRenderingContext2D, text: string, maxWidth: number): string {
@@ -2027,6 +2074,9 @@ export function CrmTable({
   const [selectedOutreachOutcome, setSelectedOutreachOutcome] = useState("interested");
   const [outreachCampaignError, setOutreachCampaignError] = useState<string | null>(null);
   const [isSendingToTelegram, setIsSendingToTelegram] = useState(false);
+  const [leadProgressMarks, setLeadProgressMarks] = useState<Record<string, Record<string, boolean>>>({});
+  const [leadProgressMarksLoaded, setLeadProgressMarksLoaded] = useState(false);
+  const [leadProgressBursts, setLeadProgressBursts] = useState<Record<string, number>>({});
   const [telegramSendNotice, setTelegramSendNotice] = useState<string | null>(null);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [createValues, setCreateValues] = useState<Record<string, string>>({});
@@ -2201,6 +2251,24 @@ export function CrmTable({
   }, [loadedPreferencesKey, preferences, storageKey]);
 
   useEffect(() => {
+    try {
+      const saved = window.localStorage.getItem(leadProgressStorageKey);
+      setLeadProgressMarks(saved ? (JSON.parse(saved) as Record<string, Record<string, boolean>>) : {});
+    } catch {
+      setLeadProgressMarks({});
+    } finally {
+      setLeadProgressMarksLoaded(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!leadProgressMarksLoaded) {
+      return;
+    }
+    window.localStorage.setItem(leadProgressStorageKey, JSON.stringify(leadProgressMarks));
+  }, [leadProgressMarks, leadProgressMarksLoaded]);
+
+  useEffect(() => {
     if (tableKey === "clients") {
       setLinkedTableColor(tableColor);
       return;
@@ -2349,6 +2417,12 @@ export function CrmTable({
         feeRows: offerFeeRows
       })
     : { status: "missing" as const, reason: "Open a lead to calculate offer" };
+  const detailsLeadProgressTotalGross =
+    "totalGross" in detailsOfferPreview && typeof detailsOfferPreview.totalGross === "number"
+      ? detailsOfferPreview.totalGross
+      : null;
+  const detailsLeadProgressReward = detailsPanelRow ? leadProgressReward(detailsPanelRow, detailsLeadProgressTotalGross) : "—";
+  const detailsLeadAchievementMarks = detailsPanelRow ? leadProgressMarks[detailsPanelRow.id] ?? {} : {};
   const selectedOutreachCampaign =
     outreachCampaigns.find((campaign) => campaign.id === selectedOutreachCampaignId) ??
     outreachCampaigns.find((campaign) => campaign.status === "active") ??
@@ -2910,6 +2984,67 @@ export function CrmTable({
       // Audio feedback is intentionally best-effort.
     }
   }, [preferences.handoffBall, preferences.handoffSoundEnabled]);
+
+  const playLeadAchievementSound = useCallback((achievement: LeadAchievement, enabled: boolean) => {
+    try {
+      if (preferences.handoffSoundEnabled === false) {
+        return;
+      }
+      const playPreset = (ballType: HandoffBallType, delayMs: number, volume: number) => {
+        window.setTimeout(() => {
+          try {
+            const audio = new Audio(handoffSoundPresets[ballType].src);
+            audio.volume = volume;
+            void audio.play();
+          } catch {
+            // Audio feedback is intentionally best-effort.
+          }
+        }, delayMs);
+      };
+      if (!enabled) {
+        playPreset("potato", 0, 0.18);
+        return;
+      }
+      if (achievement.effect === "money") {
+        playPreset("potato", 0, 0.28);
+        playPreset("basketball", 130, 0.34);
+        playPreset("football", 260, 0.38);
+        return;
+      }
+      if (achievement.effect === "wiggle") {
+        playPreset("volleyball", 0, 0.26);
+        playPreset("potato", 135, 0.2);
+        return;
+      }
+      playPreset(achievement.effect === "bounce" ? "basketball" : "potato", 0, achievement.effect === "bounce" ? 0.28 : 0.2);
+    } catch {
+      // Audio feedback is intentionally best-effort.
+    }
+  }, [preferences.handoffSoundEnabled]);
+
+  const toggleLeadAchievement = useCallback((rowId: string, achievement: LeadAchievement, isActive: boolean) => {
+    const willTurnOn = !isActive;
+    const burstKey = `${rowId}:${achievement.id}`;
+    setLeadProgressMarks((current) => {
+      const currentRow = current[rowId] ?? {};
+      return {
+        ...current,
+        [rowId]: {
+          ...currentRow,
+          [achievement.id]: willTurnOn
+        }
+      };
+    });
+    setLeadProgressBursts((current) => ({ ...current, [burstKey]: Date.now() }));
+    window.setTimeout(() => {
+      setLeadProgressBursts((current) => {
+        const next = { ...current };
+        delete next[burstKey];
+        return next;
+      });
+    }, achievement.effect === "money" ? 1100 : 820);
+    playLeadAchievementSound(achievement, willTurnOn);
+  }, [playLeadAchievementSound]);
 
   const setDetailsValue = useCallback((columnId: string, value: string) => {
     setDetailsPanel((current) =>
@@ -3918,7 +4053,7 @@ export function CrmTable({
         return;
       }
 
-      if (isInlineLongTextColumn(column) && args.cell.kind === GridCellKind.Text) {
+      if (args.cell.kind === GridCellKind.Text && (isInlineLongTextColumn(column) || isWrappedAddressColumn(column))) {
         const text = args.cell.displayData || args.cell.data || "";
         const mutableCell = args.cell as typeof args.cell & { displayData?: string; data?: string };
         const originalDisplayData = mutableCell.displayData;
@@ -3928,30 +4063,21 @@ export function CrmTable({
         drawContent();
         mutableCell.displayData = originalDisplayData;
         mutableCell.data = originalData;
-        drawWrappedTextCell(args, text);
+        drawWrappedTextCell(
+          args,
+          text,
+          isWrappedAddressColumn(column) ? { maxLines: 2, ellipsis: true } : undefined
+        );
         drawSearchMatchHighlight(args, query, isDarkMode);
-        return;
-      }
-
-      if (isWrappedAddressColumn(column) && args.cell.kind === GridCellKind.Text) {
-        const text = args.cell.displayData || args.cell.data || "";
-        const mutableCell = args.cell as typeof args.cell & { displayData?: string; data?: string };
-        const originalDisplayData = mutableCell.displayData;
-        const originalData = mutableCell.data;
-        mutableCell.displayData = "";
-        mutableCell.data = "";
+        if (column?.group !== "Client") {
+          return;
+        }
+      } else {
         drawContent();
-        mutableCell.displayData = originalDisplayData;
-        mutableCell.data = originalData;
-        drawWrappedTextCell(args, text, { maxLines: 2, ellipsis: true });
         drawSearchMatchHighlight(args, query, isDarkMode);
-        return;
-      }
-
-      drawContent();
-      drawSearchMatchHighlight(args, query, isDarkMode);
-      if (column?.group !== "Client") {
-        return;
+        if (column?.group !== "Client") {
+          return;
+        }
       }
 
       const { ctx, rect } = args;
@@ -5434,6 +5560,44 @@ export function CrmTable({
               </button>
             </header>
 
+            {isLeadTable ? (
+              <section className="leadProgressHud" aria-label="Lead progress">
+                <div className="leadProgressSets">
+                  {leadAchievementSets.map((set) => (
+                    <div className="leadProgressSet" key={set.id}>
+                      <span className="leadProgressSetTitle">{set.title}</span>
+                      <div className="leadProgressTrack">
+                        {set.achievements.map((achievement) => {
+                          const isActive = Boolean(detailsLeadAchievementMarks[achievement.id]);
+                          const burstKey = detailsPanelRow ? `${detailsPanelRow.id}:${achievement.id}` : "";
+                          const isBursting = Boolean(burstKey && leadProgressBursts[burstKey]);
+                          return (
+                            <button
+                              type="button"
+                              className={`leadProgressStep effect-${achievement.effect}${isActive ? " done" : ""}${isBursting ? " burst" : ""}`}
+                              key={achievement.id}
+                              aria-pressed={isActive}
+                              style={{ "--achievement-color": achievement.color } as CSSProperties}
+                              onClick={() => detailsPanelRow && toggleLeadAchievement(detailsPanelRow.id, achievement, isActive)}
+                            >
+                              <span className="leadProgressIcon" aria-hidden="true">
+                                <img src={achievement.image} alt="" draggable={false} />
+                              </span>
+                              <span className="leadProgressLabel">{achievement.label}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <div className={`leadProgressReward${detailsLeadProgressReward !== "—" ? " ready" : ""}`}>
+                  <span>Reward</span>
+                  <strong>{detailsLeadProgressReward}</strong>
+                </div>
+              </section>
+            ) : null}
+
             <div
               className={`detailsDrawerBody${hasDetailsSideSections ? "" : " single"}${isLeadTable ? " lead" : ""}${isColdTargetTable ? " coldTarget" : ""}`}
             >
@@ -6447,5 +6611,3 @@ export function CrmTable({
     </section>
   );
 }
-
-
