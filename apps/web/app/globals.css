@@ -264,28 +264,28 @@ input {
 
 .sidebarUser {
   display: inline-flex;
+  justify-content: flex-start;
   min-width: 0;
 }
 
 .sidebarUser button {
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--panel-subtle) 76%, var(--panel));
+  background: transparent;
+  border: 0;
+  border-radius: 0;
   color: var(--muted);
   cursor: pointer;
   display: inline-flex;
   gap: 5px;
   max-width: 100%;
-  min-height: 26px;
   font-size: 12px;
-  line-height: 1;
-  padding: 6px 8px;
+  line-height: 1.15;
+  min-height: 0;
+  padding: 0;
+  text-align: left;
 }
 
 .sidebarUser button:hover {
-  background: var(--panel);
-  border-color: color-mix(in srgb, var(--muted) 38%, var(--line));
-  color: var(--ink-soft);
+  color: var(--accent);
 }
 
 .sidebarUser button span {
@@ -6418,7 +6418,7 @@ input {
     gap: 12px;
     justify-content: flex-start;
     margin-bottom: 12px;
-    padding-right: 118px;
+    padding-right: 92px;
   }
 
   .brand a {
@@ -6426,19 +6426,16 @@ input {
   }
 
   .sidebarUser {
-    flex: 1 1 auto;
-    justify-content: flex-start;
+    justify-content: flex-end;
     min-width: 0;
   }
 
   .sidebarUser button {
-    max-width: min(150px, 100%);
-    min-height: 24px;
-    padding: 5px 7px;
+    max-width: min(132px, 100%);
   }
 
   .sidebarUser button b {
-    max-width: 78px;
+    max-width: 74px;
   }
 
   .sidebarFooter {
@@ -6459,7 +6456,9 @@ input {
 
   .sidebarBottom {
     border-top: 0;
+    align-items: end;
     grid-column: 3;
+    justify-items: end;
     justify-self: end;
     margin-top: 0;
     pointer-events: auto;

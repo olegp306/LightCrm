@@ -2,6 +2,12 @@
 
 All notable LightCrm releases are documented here. Starting with `0.2.0`, every version bump must include a changelog entry.
 
+## 0.3.52 - 2026-07-02
+
+- Moved the signed-in logout/account action into the lower sidebar controls above Light Mode.
+- Restyled logout as a quiet text action without a pill border or button background.
+- Tightened the mobile header spacing now that logout no longer lives beside the LightCrm brand.
+
 ## 0.3.51 - 2026-07-02
 
 - Standardized the production canonical URL as `https://lightcrm.204-168-163-99.sslip.io`.

@@ -77,14 +77,6 @@ export default async function RootLayout({ children }: { children: React.ReactNo
                 <span>v{appPackage.version}</span>
               </Link>
               {environmentBadge ? <div className="environmentBadge">{environmentBadge}</div> : null}
-              {session ? (
-                <form className="sidebarUser" action="/api/auth/logout" method="post" title={session.email}>
-                  <button type="submit">
-                    <span>Logout</span>
-                    <b>{accountLabel(session.email)}</b>
-                  </button>
-                </form>
-              ) : null}
             </div>
             <nav className="nav" aria-label="CRM navigation">
               <div className="navPrimary" aria-label="Operator workspace">
@@ -118,6 +110,14 @@ export default async function RootLayout({ children }: { children: React.ReactNo
                 <BackupButton />
               </div>
               <div className="sidebarBottom">
+                {session ? (
+                  <form className="sidebarUser" action="/api/auth/logout" method="post" title={session.email}>
+                    <button type="submit">
+                      <span>Logout</span>
+                      <b>{accountLabel(session.email)}</b>
+                    </button>
+                  </form>
+                ) : null}
                 <ThemeToggle />
               </div>
             </div>
