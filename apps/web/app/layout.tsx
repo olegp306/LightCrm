@@ -1,7 +1,9 @@
 import type { Metadata } from "next";
+import { cookies } from "next/headers";
 import Link from "next/link";
 import { CalendarDays, FileText, Folders, Megaphone, MoreHorizontal, Send, Settings, UsersRound, type LucideIcon } from "lucide-react";
 import appPackage from "../package.json";
+import { authSessionCookieName, readSessionCookieValue } from "../auth/session";
 import { BackupButton } from "./components/BackupButton";
 import { ThemeToggle } from "./components/ThemeToggle";
 import "./globals.css";
@@ -48,8 +50,13 @@ function getEnvironmentBadge() {
   return null;
 }
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+function accountLabel(email: string) {
+  return email.split("@")[0] || email;
+}
+
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const environmentBadge = getEnvironmentBadge();
+  const session = await readSessionCookieValue(cookies().get(authSessionCookieName)?.value);
 
   return (
     <html lang="en" suppressHydrationWarning>
@@ -70,6 +77,14 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                 <span>v{appPackage.version}</span>
               </Link>
               {environmentBadge ? <div className="environmentBadge">{environmentBadge}</div> : null}
+              {session ? (
+                <form className="sidebarUser" action="/api/auth/logout" method="post" title={session.email}>
+                  <button type="submit">
+                    <span>Logout</span>
+                    <b>{accountLabel(session.email)}</b>
+                  </button>
+                </form>
+              ) : null}
             </div>
             <nav className="nav" aria-label="CRM navigation">
               <div className="navPrimary" aria-label="Operator workspace">

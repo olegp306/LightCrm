@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { handleRouteError, resolveWorkspaceId } from "../../_shared";
 import { getCrmRuntimeSettings } from "../../settings/crm-settings-store";
-import { draftForCampaign } from "../draft-generator";
+import { draftForCampaign, ensureEmailSignature } from "../draft-generator";
 
 export const dynamic = "force-dynamic";
 
@@ -21,6 +21,28 @@ function addDays(value: Date, days: number) {
   return next;
 }
 
+function draftIdentity(campaignId: string, touchId: string) {
+  return `Campaign: ${campaignId}\nTouch: ${touchId}`;
+}
+
+function draftDescription(input: {
+  campaignName: string;
+  campaignId: string;
+  touchId: string;
+  action: string;
+  subject: string;
+  body: string;
+}) {
+  return [
+    input.campaignName,
+    draftIdentity(input.campaignId, input.touchId),
+    input.action,
+    input.subject ? `Subject: ${input.subject}` : null,
+    input.body ? `Draft:\n${input.body}` : null
+  ]
+    .filter(Boolean)
+    .join("\n\n");
+}
 
 function calendarItemForReminder(reminder: {
   id: string;
@@ -74,16 +96,7 @@ export async function POST(request: Request) {
 
     const dueAt = addDays(new Date(), touch.dayOffset);
     dueAt.setHours(9, 0, 0, 0);
-    const draft = draftForCampaign(campaign, coldTarget, touch, settings.outreachCampaigns.emailSignature);
     const title = `Touch ${touch.touchNumber}: ${touch.title} - ${coldTarget.company || coldTarget.name}`;
-    const description = [
-      campaign.name,
-      touch.action,
-      draft.subject ? `Subject: ${draft.subject}` : null,
-      draft.body ? `Draft:\n${draft.body}` : null
-    ]
-      .filter(Boolean)
-      .join("\n\n");
 
     const existingReminder = await prisma.reminder.findFirst({
       where: {
@@ -91,6 +104,7 @@ export async function POST(request: Request) {
         coldTargetId: coldTarget.id,
         title,
         sourceChannel: "outreach-campaign",
+        description: { contains: draftIdentity(campaign.id, touch.id) },
         archivedAt: null
       },
       orderBy: [{ dueAt: "asc" }]
@@ -98,23 +112,33 @@ export async function POST(request: Request) {
     if (existingReminder && !input.force) {
       const savedSubject = draftSubjectFromDescription(existingReminder.description);
       const savedBody = draftBodyFromDescription(existingReminder.description);
+      const body = touch.channel === "email"
+        ? ensureEmailSignature(savedBody, settings.outreachCampaigns.emailSignature)
+        : savedBody;
       return NextResponse.json({
         draft: {
           reminderId: existingReminder.id,
-          subject: savedSubject || draft.subject,
-          body: savedBody || draft.body,
+          subject: savedSubject,
+          body,
           channel: touch.channel,
           dueAt: existingReminder.dueAt.toISOString(),
           status: existingReminder.status,
           action: touch.action,
           email: coldTarget.email,
-          personaHook: draft.personaHook,
-          promptApplied: draft.promptApplied,
           recreated: false
         },
         calendarItem: calendarItemForReminder(existingReminder, coldTarget.id)
       });
     }
+    const draft = draftForCampaign(campaign, coldTarget, touch, settings.outreachCampaigns.emailSignature);
+    const description = draftDescription({
+      campaignName: campaign.name,
+      campaignId: campaign.id,
+      touchId: touch.id,
+      action: touch.action,
+      subject: draft.subject,
+      body: draft.body
+    });
     const reminder = existingReminder
       ? await prisma.reminder.update({
           where: { id: existingReminder.id },
@@ -152,6 +176,4 @@ export async function POST(request: Request) {
     return handleRouteError(error);
   }
 }
-
-
 

@@ -107,6 +107,9 @@ input {
 }
 
 .brand {
+  align-items: flex-start;
+  display: grid;
+  gap: 10px;
   margin-bottom: 28px;
 }
 
@@ -259,6 +262,46 @@ input {
   padding-top: 14px;
 }
 
+.sidebarUser {
+  display: inline-flex;
+  min-width: 0;
+}
+
+.sidebarUser button {
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--panel-subtle) 76%, var(--panel));
+  color: var(--muted);
+  cursor: pointer;
+  display: inline-flex;
+  gap: 5px;
+  max-width: 100%;
+  min-height: 26px;
+  font-size: 12px;
+  line-height: 1;
+  padding: 6px 8px;
+}
+
+.sidebarUser button:hover {
+  background: var(--panel);
+  border-color: color-mix(in srgb, var(--muted) 38%, var(--line));
+  color: var(--ink-soft);
+}
+
+.sidebarUser button span {
+  flex: 0 0 auto;
+}
+
+.sidebarUser button b {
+  display: inline-block;
+  font-weight: 700;
+  max-width: 112px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .mainShell {
   display: grid;
   grid-template-rows: minmax(0, 1fr);
@@ -375,6 +418,106 @@ input {
   color: var(--muted);
   margin: 0;
   max-width: 760px;
+}
+
+.loginPanel {
+  align-items: center;
+  display: grid;
+  min-height: calc(100vh - 44px);
+}
+
+.loginCard {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: grid;
+  gap: 18px;
+  max-width: 460px;
+  padding: 26px;
+  background: var(--panel);
+  box-shadow: 0 20px 60px rgba(15, 23, 42, 0.08);
+}
+
+.loginEyebrow {
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0;
+  margin: 0 0 8px;
+  text-transform: uppercase;
+}
+
+.loginCard h1 {
+  font-size: 28px;
+  line-height: 1.1;
+  margin: 0 0 8px;
+}
+
+.loginCard p {
+  color: var(--muted);
+  margin: 0;
+}
+
+.loginButton {
+  align-items: center;
+  background: #2563eb;
+  border-radius: 6px;
+  box-shadow: 0 10px 24px rgba(37, 99, 235, 0.28);
+  color: #ffffff;
+  display: inline-flex;
+  font-weight: 800;
+  gap: 10px;
+  justify-content: center;
+  min-height: 48px;
+  padding: 13px 18px;
+  transition:
+    background 0.16s ease,
+    box-shadow 0.16s ease,
+    transform 0.16s ease;
+}
+
+.loginButton:hover {
+  background: #1d4ed8;
+  box-shadow: 0 14px 30px rgba(37, 99, 235, 0.34);
+  transform: translateY(-1px);
+}
+
+.loginButton:focus-visible {
+  outline: 3px solid rgba(37, 99, 235, 0.28);
+  outline-offset: 3px;
+}
+
+.loginError {
+  border: 1px solid var(--danger);
+  border-radius: 6px;
+  background: var(--danger-soft);
+  color: var(--danger);
+  font-size: 13px;
+  padding: 10px 12px;
+}
+
+.loginConfigWarning {
+  border: 1px solid var(--warn);
+  border-radius: 6px;
+  background: var(--warn-soft);
+  color: var(--warn);
+  display: grid;
+  font-size: 13px;
+  gap: 8px;
+  padding: 10px 12px;
+}
+
+.loginConfigWarning code {
+  color: var(--ink-soft);
+  overflow-wrap: anywhere;
+}
+
+.loginAllowedList {
+  color: var(--muted);
+  display: grid;
+  font-size: 13px;
+  gap: 6px;
+  margin: 0;
+  padding-left: 18px;
 }
 
 .calendarPage {
@@ -3995,9 +4138,46 @@ input {
 }
 
 .detailsOutreachDraftActions {
+  align-items: center;
   display: grid;
   gap: 6px;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: minmax(92px, auto) repeat(3, minmax(0, 1fr));
+}
+
+.detailsOutreachAutosave {
+  align-items: center;
+  background: color-mix(in srgb, var(--control) 86%, var(--accent));
+  border: 1px solid color-mix(in srgb, var(--line) 72%, var(--accent));
+  border-radius: 6px;
+  color: var(--muted);
+  display: inline-flex;
+  font-size: calc(12px * var(--table-font-scale, 1));
+  font-weight: 800;
+  justify-content: center;
+  min-height: 30px;
+  padding: 5px 8px;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.detailsOutreachAutosave-dirty,
+.detailsOutreachAutosave-saving {
+  background: color-mix(in srgb, #4fb477 18%, var(--control));
+  border-color: color-mix(in srgb, #4fb477 48%, var(--line));
+  color: #27724a;
+}
+
+.detailsOutreachAutosave-saved {
+  background: color-mix(in srgb, #4fb477 24%, var(--control));
+  border-color: color-mix(in srgb, #4fb477 62%, var(--line));
+  box-shadow: 0 0 0 2px color-mix(in srgb, #4fb477 12%, transparent);
+  color: #1f6f42;
+}
+
+.detailsOutreachAutosave-error {
+  background: color-mix(in srgb, #d64f4f 16%, var(--control));
+  border-color: color-mix(in srgb, #d64f4f 48%, var(--line));
+  color: #9b2f2f;
 }
 
 .detailsOutreachDraft textarea {
@@ -6236,9 +6416,29 @@ input {
     align-items: center;
     display: flex;
     gap: 12px;
-    justify-content: space-between;
+    justify-content: flex-start;
     margin-bottom: 12px;
     padding-right: 118px;
+  }
+
+  .brand a {
+    flex: 0 0 auto;
+  }
+
+  .sidebarUser {
+    flex: 1 1 auto;
+    justify-content: flex-start;
+    min-width: 0;
+  }
+
+  .sidebarUser button {
+    max-width: min(150px, 100%);
+    min-height: 24px;
+    padding: 5px 7px;
+  }
+
+  .sidebarUser button b {
+    max-width: 78px;
   }
 
   .sidebarFooter {

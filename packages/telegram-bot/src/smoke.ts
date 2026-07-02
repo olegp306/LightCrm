@@ -35,6 +35,11 @@ function crmApiBase(): string {
   return (process.env.LIGHTCRM_API_BASE ?? "http://localhost:4900").replace(/\/$/, "");
 }
 
+function crmAuthHeaders(): HeadersInit {
+  const token = process.env.LIGHTCRM_INTERNAL_API_TOKEN;
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
 async function telegramCall<T>(token: string, method: string): Promise<T> {
   const response = await fetch(`https://api.telegram.org/bot${token}/${method}`);
   const payload = (await response.json()) as TelegramResponse<T>;
@@ -45,7 +50,7 @@ async function telegramCall<T>(token: string, method: string): Promise<T> {
 }
 
 async function crmGet(path: string): Promise<unknown> {
-  const response = await fetch(`${crmApiBase()}${path}`);
+  const response = await fetch(`${crmApiBase()}${path}`, { headers: crmAuthHeaders() });
   const text = await response.text();
   if (!response.ok) {
     throw new Error(`CRM ${path} failed with ${response.status}: ${text.slice(0, 160)}`);

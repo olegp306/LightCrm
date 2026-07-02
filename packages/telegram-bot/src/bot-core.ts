@@ -109,6 +109,7 @@ export type PrepareTelegramAttachmentInput = {
 
 export type UploadTelegramAttachmentToWebInput = {
   crmApiBase: string;
+  crmApiToken?: string | null;
   workspaceId: string;
   leadId: string;
   sourceChannel: string;
@@ -755,6 +756,7 @@ export async function uploadTelegramAttachmentToWeb(
   const fetchImpl = input.fetchImpl ?? fetch;
   const response = await fetchImpl(`${input.crmApiBase.replace(/\/$/, "")}/api/crm/lead-intake/upload`, {
     method: "POST",
+    ...(input.crmApiToken ? { headers: { Authorization: `Bearer ${input.crmApiToken}` } } : {}),
     body: form
   });
   const payload = (await response.json()) as LeadIntakeUploadResponse & { error?: string };

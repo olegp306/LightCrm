@@ -57,6 +57,10 @@ import {
   type TablePreferences,
   type TableSort
 } from "./table-model";
+import {
+  autosaveLabelForDraft,
+  shouldSaveOutreachDraft
+} from "./outreach-draft-autosave";
 import { darkTableTheme, lightTableTheme, scaledTableTheme } from "./table-theme";
 
 type DrawCellArgs = Parameters<NonNullable<ComponentProps<typeof DataEditor>["drawCell"]>>[0];
@@ -300,6 +304,9 @@ type OutreachDraftState = {
   email: string | null;
   loading: boolean;
   saving?: boolean;
+  dirty?: boolean;
+  savedSubject?: string | null;
+  savedBody?: string | null;
   error: string | null;
   message?: string | null;
   personaHook?: string;
@@ -2105,10 +2112,23 @@ export function CrmTable({
   >({});
   const lastHandoffClickRef = useRef<{ key: string; at: number } | null>(null);
   const initialDetailsOpenedRef = useRef<string | null>(null);
+  const outreachDraftsRef = useRef(outreachDrafts);
+  const outreachDraftAutosaveTimersRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   const updateRecordIdPayload = useCallback(
     (rowId: string) => ({ [updateRecordIdField]: rowId }),
     [updateRecordIdField]
   );
+
+  useEffect(() => {
+    outreachDraftsRef.current = outreachDrafts;
+  }, [outreachDrafts]);
+
+  useEffect(() => {
+    const timers = outreachDraftAutosaveTimersRef.current;
+    return () => {
+      Object.values(timers).forEach((timer) => clearTimeout(timer));
+    };
+  }, []);
 
   useEffect(() => {
     if (!showColumnMenu && !showHandoffMenu) {
@@ -4344,6 +4364,9 @@ export function CrmTable({
           email: existing?.email ?? null,
           loading: true,
           saving: false,
+          dirty: existing?.dirty ?? false,
+          savedSubject: existing?.savedSubject ?? existing?.subject ?? "",
+          savedBody: existing?.savedBody ?? existing?.body ?? "",
           message: null,
           error: null
         }
@@ -4374,6 +4397,9 @@ export function CrmTable({
           [key]: {
             ...draft,
             loading: false,
+            dirty: false,
+            savedSubject: draft.subject,
+            savedBody: draft.body,
             error: null
           }
         }));
@@ -4392,6 +4418,9 @@ export function CrmTable({
             email: existing?.email ?? null,
             loading: false,
             saving: false,
+            dirty: existing?.dirty ?? false,
+            savedSubject: existing?.savedSubject ?? existing?.subject ?? "",
+            savedBody: existing?.savedBody ?? existing?.body ?? "",
             message: null,
             error: reason instanceof Error ? reason.message : "Draft creation failed."
           }
@@ -4419,9 +4448,20 @@ export function CrmTable({
       if (!detailsPanelRow || !selectedOutreachCampaign || !outreachDraftEndpoint) {
         return;
       }
-      const draft = outreachDrafts[key] ? { ...outreachDrafts[key], ...patch } : undefined;
+      const draft = outreachDraftsRef.current[key] ? { ...outreachDraftsRef.current[key], ...patch } : undefined;
       if (!draft?.reminderId) {
         updateOutreachDraftForDetailsRow(key, { error: "Open this touch before saving the draft." });
+        return;
+      }
+      if (
+        !shouldSaveOutreachDraft({
+          subject: draft.subject,
+          body: draft.body,
+          savedSubject: draft.savedSubject,
+          savedBody: draft.savedBody
+        })
+      ) {
+        updateOutreachDraftForDetailsRow(key, { dirty: false, saving: false, error: null, message: "Saved" });
         return;
       }
       const updateEndpoint = `${outreachDraftEndpoint.replace(/\/$/, "")}/update`;
@@ -4443,12 +4483,27 @@ export function CrmTable({
         if (!response.ok) {
           throw new Error(payload.error ?? "Draft save failed.");
         }
-        updateOutreachDraftForDetailsRow(key, {
-          subject: payload.outreach?.subject ?? draft.subject,
-          body: payload.outreach?.body ?? draft.body,
-          saving: false,
-          error: null,
-          message: "Saved"
+        const savedSubject = payload.outreach?.subject ?? draft.subject;
+        const savedBody = payload.outreach?.body ?? draft.body;
+        setOutreachDrafts((current) => {
+          const currentDraft = current[key];
+          if (!currentDraft) {
+            return current;
+          }
+          const responseMatchesCurrentText = currentDraft.subject === draft.subject && currentDraft.body === draft.body;
+          return {
+            ...current,
+            [key]: {
+              ...currentDraft,
+              ...(responseMatchesCurrentText ? { subject: savedSubject, body: savedBody } : {}),
+              savedSubject,
+              savedBody,
+              dirty: !responseMatchesCurrentText,
+              saving: false,
+              error: null,
+              message: responseMatchesCurrentText ? "Saved" : null
+            }
+          };
         });
       } catch (reason) {
         updateOutreachDraftForDetailsRow(key, {
@@ -4457,7 +4512,47 @@ export function CrmTable({
         });
       }
     },
-    [detailsPanelRow, outreachDraftEndpoint, outreachDrafts, selectedOutreachCampaign, updateOutreachDraftForDetailsRow]
+    [detailsPanelRow, outreachDraftEndpoint, selectedOutreachCampaign, updateOutreachDraftForDetailsRow]
+  );
+
+  const clearOutreachDraftAutosave = useCallback((key: string) => {
+    const timer = outreachDraftAutosaveTimersRef.current[key];
+    if (timer) {
+      clearTimeout(timer);
+      delete outreachDraftAutosaveTimersRef.current[key];
+    }
+  }, []);
+
+  const scheduleOutreachDraftAutosave = useCallback(
+    (key: string, patch: Partial<Pick<OutreachDraftState, "subject" | "body">>) => {
+      clearOutreachDraftAutosave(key);
+      outreachDraftAutosaveTimersRef.current[key] = setTimeout(() => {
+        delete outreachDraftAutosaveTimersRef.current[key];
+        void saveOutreachDraftForDetailsRow(key, patch);
+      }, 700);
+    },
+    [clearOutreachDraftAutosave, saveOutreachDraftForDetailsRow]
+  );
+
+  const editOutreachDraftForDetailsRow = useCallback(
+    (key: string, patch: Partial<Pick<OutreachDraftState, "subject" | "body">>) => {
+      updateOutreachDraftForDetailsRow(key, {
+        ...patch,
+        dirty: true,
+        error: null,
+        message: null
+      });
+      scheduleOutreachDraftAutosave(key, patch);
+    },
+    [scheduleOutreachDraftAutosave, updateOutreachDraftForDetailsRow]
+  );
+
+  const saveOutreachDraftImmediately = useCallback(
+    (key: string, patch?: Partial<Pick<OutreachDraftState, "subject" | "body">>) => {
+      clearOutreachDraftAutosave(key);
+      void saveOutreachDraftForDetailsRow(key, patch);
+    },
+    [clearOutreachDraftAutosave, saveOutreachDraftForDetailsRow]
   );
 
   useEffect(() => {
@@ -5945,6 +6040,14 @@ export function CrmTable({
                                   const key = outreachDraftKey(detailsPanelRow.id, selectedOutreachCampaign.id, touch.id);
                                   const draft = outreachDrafts[key];
                                   const isStyledDraft = styledOutreachDrafts[key] ?? true;
+                                  const autosaveStatus = draft
+                                    ? autosaveLabelForDraft({
+                                        saving: draft.saving,
+                                        dirty: draft.dirty,
+                                        error: draft.error,
+                                        message: draft.message
+                                      })
+                                    : null;
                                   return (
                                     <details
                                       className="detailsOutreachTouch"
@@ -5980,7 +6083,7 @@ export function CrmTable({
                                         </div>
                                         {!draft || draft.loading ? <p className="detailsOutreachDraftStatus">Preparing draft...</p> : null}
                                         {draft?.error ? <p className="detailsDrawerError">{draft.error}</p> : null}
-                                        {draft && !draft.loading && !draft.error ? (
+                                        {draft && !draft.loading && draft.reminderId ? (
                                           <>
                                             <label>
                                               <span>Subject</span>
@@ -5988,13 +6091,10 @@ export function CrmTable({
                                                 value={draft.subject}
                                                 placeholder="No subject prepared"
                                                 onBlur={(event) =>
-                                                  void saveOutreachDraftForDetailsRow(key, { subject: event.currentTarget.value })
+                                                  saveOutreachDraftImmediately(key, { subject: event.currentTarget.value })
                                                 }
                                                 onChange={(event) =>
-                                                  updateOutreachDraftForDetailsRow(key, {
-                                                    subject: event.target.value,
-                                                    message: null
-                                                  })
+                                                  editOutreachDraftForDetailsRow(key, { subject: event.target.value })
                                                 }
                                               />
                                             </label>
@@ -6007,10 +6107,14 @@ export function CrmTable({
                                                   role="textbox"
                                                   aria-label="Email body"
                                                   suppressContentEditableWarning
+                                                  onInput={(event) => {
+                                                    const body = event.currentTarget.innerText.trim();
+                                                    editOutreachDraftForDetailsRow(key, { body });
+                                                  }}
                                                   onBlur={(event) => {
                                                     const body = event.currentTarget.innerText.trim();
                                                     updateOutreachDraftForDetailsRow(key, { body, message: null });
-                                                    void saveOutreachDraftForDetailsRow(key, { body });
+                                                    saveOutreachDraftImmediately(key, { body });
                                                   }}
                                                 >
                                                   {emailBodyParagraphs(draft.body).map((paragraph, paragraphIndex, paragraphs) => (
@@ -6034,21 +6138,25 @@ export function CrmTable({
                                                   value={draft.body}
                                                   placeholder="No draft prepared"
                                                   onBlur={(event) =>
-                                                    void saveOutreachDraftForDetailsRow(key, { body: event.currentTarget.value })
+                                                    saveOutreachDraftImmediately(key, { body: event.currentTarget.value })
                                                   }
                                                   onChange={(event) =>
-                                                    updateOutreachDraftForDetailsRow(key, {
-                                                      body: event.target.value,
-                                                      message: null
-                                                    })
+                                                    editOutreachDraftForDetailsRow(key, { body: event.target.value })
                                                   }
                                                 />
                                               )}
                                             </label>
                                             <div className="detailsOutreachDraftActions">
+                                              {autosaveStatus ? (
+                                                <span
+                                                  className={`detailsOutreachAutosave detailsOutreachAutosave-${autosaveStatus.tone}`}
+                                                >
+                                                  {autosaveStatus.label}
+                                                </span>
+                                              ) : null}
                                               <button
                                                 type="button"
-                                                onClick={() => void saveOutreachDraftForDetailsRow(key)}
+                                                onClick={() => saveOutreachDraftImmediately(key)}
                                                 disabled={draft.saving}
                                               >
                                                 {draft.saving ? "Saving" : "Save draft"}

@@ -48,6 +48,7 @@ if (!token) {
 const apiBase = `https://api.telegram.org/bot${token}`;
 const telegramFileBase = `https://api.telegram.org/file/bot${token}`;
 const crmApiBase = process.env.LIGHTCRM_API_BASE ?? "http://localhost:4900";
+const crmApiToken = process.env.LIGHTCRM_INTERNAL_API_TOKEN;
 const allowedChatIds = parseAllowedChatIds(process.env.TELEGRAM_ALLOWED_CHAT_IDS);
 const workspaceId = process.env.LIGHTCRM_WORKSPACE_ID ?? "default";
 const pollIntervalMs = Number(process.env.TELEGRAM_POLL_INTERVAL_MS ?? 2500);
@@ -96,6 +97,10 @@ function crmApiUrl(path: string): string {
   return `${crmApiBase.replace(/\/$/, "")}${path}`;
 }
 
+function crmAuthHeaders(): HeadersInit {
+  return crmApiToken ? { Authorization: `Bearer ${crmApiToken}` } : {};
+}
+
 async function telegramCall<T>(method: string, body: Record<string, unknown>): Promise<T> {
   const response = await fetch(`${apiBase}/${method}`, {
     method: "POST",
@@ -124,7 +129,7 @@ async function telegramFormCall<T>(method: string, form: FormData): Promise<T> {
 async function crmCall<T>(path: string, body: unknown): Promise<T> {
   const response = await fetch(crmApiUrl(path), {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...crmAuthHeaders() },
     body: JSON.stringify(body)
   });
   const payload = await response.json();
@@ -135,7 +140,7 @@ async function crmCall<T>(path: string, body: unknown): Promise<T> {
 }
 
 async function crmGet<T>(path: string): Promise<T> {
-  const response = await fetch(crmApiUrl(path));
+  const response = await fetch(crmApiUrl(path), { headers: crmAuthHeaders() });
   const payload = await response.json();
   if (!response.ok) {
     const error = new Error(typeof payload?.error === "string" ? payload.error : `LightCrm API ${path} failed`);
@@ -254,7 +259,7 @@ type CrmLeadWithDocuments = {
 async function listRecentLeads(input: TelegramRecentLeadsInput): Promise<TelegramLeadSearchResult> {
   const url = new URL(crmApiUrl("/api/crm/leads"));
   url.searchParams.set("workspaceId", input.workspaceId);
-  const response = await fetch(url);
+  const response = await fetch(url, { headers: crmAuthHeaders() });
   const payload = (await response.json()) as CrmLeadWithDocuments[] | { error?: string };
   if (!response.ok || !Array.isArray(payload)) {
     throw new Error(!Array.isArray(payload) && payload.error ? payload.error : "LightCrm API /api/crm/leads failed");
@@ -299,7 +304,7 @@ function publicCrmUrl(value: string): string {
 async function listLeadDocuments(input: TelegramLeadDocumentsInput): Promise<TelegramLeadDocumentsResult> {
   const url = new URL(crmApiUrl("/api/crm/leads"));
   url.searchParams.set("workspaceId", input.workspaceId);
-  const response = await fetch(url);
+  const response = await fetch(url, { headers: crmAuthHeaders() });
   const payload = (await response.json()) as CrmLeadWithDocuments[] | { error?: string };
   if (!response.ok || !Array.isArray(payload)) {
     throw new Error(!Array.isArray(payload) && payload.error ? payload.error : "LightCrm API /api/crm/leads failed");
@@ -373,6 +378,11 @@ function absoluteCrmUrl(value: string): string {
   return crmApiUrl(value.startsWith("/") ? value : `/${value}`);
 }
 
+function crmDownloadOptions(value: string): RequestInit {
+  const absolute = absoluteCrmUrl(value);
+  return absolute.startsWith(crmApiBase.replace(/\/$/, "")) ? { headers: crmAuthHeaders() } : {};
+}
+
 async function generateOffer(leadId: string): Promise<TelegramGeneratedDocument> {
   const payload = await crmCall<GenerateOfferResponse>("/api/crm/leads/generate-offer", {
     workspaceId,
@@ -382,7 +392,7 @@ async function generateOffer(leadId: string): Promise<TelegramGeneratedDocument>
   if (!document?.downloadUrl) {
     throw new Error("Commercial offer generation did not return a download URL");
   }
-  const response = await fetch(absoluteCrmUrl(document.downloadUrl));
+  const response = await fetch(absoluteCrmUrl(document.downloadUrl), crmDownloadOptions(document.downloadUrl));
   if (!response.ok) {
     throw new Error(`Commercial offer download failed: ${response.status}`);
   }
@@ -461,6 +471,7 @@ async function prepareAttachment(input: PrepareTelegramAttachmentInput): Promise
       : null;
   return uploadTelegramAttachmentToWeb({
     crmApiBase,
+    crmApiToken,
     workspaceId: input.workspaceId,
     leadId: input.leadId,
     sourceChannel: "telegram",

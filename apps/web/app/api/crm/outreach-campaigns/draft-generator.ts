@@ -251,7 +251,7 @@ function translatedDraft(
   if (language === "ru") {
     return {
       subject: "Архитектурное планирование для ранних стадий проекта",
-      body: appendSignature(
+      body: ensureEmailSignature(
         [
           `Здравствуйте${salutation === "zusammen" ? "" : `, ${salutation}`},`,
           "",
@@ -270,7 +270,7 @@ function translatedDraft(
   }
   return {
     subject: "Architectural planning for early project phases",
-    body: appendSignature(
+    body: ensureEmailSignature(
       [
         `Hello${salutation === "zusammen" ? "" : ` ${salutation}`},`,
         "",
@@ -302,17 +302,26 @@ function normalizeEmailSignature(signature: string | null | undefined) {
 
 function bodyHasSignature(body: string, signature: string) {
   const normalizedBody = compactText(body).toLocaleLowerCase();
-  const firstSignatureLine = signature.split("\n").map((line) => line.trim()).find(Boolean);
-  return Boolean(firstSignatureLine && normalizedBody.includes(firstSignatureLine.toLocaleLowerCase()));
+  const normalizedSignature = compactText(signature).toLocaleLowerCase();
+  return Boolean(normalizedSignature && normalizedBody.includes(normalizedSignature));
 }
 
-function appendSignature(body: string, signature: string | null | undefined) {
+function stripTrailingPartialSignature(body: string, signature: string) {
+  const firstSignatureLine = signature.split("\n").map((line) => line.trim()).find(Boolean);
+  if (!firstSignatureLine) {
+    return body;
+  }
+  const escaped = firstSignatureLine.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return body.replace(new RegExp(`\\n{0,2}${escaped}\\s*$`, "i"), "").replace(/\s+$/g, "");
+}
+
+export function ensureEmailSignature(body: string, signature: string | null | undefined) {
   const cleanedSignature = normalizeEmailSignature(signature);
   const cleanedBody = body.replace(/\s+$/g, "");
   if (!cleanedSignature || bodyHasSignature(cleanedBody, cleanedSignature)) {
     return cleanedBody;
   }
-  return `${cleanedBody}\n\n${cleanedSignature}`;
+  return `${stripTrailingPartialSignature(cleanedBody, cleanedSignature)}\n\n${cleanedSignature}`;
 }
 
 export function draftForCampaign(
@@ -332,7 +341,7 @@ export function draftForCampaign(
   if (!template) {
     return {
       subject: "",
-      body: appendSignature(`Manual action: prepare ${campaign.name} touch for ${salutation}.\n\nPersona hook: ${personaHook}`, emailSignature),
+      body: ensureEmailSignature(`Manual action: prepare ${campaign.name} touch for ${salutation}.\n\nPersona hook: ${personaHook}`, emailSignature),
       salutation,
       personaHook,
       promptApplied
@@ -344,7 +353,7 @@ export function draftForCampaign(
   };
   return {
     subject: normalizeGermanText(fillTemplate(template.subject, replacements)),
-    body: appendSignature(normalizeGermanText(fillTemplate(template.body, replacements)), emailSignature),
+    body: ensureEmailSignature(normalizeGermanText(fillTemplate(template.body, replacements)), emailSignature),
     salutation,
     personaHook,
     promptApplied

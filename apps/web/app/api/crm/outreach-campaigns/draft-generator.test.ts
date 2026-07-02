@@ -73,6 +73,74 @@ describe("draftForCampaign", () => {
     expect(draft.body).not.toContain("Flaechen");
   });
 
+  it("appends the complete configured signature, including the long legal footer", async () => {
+    const settings = await getCrmRuntimeSettings();
+    const campaign = settings.outreachCampaigns.campaigns[0]!;
+    const touch = campaign.touchpoints.find((item) => item.channel === "email") ?? campaign.touchpoints[0]!;
+    const target = {
+      name: "Bau Partner München",
+      company: "Bau Partner München",
+      notesResearch: "Bauträger mit Wohnungsbauprojekten in München."
+    };
+
+    const draft = draftForCampaign(campaign, target, touch, settings.outreachCampaigns.emailSignature);
+
+    for (const line of settings.outreachCampaigns.emailSignature.split("\n").filter((item) => item.trim())) {
+      expect(draft.body).toContain(line);
+    }
+  });
+
+  it("replaces a partial signoff with the complete configured signature", () => {
+    const campaign = {
+      id: "partial-signature-campaign",
+      name: "Partial signature campaign",
+      status: "active" as const,
+      goal: "Use full signature.",
+      summary: "One touch.",
+      prompt: "Deutsch.",
+      touchpoints: [
+        {
+          id: "touch-1",
+          touchNumber: 1,
+          dayOffset: 0,
+          channel: "email" as const,
+          title: "Intro",
+          action: "Send intro.",
+          templateId: "t1"
+        }
+      ],
+      templates: [
+        {
+          id: "t1",
+          subject: "Kurzer Austausch",
+          body: "Guten Tag {{salutation}},\n\n{{persona_hook}}\n\nMit freundlichen Grüßen"
+        }
+      ]
+    };
+    const signature = [
+      "Mit freundlichen Grüßen",
+      "Ekaterina Reyzbikh",
+      "Dipl. Architektin",
+      "website: www.reyzbikh-architect.com"
+    ].join("\n");
+
+    const draft = draftForCampaign(
+      campaign,
+      {
+        name: "Müller Bau",
+        company: "Müller Bau",
+        notesResearch: "Wohnungsbau in München."
+      },
+      campaign.touchpoints[0]!,
+      signature
+    );
+
+    expect(draft.body.match(/Mit freundlichen Grüßen/g)).toHaveLength(1);
+    expect(draft.body).toContain("Ekaterina Reyzbikh");
+    expect(draft.body).toContain("Dipl. Architektin");
+    expect(draft.body).toContain("website: www.reyzbikh-architect.com");
+  });
+
   it("normalizes German ASCII transliteration before returning the final email", () => {
     const campaign = {
       id: "ascii-campaign",

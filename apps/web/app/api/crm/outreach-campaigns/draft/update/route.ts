@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { handleRouteError, resolveWorkspaceId } from "../../../_shared";
 import { getCrmRuntimeSettings } from "../../../settings/crm-settings-store";
+import { ensureEmailSignature } from "../../draft-generator";
 
 export const dynamic = "force-dynamic";
 
@@ -17,10 +18,25 @@ const updateDraftSchema = z.object({
 
 function reminderAction(description: string | null, fallback: string | null) {
   const lines = (description ?? "").split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
-  if (lines[1] && !lines[1].startsWith("Subject:") && !lines[1].startsWith("Draft:")) {
+  const action = lines.find(
+    (line) =>
+      !line.startsWith("Campaign:") &&
+      !line.startsWith("Touch:") &&
+      !line.startsWith("Subject:") &&
+      !line.startsWith("Draft:") &&
+      line !== fallback
+  );
+  if (action && action !== lines[0]) {
+    return action;
+  }
+  if (lines[1] && !lines[1].startsWith("Campaign:") && !lines[1].startsWith("Subject:") && !lines[1].startsWith("Draft:")) {
     return lines[1];
   }
   return fallback ?? null;
+}
+
+function draftIdentity(campaignId: string, touchId: string | null) {
+  return touchId ? `Campaign: ${campaignId}\nTouch: ${touchId}` : `Campaign: ${campaignId}`;
 }
 
 export async function POST(request: Request) {
@@ -51,33 +67,41 @@ export async function POST(request: Request) {
     const touchNumber = touchMatch ? Number(touchMatch[1]) : null;
     const touch = campaign.touchpoints.find((item) => item.touchNumber === touchNumber) ?? null;
     const action = reminderAction(reminder.description, touch?.action ?? null);
+    const savedBody = touch?.channel === "email"
+      ? ensureEmailSignature(input.body, settings.outreachCampaigns.emailSignature)
+      : input.body;
     const description = [
       campaign.name,
+      draftIdentity(campaign.id, touch?.id ?? null),
       action,
       input.subject ? `Subject: ${input.subject}` : null,
-      input.body ? `Draft:\n${input.body}` : null
+      savedBody ? `Draft:\n${savedBody}` : null
     ]
       .filter(Boolean)
       .join("\n\n");
+    const assignment = await prisma.outreachCampaignAssignment.findFirst({
+      where: {
+        workspaceId,
+        coldTargetId: input.coldTargetId,
+        campaignId: input.campaignId,
+        archivedAt: null
+      }
+    });
+    const isCurrentTouch = Boolean(assignment && touchNumber === assignment.currentTouchIndex + 1);
 
-    const [updatedReminder] = await Promise.all([
-      prisma.reminder.update({
-        where: { id: reminder.id },
-        data: { description }
-      }),
-      prisma.outreachCampaignAssignment.updateMany({
-        where: {
-          workspaceId,
-          coldTargetId: input.coldTargetId,
-          campaignId: input.campaignId,
-          archivedAt: null
-        },
+    const updatedReminder = await prisma.reminder.update({
+      where: { id: reminder.id },
+      data: { description }
+    });
+    if (assignment && isCurrentTouch) {
+      await prisma.outreachCampaignAssignment.update({
+        where: { id: assignment.id },
         data: {
           draftSubject: input.subject || null,
-          draftBody: input.body || null
+          draftBody: savedBody || null
         }
-      })
-    ]);
+      });
+    }
 
     return NextResponse.json({
       ok: true,
@@ -87,7 +111,7 @@ export async function POST(request: Request) {
       },
       outreach: {
         subject: input.subject,
-        body: input.body
+        body: savedBody
       }
     });
   } catch (error) {

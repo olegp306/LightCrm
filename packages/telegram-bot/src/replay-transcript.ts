@@ -62,9 +62,10 @@ function extractReplayCases(source: string): ReplayCase[] {
 
 async function crmPost<T>(path: string, body: unknown): Promise<T> {
   const crmApiBase = process.env.LIGHTCRM_API_BASE ?? "http://localhost:4900";
+  const token = process.env.LIGHTCRM_INTERNAL_API_TOKEN;
   const response = await fetch(`${crmApiBase}${path}`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
     body: JSON.stringify(body)
   });
   const payload = await response.json();
@@ -76,7 +77,10 @@ async function crmPost<T>(path: string, body: unknown): Promise<T> {
 
 async function crmGet<T>(path: string): Promise<T> {
   const crmApiBase = process.env.LIGHTCRM_API_BASE ?? "http://localhost:4900";
-  const response = await fetch(`${crmApiBase}${path}`);
+  const token = process.env.LIGHTCRM_INTERNAL_API_TOKEN;
+  const response = await fetch(`${crmApiBase}${path}`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {}
+  });
   const payload = await response.json();
   if (!response.ok) {
     throw new Error(typeof payload?.error === "string" ? payload.error : `LightCrm API ${path} failed`);

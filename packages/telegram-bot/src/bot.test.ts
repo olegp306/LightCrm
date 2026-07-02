@@ -3816,6 +3816,53 @@ describe("telegram bot core", () => {
     });
   });
 
+  it("sends the internal CRM API token when uploading telegram attachment bytes", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        documents: [
+          {
+            fileName: "brief.pdf",
+            storageProvider: "local",
+            storageBucket: null,
+            storageKey: "workspaces/default/leads/lead-1/brief.pdf",
+            downloadUrl: "/api/crm/storage/local/workspaces%2Fdefault%2Fleads%2Flead-1%2Fbrief.pdf",
+            mimeType: "application/pdf",
+            sizeBytes: 3
+          }
+        ]
+      })
+    });
+
+    await uploadTelegramAttachmentToWeb({
+      crmApiBase: "http://localhost:4900",
+      crmApiToken: "tg-secret",
+      workspaceId: "default",
+      leadId: "lead-1",
+      sourceChannel: "telegram",
+      sourceThreadId: "111111",
+      sourceMessageId: "200",
+      text: "Ещё новый лид",
+      author: "Katya",
+      attachment: {
+        fileId: "file-1",
+        uniqueId: "unique-1",
+        kind: "pdf",
+        fileName: "brief.pdf",
+        mimeType: "application/pdf",
+        sizeBytes: 3
+      },
+      bytes: new Uint8Array([1, 2, 3]),
+      fetchImpl
+    });
+
+    expect(fetchImpl).toHaveBeenCalledWith("http://localhost:4900/api/crm/lead-intake/upload", {
+      method: "POST",
+      headers: { Authorization: "Bearer tg-secret" },
+      body: expect.any(FormData)
+    });
+  });
+
   it("uploads from an independent copy when attachment analysis detaches the downloaded bytes", async () => {
     const downloadedBytes = new Uint8Array([7, 8, 9]);
     const uploadBytes = Uint8Array.from(downloadedBytes);

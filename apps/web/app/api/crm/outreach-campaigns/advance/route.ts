@@ -50,6 +50,15 @@ function stoppedStatusForOutcome(outcome: string | undefined) {
   return `stopped:${outcome}`;
 }
 
+function draftSubjectFromDescription(description: string | null) {
+  return description?.match(/(?:^|\n)Subject:\s*([^\n]+)/)?.[1]?.trim() ?? "";
+}
+
+function draftBodyFromDescription(description: string | null) {
+  const match = description?.match(/(?:^|\n)Draft:\s*\n([\s\S]*)$/);
+  return match?.[1]?.trim() ?? "";
+}
+
 async function convertInterestedTargetToLead(input: {
   workspaceId: string;
   coldTarget: {
@@ -205,6 +214,8 @@ export async function POST(request: Request) {
     if (currentReminder) {
       await prisma.reminder.update({ where: { id: currentReminder.id }, data: { status: "done" } });
     }
+    const sentSubject = draftSubjectFromDescription(currentReminder?.description ?? null);
+    const sentBody = draftBodyFromDescription(currentReminder?.description ?? null);
 
     await prisma.outreachTouch.create({
       data: {
@@ -212,8 +223,8 @@ export async function POST(request: Request) {
         coldTargetId: coldTarget.id,
         channel: currentTouch.channel,
         direction: "outbound",
-        subject: assignment.draftSubject,
-        body: assignment.draftBody,
+        subject: sentSubject || assignment.draftSubject,
+        body: sentBody || assignment.draftBody,
         occurredAt: new Date(),
         outcome: "sent"
       }
@@ -309,6 +320,5 @@ export async function POST(request: Request) {
     return handleRouteError(error);
   }
 }
-
 
 

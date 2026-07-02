@@ -1,0 +1,38 @@
+export type GoogleLoginConfigEnv = Record<string, string | undefined> & {
+  GOOGLE_CLIENT_ID?: string;
+  GOOGLE_CLIENT_SECRET?: string;
+  LIGHTCRM_SESSION_SECRET?: string;
+  AUTH_SESSION_SECRET?: string;
+};
+
+export type GoogleLoginConfig = {
+  configured: boolean;
+  missing: string[];
+  callbackUrl: string;
+};
+
+type HeaderReader = {
+  get(name: string): string | null;
+};
+
+export function originFromHeaders(headers: HeaderReader, fallbackOrigin: string) {
+  const fallback = new URL(fallbackOrigin);
+  const protocol = headers.get("x-forwarded-proto") ?? fallback.protocol.replace(/:$/, "") ?? "http";
+  const host = headers.get("x-forwarded-host") ?? headers.get("host") ?? fallback.host;
+  return `${protocol}://${host}`;
+}
+
+export function googleLoginConfig(origin: string, env: GoogleLoginConfigEnv = process.env): GoogleLoginConfig {
+  const callbackUrl = new URL("/api/auth/google/callback", origin).toString();
+  const missing = [
+    env.GOOGLE_CLIENT_ID ? null : "GOOGLE_CLIENT_ID",
+    env.GOOGLE_CLIENT_SECRET ? null : "GOOGLE_CLIENT_SECRET",
+    env.LIGHTCRM_SESSION_SECRET || env.AUTH_SESSION_SECRET ? null : "LIGHTCRM_SESSION_SECRET"
+  ].filter((item): item is string => Boolean(item));
+
+  return {
+    configured: missing.length === 0,
+    missing,
+    callbackUrl
+  };
+}

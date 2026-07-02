@@ -2,6 +2,22 @@
 
 All notable LightCrm releases are documented here. Starting with `0.2.0`, every version bump must include a changelog entry.
 
+## 0.3.50 - 2026-07-02
+
+- Moved the signed-in account logout control into the top brand area as a compact grey button.
+- Shortened the visible account label to the Gmail name before `@` so mobile headers do not reflow.
+- Preserved canonical prod and test login routing after the mobile header adjustment.
+
+## 0.3.49 - 2026-07-02
+
+- Added production Google login deployment for the three approved Gmail accounts.
+- Configured the canonical production URL as `https://lightcrm.204-168-163-99.sslip.io`.
+- Protected CRM pages behind the Google login gate while keeping internal API access available to the Telegram bot.
+- Fixed reverse-proxy redirects so login and logout no longer bounce users to `localhost`.
+- Made the Google sign-in button a clearer blue call-to-action.
+- Added server environment setup for Google OAuth, signed sessions, and shared internal API tokens.
+- Backed up production database and environment before deploying the release.
+
 ## 0.3.48 - 2026-06-30
 
 - Added a two-row lead progress HUD prototype with cropped achievement artwork from the provided sketch.
