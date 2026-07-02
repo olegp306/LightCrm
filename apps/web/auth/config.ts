@@ -3,6 +3,8 @@ export type GoogleLoginConfigEnv = Record<string, string | undefined> & {
   GOOGLE_CLIENT_SECRET?: string;
   LIGHTCRM_SESSION_SECRET?: string;
   AUTH_SESSION_SECRET?: string;
+  NEXT_PUBLIC_APP_URL?: string;
+  NEXTAUTH_URL?: string;
 };
 
 export type GoogleLoginConfig = {
@@ -20,6 +22,30 @@ export function originFromHeaders(headers: HeaderReader, fallbackOrigin: string)
   const protocol = headers.get("x-forwarded-proto") ?? fallback.protocol.replace(/:$/, "") ?? "http";
   const host = headers.get("x-forwarded-host") ?? headers.get("host") ?? fallback.host;
   return `${protocol}://${host}`;
+}
+
+export function configuredPublicOrigin(env: GoogleLoginConfigEnv = process.env): string | null {
+  const raw = env.NEXT_PUBLIC_APP_URL?.trim() || env.NEXTAUTH_URL?.trim();
+  if (!raw) {
+    return null;
+  }
+  try {
+    const url = new URL(raw);
+    if (url.protocol !== "http:" && url.protocol !== "https:") {
+      return null;
+    }
+    return url.origin;
+  } catch {
+    return null;
+  }
+}
+
+export function publicOriginFromRequest(
+  headers: HeaderReader,
+  fallbackOrigin: string,
+  env: GoogleLoginConfigEnv = process.env
+) {
+  return configuredPublicOrigin(env) ?? originFromHeaders(headers, fallbackOrigin);
 }
 
 export function googleLoginConfig(origin: string, env: GoogleLoginConfigEnv = process.env): GoogleLoginConfig {

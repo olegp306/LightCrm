@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { originFromHeaders } from "./auth/config";
+import { publicOriginFromRequest } from "./auth/config";
 import { authSessionCookieName, isValidInternalApiToken, readSessionCookieValue } from "./auth/session";
 
 const publicPathPrefixes = [
@@ -38,7 +38,7 @@ export async function middleware(request: NextRequest) {
     return NextResponse.json({ error: "LightCRM login required." }, { status: 401 });
   }
 
-  const loginUrl = new URL("/login", originFromHeaders(request.headers, request.nextUrl.origin));
+  const loginUrl = new URL("/login", publicOriginFromRequest(request.headers, request.nextUrl.origin));
   loginUrl.searchParams.set("returnTo", `${pathname}${search}`);
   return NextResponse.redirect(loginUrl);
 }

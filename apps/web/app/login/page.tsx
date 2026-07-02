@@ -1,6 +1,6 @@
 import { LogIn } from "lucide-react";
 import { headers } from "next/headers";
-import { googleLoginConfig, originFromHeaders } from "../../auth/config";
+import { googleLoginConfig, publicOriginFromRequest } from "../../auth/config";
 import { allowedLoginEmails } from "../../auth/session";
 
 type LoginPageProps = {
@@ -32,7 +32,7 @@ export default function LoginPage({ searchParams }: LoginPageProps) {
   const returnTo = safeReturnTo(searchParams?.returnTo);
   const message = errorMessage(searchParams?.error, searchParams?.email);
   const headerStore = headers();
-  const config = googleLoginConfig(originFromHeaders(headerStore, "http://localhost:3004"));
+  const config = googleLoginConfig(publicOriginFromRequest(headerStore, "http://localhost:3004"));
   const authHref = `/api/auth/google/login?returnTo=${encodeURIComponent(returnTo)}`;
 
   return (

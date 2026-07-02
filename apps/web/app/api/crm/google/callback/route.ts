@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { publicOriginFromRequest } from "../../../../../auth/config";
 
 export const dynamic = "force-dynamic";
 
@@ -8,7 +9,7 @@ function stateReturnTo(value: string | null) {
   }
   try {
     const parsed = JSON.parse(Buffer.from(value, "base64url").toString("utf8")) as { returnTo?: string };
-    return parsed.returnTo?.startsWith("/") ? parsed.returnTo : "/today";
+    return parsed.returnTo?.startsWith("/") && !parsed.returnTo.startsWith("//") ? parsed.returnTo : "/today";
   } catch {
     return "/today";
   }
@@ -22,13 +23,15 @@ export async function GET(request: Request) {
   }
 
   const requestUrl = new URL(request.url);
+  const publicOrigin = publicOriginFromRequest(request.headers, requestUrl.origin);
+  const publicUrl = new URL(publicOrigin);
   const code = requestUrl.searchParams.get("code");
   const returnTo = stateReturnTo(requestUrl.searchParams.get("state"));
   if (!code) {
-    return NextResponse.redirect(new URL(`${returnTo}?gmail=missing-code`, requestUrl.origin));
+    return NextResponse.redirect(new URL(`${returnTo}?gmail=missing-code`, publicOrigin));
   }
 
-  const redirectUri = new URL("/api/crm/google/callback", requestUrl.origin);
+  const redirectUri = new URL("/api/crm/google/callback", publicOrigin);
   const tokenResponse = await fetch("https://oauth2.googleapis.com/token", {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -45,11 +48,11 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: token?.error_description ?? "Google token exchange failed." }, { status: 400 });
   }
 
-  const response = NextResponse.redirect(new URL(returnTo, requestUrl.origin));
+  const response = NextResponse.redirect(new URL(returnTo, publicOrigin));
   response.cookies.set("lightcrm_google_access_token", token.access_token, {
     httpOnly: true,
     sameSite: "lax",
-    secure: requestUrl.protocol === "https:",
+    secure: publicUrl.protocol === "https:",
     maxAge: Math.max(60, Number(token.expires_in ?? 3600) - 60),
     path: "/"
   });
@@ -57,7 +60,7 @@ export async function GET(request: Request) {
     response.cookies.set("lightcrm_google_refresh_token", token.refresh_token, {
       httpOnly: true,
       sameSite: "lax",
-      secure: requestUrl.protocol === "https:",
+      secure: publicUrl.protocol === "https:",
       maxAge: 60 * 60 * 24 * 30,
       path: "/"
     });

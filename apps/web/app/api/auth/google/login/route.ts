@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { googleLoginConfig, originFromHeaders } from "../../../../../auth/config";
+import { googleLoginConfig, publicOriginFromRequest } from "../../../../../auth/config";
 
 export const dynamic = "force-dynamic";
 
@@ -12,7 +12,7 @@ export async function GET(request: Request) {
   const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
 
   const requestUrl = new URL(request.url);
-  const publicOrigin = originFromHeaders(request.headers, requestUrl.origin);
+  const publicOrigin = publicOriginFromRequest(request.headers, requestUrl.origin);
   const config = googleLoginConfig(publicOrigin);
   if (!clientId || !clientSecret || !config.configured) {
     return NextResponse.json(

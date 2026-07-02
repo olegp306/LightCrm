@@ -16,6 +16,7 @@ describe("Google callback route", () => {
     vi.stubEnv("GOOGLE_CLIENT_ID", "google-client-id");
     vi.stubEnv("GOOGLE_CLIENT_SECRET", "google-client-secret");
     vi.stubEnv("LIGHTCRM_SESSION_SECRET", "session-secret");
+    vi.stubEnv("NEXT_PUBLIC_APP_URL", "https://lightcrm.204-168-163-99.sslip.io");
   }
 
   function mockGoogleEmail(email: string) {
@@ -46,7 +47,7 @@ describe("Google callback route", () => {
     const cookieValue = cookie.match(new RegExp(`${authSessionCookieName}=([^;]+)`))?.[1];
 
     expect(response.status).toBe(307);
-    expect(response.headers.get("location")).toBe("http://localhost:3004/leads");
+    expect(response.headers.get("location")).toBe("https://lightcrm.204-168-163-99.sslip.io/leads");
     expect(cookieValue).toBeTruthy();
     await expect(readSessionCookieValue(cookieValue, { secret: "session-secret" })).resolves.toMatchObject({
       email: "ekaterina.reyzbikh@gmail.com"
@@ -66,7 +67,9 @@ describe("Google callback route", () => {
     );
 
     expect(response.status).toBe(307);
-    expect(response.headers.get("location")).toBe("http://localhost:3004/login?error=not-allowed&email=someone%40example.com");
+    expect(response.headers.get("location")).toBe(
+      "https://lightcrm.204-168-163-99.sslip.io/login?error=not-allowed&email=someone%40example.com"
+    );
     expect(response.headers.get("set-cookie")).toContain(`${authSessionCookieName}=`);
   });
 });

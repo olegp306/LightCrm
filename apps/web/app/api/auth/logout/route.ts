@@ -1,12 +1,12 @@
 import { NextResponse } from "next/server";
-import { originFromHeaders } from "../../../../auth/config";
+import { publicOriginFromRequest } from "../../../../auth/config";
 import { authSessionCookieName } from "../../../../auth/session";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
   const requestUrl = new URL(request.url);
-  const response = NextResponse.redirect(new URL("/login", originFromHeaders(request.headers, requestUrl.origin)));
+  const response = NextResponse.redirect(new URL("/login", publicOriginFromRequest(request.headers, requestUrl.origin)));
   response.cookies.delete(authSessionCookieName);
   return response;
 }

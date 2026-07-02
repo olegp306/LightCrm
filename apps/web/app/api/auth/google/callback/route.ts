@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { originFromHeaders } from "../../../../../auth/config";
+import { publicOriginFromRequest } from "../../../../../auth/config";
 import { authSessionCookieName, authSessionMaxAgeSeconds, createSessionCookieValue, isAllowedLoginEmail } from "../../../../../auth/session";
 
 export const dynamic = "force-dynamic";
@@ -45,7 +45,7 @@ export async function GET(request: Request) {
   }
 
   const requestUrl = new URL(request.url);
-  const publicOrigin = originFromHeaders(request.headers, requestUrl.origin);
+  const publicOrigin = publicOriginFromRequest(request.headers, requestUrl.origin);
   const publicUrl = new URL(publicOrigin);
   const code = requestUrl.searchParams.get("code");
   const returnTo = stateReturnTo(requestUrl.searchParams.get("state"));

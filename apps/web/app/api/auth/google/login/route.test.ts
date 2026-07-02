@@ -10,6 +10,7 @@ describe("Google login route", () => {
     vi.stubEnv("GOOGLE_CLIENT_ID", "google-client-id");
     vi.stubEnv("GOOGLE_CLIENT_SECRET", "google-client-secret");
     vi.stubEnv("LIGHTCRM_SESSION_SECRET", "session-secret");
+    vi.stubEnv("NEXT_PUBLIC_APP_URL", "https://lightcrm.204-168-163-99.sslip.io");
 
     const response = await GET(
       new Request("http://0.0.0.0:3004/api/auth/google/login?returnTo=%2Fleads", {
@@ -25,7 +26,7 @@ describe("Google login route", () => {
     const authUrl = new URL(location!);
     expect(authUrl.origin).toBe("https://accounts.google.com");
     expect(authUrl.searchParams.get("client_id")).toBe("google-client-id");
-    expect(authUrl.searchParams.get("redirect_uri")).toBe("http://localhost:3004/api/auth/google/callback");
+    expect(authUrl.searchParams.get("redirect_uri")).toBe("https://lightcrm.204-168-163-99.sslip.io/api/auth/google/callback");
     expect(authUrl.searchParams.get("scope")).toBe("openid email profile");
   });
 

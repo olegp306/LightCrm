@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { publicOriginFromRequest } from "../../../../../auth/config";
 import { handleRouteError } from "../../_shared";
 
 export const dynamic = "force-dynamic";
@@ -64,7 +65,8 @@ function authRequired(request: Request, returnTo: string | null | undefined, mes
       { status: 501 }
     );
   }
-  const url = new URL("/api/crm/google/auth", request.url);
+  const requestUrl = new URL(request.url);
+  const url = new URL("/api/crm/google/auth", publicOriginFromRequest(request.headers, requestUrl.origin));
   if (returnTo) {
     url.searchParams.set("returnTo", returnTo);
   }

@@ -1,6 +1,7 @@
 import { createCrmBackupModel, type CrmBackupCellValue, type CrmBackupSheet } from "@lightcrm/core";
 import ExcelJS from "exceljs";
 import { NextResponse } from "next/server";
+import { publicOriginFromRequest } from "../../../../auth/config";
 import { defaultWorkspaceId, getCrm, handleRouteError, resolveWorkspaceId } from "../_shared";
 
 export const dynamic = "force-dynamic";
@@ -106,7 +107,7 @@ export async function GET(request: Request) {
       crm.listRecords({ entity: "documentFile", workspaceId, includeArchived: true })
     ]);
     const model = createCrmBackupModel({
-      appBaseUrl: url.origin,
+      appBaseUrl: publicOriginFromRequest(request.headers, url.origin),
       clients,
       leads,
       reminders,

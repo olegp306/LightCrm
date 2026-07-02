@@ -44,8 +44,8 @@ function NavIcon({ icon: Icon }: { icon: LucideIcon }) {
 function getEnvironmentBadge() {
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
   const workspaceId = process.env.LIGHTCRM_WORKSPACE_ID ?? "";
-  if (workspaceId.toLowerCase() === "test" || appUrl.includes(":3004")) {
-    return "Тестовый стенд · 3004";
+  if (workspaceId.toLowerCase() === "test" || appUrl.includes("lightcrm-test.") || appUrl.includes(":3004")) {
+    return "Тестовый стенд";
   }
   return null;
 }

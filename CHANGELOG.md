@@ -2,6 +2,14 @@
 
 All notable LightCrm releases are documented here. Starting with `0.2.0`, every version bump must include a changelog entry.
 
+## 0.3.51 - 2026-07-02
+
+- Standardized the production canonical URL as `https://lightcrm.204-168-163-99.sslip.io`.
+- Made Google login, Gmail authorization, logout, backups, and middleware prefer the configured public origin over request hosts.
+- Kept Telegram CRM buttons on the existing `/leads?leadId=...` format instead of adding extra lead routes.
+- Documented the split between internal `LIGHTCRM_API_BASE` and public `NEXT_PUBLIC_APP_URL`.
+- Updated the test-stand badge to detect the canonical test hostname instead of relying only on port `3004`.
+
 ## 0.3.50 - 2026-07-02
 
 - Moved the signed-in account logout control into the top brand area as a compact grey button.
