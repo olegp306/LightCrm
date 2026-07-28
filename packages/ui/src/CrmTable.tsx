@@ -2512,6 +2512,12 @@ export function CrmTable({
     outreachCampaigns.find((campaign) => campaign.status === "active") ??
     outreachCampaigns[0] ??
     null;
+  const detailsOutreachDraftSaving =
+    detailsPanelRow && selectedOutreachCampaign
+      ? Object.entries(outreachDrafts).some(
+          ([key, draft]) => key.startsWith(outreachDraftKey(detailsPanelRow.id, selectedOutreachCampaign.id, "")) && Boolean(draft.saving)
+        )
+      : false;
   const hasDetailsDocumentsSection = detailsPanelDocuments.length > 0 || columns.some((column) => column.id === "documents");
   const hasDetailsCalendarSection = detailsPanelCalendarItems.length > 0 || columns.some((column) => column.id === "calendar");
   const hasDetailsSideSections =
@@ -3869,10 +3875,6 @@ export function CrmTable({
     updateRecordIdPayload
   ]);
 
-  const saveDetailsPanel = useCallback(async () => {
-    await saveDetailsPanelChanges({ closePanel: true });
-  }, [saveDetailsPanelChanges]);
-
   const selectClientForLead = useCallback(
     async (client: ClientOption) => {
       if (!clientPicker || (!clientLinkEndpoint && !updateRecordEndpoint) || clientPicker.saving) {
@@ -4531,12 +4533,12 @@ export function CrmTable({
   const saveOutreachDraftForDetailsRow = useCallback(
     async (key: string, patch?: Partial<Pick<OutreachDraftState, "subject" | "body">>) => {
       if (!detailsPanelRow || !selectedOutreachCampaign || !outreachDraftEndpoint) {
-        return;
+        return false;
       }
       const draft = outreachDraftsRef.current[key] ? { ...outreachDraftsRef.current[key], ...patch } : undefined;
       if (!draft?.reminderId) {
         updateOutreachDraftForDetailsRow(key, { error: "Open this touch before saving the draft." });
-        return;
+        return false;
       }
       if (
         !shouldSaveOutreachDraft({
@@ -4547,7 +4549,7 @@ export function CrmTable({
         })
       ) {
         updateOutreachDraftForDetailsRow(key, { dirty: false, saving: false, error: null, message: "Saved" });
-        return;
+        return true;
       }
       const updateEndpoint = `${outreachDraftEndpoint.replace(/\/$/, "")}/update`;
       updateOutreachDraftForDetailsRow(key, { saving: true, error: null, message: null });
@@ -4590,11 +4592,13 @@ export function CrmTable({
             }
           };
         });
+        return true;
       } catch (reason) {
         updateOutreachDraftForDetailsRow(key, {
           saving: false,
           error: reason instanceof Error ? reason.message : "Draft save failed."
         });
+        return false;
       }
     },
     [detailsPanelRow, outreachDraftEndpoint, selectedOutreachCampaign, updateOutreachDraftForDetailsRow]
@@ -4607,6 +4611,50 @@ export function CrmTable({
       delete outreachDraftAutosaveTimersRef.current[key];
     }
   }, []);
+
+  const saveDirtyOutreachDraftsForDetailsRow = useCallback(async () => {
+    if (!detailsPanelRow || !selectedOutreachCampaign || !outreachDraftEndpoint) {
+      return true;
+    }
+    const draftKeyPrefix = outreachDraftKey(detailsPanelRow.id, selectedOutreachCampaign.id, "");
+    const draftEntries = Object.entries(outreachDraftsRef.current).filter(([key, draft]) => {
+      if (!key.startsWith(draftKeyPrefix)) {
+        return false;
+      }
+      return (
+        Boolean(draft?.dirty) ||
+        shouldSaveOutreachDraft({
+          subject: draft.subject,
+          body: draft.body,
+          savedSubject: draft.savedSubject,
+          savedBody: draft.savedBody
+        })
+      );
+    });
+    if (draftEntries.length === 0) {
+      return true;
+    }
+    const results = await Promise.all(
+      draftEntries.map(async ([key]) => {
+        clearOutreachDraftAutosave(key);
+        return saveOutreachDraftForDetailsRow(key);
+      })
+    );
+    return results.every(Boolean);
+  }, [clearOutreachDraftAutosave, detailsPanelRow, outreachDraftEndpoint, saveOutreachDraftForDetailsRow, selectedOutreachCampaign]);
+
+  const saveDetailsPanel = useCallback(async () => {
+    const detailsSaved = await saveDetailsPanelChanges({ closePanel: false });
+    if (!detailsSaved) {
+      return;
+    }
+    const outreachSaved = isColdTargetTable ? await saveDirtyOutreachDraftsForDetailsRow() : true;
+    if (!outreachSaved) {
+      setCreateError("Some outreach campaign changes could not be saved.");
+      return;
+    }
+    setDetailsPanel(null);
+  }, [isColdTargetTable, saveDetailsPanelChanges, saveDirtyOutreachDraftsForDetailsRow]);
 
   const scheduleOutreachDraftAutosave = useCallback(
     (key: string, patch: Partial<Pick<OutreachDraftState, "subject" | "body">>) => {
@@ -6510,8 +6558,8 @@ export function CrmTable({
               <button type="button" onClick={() => setDetailsPanel(null)}>
                 Cancel
               </button>
-              <button type="button" className="primary" onClick={saveDetailsPanel} disabled={detailsPanel.saving}>
-                {detailsPanel.saving ? "Saving" : "Save details"}
+              <button type="button" className="primary" onClick={saveDetailsPanel} disabled={detailsPanel.saving || detailsOutreachDraftSaving}>
+                {detailsPanel.saving || detailsOutreachDraftSaving ? "Saving" : "Save details"}
               </button>
             </footer>
           </section>
