@@ -204,6 +204,8 @@ describe("table-model", () => {
 
   it("detects columns that should render with wrapped table text", () => {
     expect(shouldWrapTableColumn({ id: "client.name", title: "Client", wrapText: true })).toBe(true);
+    expect(shouldWrapTableColumn({ id: "hook", title: "Hook", valueKind: "longText" })).toBe(true);
+    expect(shouldWrapTableColumn({ id: "role", title: "Role", wrapText: true })).toBe(true);
     expect(shouldWrapTableColumn({ id: "status", title: "Status" })).toBe(false);
   });
 

@@ -7,7 +7,7 @@ export default function ColdTargetsPage() {
       {...tables.coldTargets}
       endpoint="/api/crm/cold-targets"
       updateRecordEndpoint="/api/crm/cold-targets/upsert"
-      updateRecordIdField="id"
+      updateRecordIdField="coldTargetId"
       calendarFeedEndpoint="/api/crm/calendar-feed"
       outreachStartEndpoint="/api/crm/outreach-campaigns/start"
       outreachAdvanceEndpoint="/api/crm/outreach-campaigns/advance"

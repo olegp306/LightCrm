@@ -1590,7 +1590,9 @@ function isLeadSecondaryColumn(column: CrmTableColumn): boolean {
 }
 
 function isMobileMultilineColumn(columnId: string): boolean {
-  return ["description", "todo", "address", "notes", "rawInput"].includes(columnId);
+  return ["description", "todo", "address", "notes", "rawInput", "hook", "notesResearch", "archivedLetters"].includes(
+    columnId
+  );
 }
 
 function detailsTextareaRows(columnId: string, value: string | null | undefined): number {

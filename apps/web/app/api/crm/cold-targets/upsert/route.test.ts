@@ -10,7 +10,8 @@ describe("cold targets upsert route", () => {
           workspaceId: "default",
           id: "cold-direct",
           name: "Maya Ops",
-          email: "maya@example.com"
+          email: "maya@example.com",
+          hook: "Reference the new logistics hub before outreach."
         })
       })
     );
@@ -20,7 +21,8 @@ describe("cold targets upsert route", () => {
     expect(payload).toMatchObject({
       id: "cold-direct",
       name: "Maya Ops",
-      email: "maya@example.com"
+      email: "maya@example.com",
+      hook: "Reference the new logistics hub before outreach."
     });
   });
 
@@ -34,7 +36,8 @@ describe("cold targets upsert route", () => {
           id: "cold-patch",
           name: "Patch Target",
           email: "old@example.com",
-          role: "Founder"
+          role: "Founder",
+          hook: "Old angle"
         })
       })
     );
@@ -47,7 +50,8 @@ describe("cold targets upsert route", () => {
           coldTargetId: "cold-patch",
           patch: {
             email: "new@example.com",
-            role: "Head of Growth"
+            role: "Head of Growth",
+            hook: "Lead with a founder-led sales audit."
           },
           source: { channel: "web-table" }
         })
@@ -60,7 +64,8 @@ describe("cold targets upsert route", () => {
       id: "cold-patch",
       name: "Patch Target",
       email: "new@example.com",
-      role: "Head of Growth"
+      role: "Head of Growth",
+      hook: "Lead with a founder-led sales audit."
     });
   });
 });

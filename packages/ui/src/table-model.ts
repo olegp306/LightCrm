@@ -182,7 +182,7 @@ export function nextActionStateForTodo(value: string): string {
 }
 
 export function shouldWrapTableColumn(column: CrmTableColumn | undefined): boolean {
-  return Boolean(column?.wrapText);
+  return Boolean(column?.wrapText || column?.valueKind === "longText");
 }
 
 export function wrapMeasuredTextLines(
