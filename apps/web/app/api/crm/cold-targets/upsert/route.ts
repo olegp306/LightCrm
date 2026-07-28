@@ -14,6 +14,7 @@ const ColdTargetPatch = z
     name: z.string().trim().min(1).optional(),
     company: optionalText,
     role: optionalText,
+    hook: optionalText,
     email: optionalText,
     phone: optionalText,
     linkedinUrl: optionalText,

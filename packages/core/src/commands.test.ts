@@ -230,6 +230,19 @@ describe("createCrmService", () => {
     expect(archived.status).toBe("archived");
   });
 
+  it("persists a cold target hook", async () => {
+    const repository = new MemoryCrmRepository();
+    const crm = createCrmService(repository);
+
+    const target = await crm.upsertColdTarget({
+      workspaceId: "workspace-1",
+      name: "Hook Target",
+      hook: "Mention their new Munich residential project."
+    });
+
+    expect(target.hook).toBe("Mention their new Munich residential project.");
+  });
+
   it("lists active records for table screens without archived rows", async () => {
     const repository = new MemoryCrmRepository();
     const crm = createCrmService(repository);

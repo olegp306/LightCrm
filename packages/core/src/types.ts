@@ -60,6 +60,7 @@ export type ColdTarget = BaseRecord & {
   name: string;
   company: string | null;
   role: string | null;
+  hook: string | null;
   email: string | null;
   phone: string | null;
   linkedinUrl: string | null;
@@ -212,6 +213,7 @@ export type UpsertColdTargetInput = {
   name: string;
   company?: string | null;
   role?: string | null;
+  hook?: string | null;
   email?: string | null;
   phone?: string | null;
   linkedinUrl?: string | null;

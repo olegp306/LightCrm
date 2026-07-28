@@ -505,6 +505,7 @@ export function createCrmService(repository: CrmRepository) {
       name: input.name,
       company: nullable(input.company ?? existing?.company),
       role: nullable(input.role ?? existing?.role),
+      hook: nullable(input.hook ?? existing?.hook),
       email: nullable(input.email ?? existing?.email),
       phone: nullable(input.phone ?? existing?.phone),
       linkedinUrl: nullable(input.linkedinUrl ?? existing?.linkedinUrl),

@@ -51,6 +51,7 @@ async function main() {
     name: "Maya Ops",
     company: "Bright Supply",
     role: "COO",
+    hook: "Reference Bright Supply's new logistics hub before pitching architecture support.",
     email: "maya@example.com",
     linkedinUrl: "linkedin.com/in/maya",
     status: "queued",
