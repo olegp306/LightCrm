@@ -49,6 +49,7 @@ import {
   sortRows,
   toCsv,
   updateRowCell,
+  wrappedTableRowHeight,
   wrapMeasuredTextLines,
   type ApiRecord,
   type ColumnTextStyle,
@@ -274,6 +275,21 @@ type LeadSummaryHistoryTarget = {
 type LongTextPreview = {
   title: string;
   text: string;
+};
+
+type WrappedTextTooltip = {
+  left: number;
+  top: number;
+  placement: "above" | "below";
+  title: string;
+  text: string;
+};
+
+type CellBounds = {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
 };
 
 type BulkActionDialog = "delete" | "merge" | null;
@@ -640,6 +656,48 @@ function isWrappedAddressColumn(column: CrmTableColumn | undefined): boolean {
 
 function wrappedCanvasLines(ctx: CanvasRenderingContext2D, text: string, maxWidth: number, maxLines: number): { lines: string[]; overflow: boolean } {
   return wrapMeasuredTextLines(text, maxWidth, maxLines, (value) => ctx.measureText(value).width);
+}
+
+function wrappedCellTooltipForHover(input: {
+  column: CrmTableColumn | undefined;
+  row: CrmTableRow | undefined;
+  bounds: CellBounds;
+  frameBounds: DOMRect;
+  theme: Partial<Theme>;
+}): WrappedTextTooltip | null {
+  const { column, row, bounds, frameBounds, theme } = input;
+  if (!column || !row || !(shouldWrapTableColumn(column) || isWrappedAddressColumn(column))) {
+    return null;
+  }
+  const text = textCellValue(row.values[column.id]);
+  if (!text) {
+    return null;
+  }
+  const fontSize = fontSizeFromTheme(theme, 13);
+  const fontFamily = theme.fontFamily ?? "Inter, sans-serif";
+  const padding = theme.cellHorizontalPadding ?? 8;
+  const availableWidth = Math.max(10, bounds.width - padding * 2);
+  const canvas = document.createElement("canvas");
+  const ctx = canvas.getContext("2d");
+  if (!ctx) {
+    return null;
+  }
+  ctx.font = `${theme.baseFontStyle ?? `${fontSize}px`} ${fontFamily}`;
+  const maxLines = isWrappedAddressColumn(column) ? 2 : 3;
+  const wrapped = wrapMeasuredTextLines(text, availableWidth, maxLines, (value) => ctx.measureText(value).width);
+  if (!wrapped.overflow) {
+    return null;
+  }
+  const relativeTop = bounds.y - frameBounds.top;
+  const showBelow = relativeTop < 140;
+  const preferredLeft = bounds.x - frameBounds.left + Math.min(Math.max(bounds.width / 2, 160), Math.max(160, bounds.width - 24));
+  return {
+    left: Math.max(170, Math.min(frameBounds.width - 170, preferredLeft)),
+    top: showBelow ? relativeTop + bounds.height + 8 : Math.max(8, relativeTop - 8),
+    placement: showBelow ? "below" : "above",
+    title: column.title,
+    text
+  };
 }
 
 function fitTextWithEllipsis(ctx: CanvasRenderingContext2D, text: string, maxWidth: number): string {
@@ -2063,6 +2121,7 @@ export function CrmTable({
     placement: "above" | "below";
     rowName: string;
   } | null>(null);
+  const [wrappedTextTooltip, setWrappedTextTooltip] = useState<WrappedTextTooltip | null>(null);
   const [previewDocument, setPreviewDocument] = useState<DocumentCellItem | null>(null);
   const [cellDeleteTarget, setCellDeleteTarget] = useState<CellDeleteTarget | null>(null);
   const [isDeletingCellItem, setIsDeletingCellItem] = useState(false);
@@ -2172,8 +2231,11 @@ export function CrmTable({
     [isDarkMode, tableFontScale]
   );
   const tableRowHeight = useMemo(
-    () => (columns.some((column) => column.id === "description" || column.id === "address") ? Math.round(48 * tableFontScale) : undefined),
-    [columns, tableFontScale]
+    () =>
+      columns.some((column) => shouldWrapTableColumn(column) || isWrappedAddressColumn(column))
+        ? wrappedTableRowHeight(fontSizeFromTheme(activeTableTheme, 13))
+        : undefined,
+    [activeTableTheme, columns]
   );
   const activeRelatedTableHeaderTheme = useMemo(
     () => relatedTableHeaderTheme(linkedTableColor, isDarkMode),
@@ -2639,12 +2701,14 @@ export function CrmTable({
       setDocumentTooltip(null);
       setCalendarTooltip(null);
       setHandoffTooltip(null);
+      setWrappedTextTooltip(null);
       return;
     }
     if (args.kind === "group-header" && args.group === "Client") {
       setDocumentTooltip(null);
       setCalendarTooltip(null);
       setHandoffTooltip(null);
+      setWrappedTextTooltip(null);
       setRelatedTooltip({
         left: args.bounds.x - frameBounds.left + args.bounds.width / 2,
         top: args.bounds.y - frameBounds.top + args.bounds.height + 6,
@@ -2655,6 +2719,13 @@ export function CrmTable({
     if (args.kind === "cell") {
       const column = configuredColumns[args.location[0]];
       const row = filteredRows[args.location[1]];
+      const nextWrappedTextTooltip = wrappedCellTooltipForHover({
+        column,
+        row,
+        bounds: args.bounds,
+        frameBounds,
+        theme: activeTableTheme
+      });
       const localX = args.localEventX <= args.bounds.width ? args.localEventX : args.localEventX - args.bounds.x;
       const localY = args.localEventY <= args.bounds.height ? args.localEventY : args.localEventY - args.bounds.y;
       setHoveredClientPickerCell(
@@ -2671,6 +2742,7 @@ export function CrmTable({
         setRelatedTooltip(null);
         setDocumentTooltip(null);
         setCalendarTooltip(null);
+        setWrappedTextTooltip(null);
         setHandoffTooltip(
           normalizedHandoffSide(row.values[column.id]) === "us"
             ? {
@@ -2690,6 +2762,7 @@ export function CrmTable({
         setRelatedTooltip(null);
         setDocumentTooltip(null);
         setHandoffTooltip(null);
+        setWrappedTextTooltip(null);
         setCalendarTooltip(
           items.length > 0
             ? {
@@ -2714,6 +2787,7 @@ export function CrmTable({
           setRelatedTooltip(null);
           setCalendarTooltip(null);
           setHandoffTooltip(null);
+          setWrappedTextTooltip(null);
           const hoveredDocument = documents[action.index];
           if (!hoveredDocument) {
             setDocumentTooltip(null);
@@ -2731,13 +2805,22 @@ export function CrmTable({
           return;
         }
       }
+      setWrappedTextTooltip(nextWrappedTextTooltip);
+      if (nextWrappedTextTooltip) {
+        setRelatedTooltip(null);
+        setDocumentTooltip(null);
+        setCalendarTooltip(null);
+        setHandoffTooltip(null);
+        return;
+      }
     }
     setHoveredClientPickerCell(null);
     setRelatedTooltip(null);
     setDocumentTooltip(null);
     setCalendarTooltip(null);
     setHandoffTooltip(null);
-  }, [clientOptionsEndpoint, configuredColumns, filteredRows, updateRecordEndpoint]);
+    setWrappedTextTooltip(null);
+  }, [activeTableTheme, clientOptionsEndpoint, configuredColumns, filteredRows, updateRecordEndpoint]);
 
   const toggleColumn = useCallback((columnId: string) => {
     setPreferences((current) => {
@@ -4957,6 +5040,7 @@ export function CrmTable({
         setDocumentTooltip(null);
         setCalendarTooltip(null);
         setHandoffTooltip(null);
+        setWrappedTextTooltip(null);
         setHoveredClientPickerCell(null);
       }}>
         {relatedTooltip ? (
@@ -5001,6 +5085,17 @@ export function CrmTable({
             <strong>Insight available</strong>
             <span>Suggested next action will appear here.</span>
             <span>{handoffTooltip.rowName}</span>
+          </div>
+        ) : null}
+        {wrappedTextTooltip ? (
+          <div
+            className={`relatedTableTooltip wrappedTextCellTooltip ${
+              wrappedTextTooltip.placement === "below" ? "relatedTableTooltipBelow" : ""
+            }`}
+            style={tableTooltipStyle(wrappedTextTooltip.left, wrappedTextTooltip.top)}
+          >
+            <strong>{wrappedTextTooltip.title}</strong>
+            <span>{wrappedTextTooltip.text}</span>
           </div>
         ) : null}
         {activeDetailRow && updateRecordEndpoint ? (

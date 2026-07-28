@@ -15,6 +15,7 @@ import {
   sortRows,
   toCsv,
   updateRowCell,
+  wrappedTableRowHeight,
   wrapMeasuredTextLines
 } from "./table-model";
 import type { CrmTableColumn, CrmTableRow } from "./CrmTable";
@@ -220,6 +221,12 @@ describe("table-model", () => {
       lines: ["aaaa bbbb", "cc dd"],
       overflow: true
     });
+  });
+
+  it("derives a capped three-line row height for wrapped table text", () => {
+    expect(wrappedTableRowHeight(13)).toBe(65);
+    expect(wrappedTableRowHeight(13, 2)).toBe(48);
+    expect(wrappedTableRowHeight(13, 20)).toBe(354);
   });
 
   it("derives lead progress steps and reward from existing lead fields", () => {
