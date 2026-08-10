@@ -5,7 +5,8 @@ import type {
   CrmTableColumn,
   CrmTableRow,
   DocumentCellItem,
-  DocumentCellValue
+  DocumentCellValue,
+  OutreachCampaignTouchpoint
 } from "./CrmTable";
 
 export type SortDirection = "asc" | "desc";
@@ -183,6 +184,30 @@ export function parseOutreachTouchProgress(
     return null;
   }
   return { current, total };
+}
+
+export function orderOutreachTouchpoints(
+  touchpoints: OutreachCampaignTouchpoint[],
+  currentTouchNumber: number | null | undefined
+): OutreachCampaignTouchpoint[] {
+  return [...touchpoints].sort((left, right) => {
+    if (!currentTouchNumber) {
+      return left.touchNumber - right.touchNumber;
+    }
+    const rank = (touchNumber: number) => {
+      if (touchNumber === currentTouchNumber) {
+        return 0;
+      }
+      if (touchNumber > currentTouchNumber && touchNumber <= currentTouchNumber + 2) {
+        return 1;
+      }
+      if (touchNumber < currentTouchNumber) {
+        return 2;
+      }
+      return 3;
+    };
+    return rank(left.touchNumber) - rank(right.touchNumber) || left.touchNumber - right.touchNumber;
+  });
 }
 
 export function formatOutreachTouchProgressLabel(progress: OutreachTouchProgress | null): string {

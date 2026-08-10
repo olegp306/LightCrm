@@ -51,6 +51,7 @@ import {
   handoffSideTone,
   leadProgressReward,
   nextActionStateForTodo,
+  orderOutreachTouchpoints,
   outreachOutcomeOptions,
   parseOutreachTouchProgress,
   recordToRow,
@@ -2590,6 +2591,11 @@ export function CrmTable({
       ? selectedOutreachCampaign.touchpoints.find((touch) => touch.touchNumber === detailsOutreachProgress.current) ?? null
       : null;
   const detailsOutreachProgressLabel = formatOutreachTouchProgressLabel(detailsOutreachProgress);
+  const orderedOutreachTouchpoints = selectedOutreachCampaign
+    ? orderOutreachTouchpoints(selectedOutreachCampaign.touchpoints, detailsOutreachProgress?.current)
+    : [];
+  const outreachChannelLabel = (channel: OutreachCampaignTouchpoint["channel"]) =>
+    channel === "linkedin" ? "LinkedIn" : channel === "phone" ? "Cold call" : "Email";
   const detailsMarkSentLabel = formatOutreachTouchActionLabel(detailsOutreachProgress);
   const hasDetailsDocumentsSection = detailsPanelDocuments.length > 0 || columns.some((column) => column.id === "documents");
   const hasDetailsCalendarSection = detailsPanelCalendarItems.length > 0 || columns.some((column) => column.id === "calendar");
@@ -4678,13 +4684,6 @@ export function CrmTable({
     [applyOutreachResponseToRow, detailsPanelRow, outreachDraftEndpoint, outreachDrafts, selectedOutreachCampaign]
   );
 
-  useEffect(() => {
-    if (!detailsCurrentOutreachTouch) {
-      return;
-    }
-    void loadOutreachDraftForDetailsRow(detailsCurrentOutreachTouch);
-  }, [detailsCurrentOutreachTouch, loadOutreachDraftForDetailsRow]);
-
   const updateOutreachDraftForDetailsRow = useCallback(
     (key: string, patch: Partial<OutreachDraftState>) => {
       setOutreachDrafts((current) => ({
@@ -6303,19 +6302,18 @@ export function CrmTable({
 
                   {isColdTargetTable ? (
                     <section className="detailsDrawerSection outreach">
-                      <div className="detailsDrawerSectionHeader">
-                        <div>
-                          <span>
-                            Outreach campaign
-                            <strong>{mobileDisplayValue(detailsPanelRow.values.campaignStatus) || "Not started"}</strong>
-                          </span>
+                      <div className="detailsDrawerSectionHeader detailsOutreachHeader">
+                        <div className="detailsOutreachHeaderTitle">
+                          <span>Outreach</span>
+                          <strong>{mobileDisplayValue(detailsPanelRow.values.campaignStatus) || "Not started"}</strong>
                         </div>
                       </div>
                       {outreachCampaigns.length > 0 ? (
                         <div className="detailsOutreachPanel">
-                          <label>
+                          <label className="detailsOutreachCampaignField">
                             <span>Campaign</span>
                             <select
+                              title={selectedOutreachCampaign?.name ?? "Campaign"}
                               value={selectedOutreachCampaign?.id ?? ""}
                               onChange={(event) => setSelectedOutreachCampaignId(event.target.value)}
                             >
@@ -6328,21 +6326,31 @@ export function CrmTable({
                           </label>
                           {selectedOutreachCampaign ? (
                             <>
-                              <p>{selectedOutreachCampaign.summary}</p>
+                              <p className="detailsOutreachSummary" title={selectedOutreachCampaign.summary}>
+                                {selectedOutreachCampaign.summary}
+                              </p>
                               {detailsPanelRow.values.campaignName ? (
-                                <div className="detailsOutreachCurrent">
+                                <div
+                                  className="detailsOutreachCurrent"
+                                  title={[
+                                    detailsOutreachProgressLabel,
+                                    detailsCurrentOutreachTouch?.title,
+                                    detailsPanelRow.values.nextAction
+                                  ]
+                                    .filter(Boolean)
+                                    .join(" · ")}
+                                >
                                   <span>Current touch</span>
                                   <strong>
-                                    {detailsOutreachProgressLabel}
-                                    {detailsCurrentOutreachTouch ? ` · ${detailsCurrentOutreachTouch.title}` : ""}
+                                    <b>{detailsOutreachProgressLabel}</b>
+                                    {detailsCurrentOutreachTouch
+                                      ? ` · ${outreachChannelLabel(detailsCurrentOutreachTouch.channel)} · ${detailsCurrentOutreachTouch.title} · D+${detailsCurrentOutreachTouch.dayOffset}`
+                                      : ""}
                                   </strong>
-                                  {detailsPanelRow.values.nextAction ? (
-                                    <small>{mobileDisplayValue(detailsPanelRow.values.nextAction)}</small>
-                                  ) : null}
                                 </div>
                               ) : null}
                               <div className="detailsOutreachTouches">
-                                {selectedOutreachCampaign.touchpoints.map((touch) => {
+                                {orderedOutreachTouchpoints.map((touch) => {
                                   const key = outreachDraftKey(detailsPanelRow.id, selectedOutreachCampaign.id, touch.id);
                                   const draft = outreachDrafts[key];
                                   const isPreviewDraft = styledOutreachDrafts[key] ?? false;
@@ -6359,7 +6367,7 @@ export function CrmTable({
                                   return (
                                     <details
                                       className={`detailsOutreachTouch${isCurrentTouch ? " current" : ""}${isPastTouch ? " past" : ""}`}
-                                      open={isCurrentTouch || Boolean(draft && !draft.loading)}
+                                      open={Boolean(draft && !draft.loading)}
                                       key={touch.id}
                                       onToggle={(event) => {
                                         if (event.currentTarget.open) {

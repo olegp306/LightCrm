@@ -10,6 +10,7 @@ import {
   formatOutreachProtocolItem,
   formatOutreachTouchActionLabel,
   formatOutreachTouchProgressLabel,
+  orderOutreachTouchpoints,
   currentTouchChipTone,
   handoffSideTone,
   leadProgressReward,
@@ -42,6 +43,21 @@ const rows: CrmTableRow[] = [
 ];
 
 describe("table-model", () => {
+  it("puts the current outreach touch first, followed by the next two touches", () => {
+    const touchpoints = [1, 2, 3, 4, 5, 6, 7, 8].map((touchNumber) => ({
+      id: `touch-${touchNumber}`,
+      touchNumber,
+      dayOffset: touchNumber,
+      channel: "email" as const,
+      title: `Touch ${touchNumber}`,
+      action: "Send message"
+    }));
+
+    expect(orderOutreachTouchpoints(touchpoints, 3).map((touch) => touch.touchNumber)).toEqual([
+      3, 4, 5, 1, 2, 6, 7, 8
+    ]);
+  });
+
   it("marks cold target pings as fresh, overdue, or dormant", () => {
     expect(coldTargetPingTone(null, new Date("2026-08-10T12:00:00.000Z"))).toBe("overdue");
     expect(coldTargetPingTone("2026-08-01T12:00:00.000Z", new Date("2026-08-10T12:00:00.000Z"))).toBe("overdue");
