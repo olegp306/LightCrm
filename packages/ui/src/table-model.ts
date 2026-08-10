@@ -294,7 +294,14 @@ export function nextActionStateForTodo(value: string): string {
 }
 
 export function shouldWrapTableColumn(column: CrmTableColumn | undefined): boolean {
-  return Boolean(column?.wrapText);
+  return Boolean(column?.wrapText || column?.valueKind === "longText");
+}
+
+export function wrappedTableRowHeight(fontSize: number, maxLines = 3): number {
+  const safeFontSize = Number.isFinite(fontSize) ? Math.max(10, fontSize) : 13;
+  const safeMaxLines = Math.max(1, Math.floor(maxLines));
+  const lineHeight = Math.round(safeFontSize * 1.28);
+  return lineHeight * safeMaxLines + 14;
 }
 
 export function wrapMeasuredTextLines(

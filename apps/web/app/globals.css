@@ -2359,6 +2359,20 @@ input {
   max-width: 320px;
 }
 
+.wrappedTextCellTooltip {
+  max-height: min(380px, calc(100vh - 220px));
+  max-width: min(520px, calc(100vw - 320px));
+  overflow: auto;
+  pointer-events: auto;
+  width: max-content;
+}
+
+.wrappedTextCellTooltip span {
+  max-width: 500px;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
 .documentCellTooltip strong,
 .documentCellTooltip span,
 .calendarCellTooltip span {

@@ -19,6 +19,7 @@ import {
   sortRows,
   toCsv,
   updateRowCell,
+  wrappedTableRowHeight,
   wrapMeasuredTextLines
 } from "./table-model";
 import { coldTargetPingTone } from "./cold-target-model";
@@ -255,7 +256,14 @@ describe("table-model", () => {
 
   it("detects columns that should render with wrapped table text", () => {
     expect(shouldWrapTableColumn({ id: "client.name", title: "Client", wrapText: true })).toBe(true);
+    expect(shouldWrapTableColumn({ id: "hook", title: "Hook", valueKind: "longText" })).toBe(true);
     expect(shouldWrapTableColumn({ id: "status", title: "Status" })).toBe(false);
+  });
+
+  it("derives a capped three-line row height for wrapped table text", () => {
+    expect(wrappedTableRowHeight(13)).toBe(65);
+    expect(wrappedTableRowHeight(13, 2)).toBe(48);
+    expect(wrappedTableRowHeight(13, 20)).toBe(354);
   });
 
   it("fills the final wrapped table line before reporting overflow", () => {

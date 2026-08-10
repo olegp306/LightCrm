@@ -24,7 +24,7 @@ export const tables: Record<string, TableDefinition> = {
       { id: "address", title: "Address", width: 220, mobilePriority: 5 },
       { id: "status", title: "Status", width: 120, mobilePriority: 6 },
       { id: "sourceChannel", title: "Source", width: 140, defaultVisible: false },
-      { id: "notes", title: "Notes", width: 260, mobilePriority: 7 }
+      { id: "notes", title: "Notes", width: 260, mobilePriority: 7, valueKind: "longText" }
     ],
     createRecord: {
       endpoint: "/api/crm/clients/upsert",
@@ -175,8 +175,8 @@ export const tables: Record<string, TableDefinition> = {
       { id: "name", title: "Name", width: 190, mobilePriority: 1 },
       { id: "company", title: "Company", width: 180 },
       { id: "country", title: "Country", width: 140, mobilePriority: 3 },
-      { id: "role", title: "Role", width: 180 },
-      { id: "hook", title: "Hook", width: 280, wrapText: true },
+      { id: "role", title: "Role", width: 180, wrapText: true },
+      { id: "hook", title: "Hook", width: 300, mobilePriority: 3, valueKind: "longText" },
       { id: "email", title: "Email", width: 230 },
       { id: "phone", title: "Phone", width: 160 },
       { id: "website", title: "Website", width: 220, valueKind: "link" },
@@ -185,13 +185,13 @@ export const tables: Record<string, TableDefinition> = {
       { id: "firstTouchChannel", title: "First touch", width: 140 },
       { id: "ballSide", title: "Ball", width: 96, valueKind: "handoff" },
       { id: "pingAt", title: "Ping", width: 110, valueKind: "ping", defaultVisible: true },
-      { id: "notesResearch", title: "Node Research", width: 360 },
-      { id: "archivedLetters", title: "I Have Letters", width: 320 },
+      { id: "notesResearch", title: "Node Research", width: 360, valueKind: "longText" },
+      { id: "archivedLetters", title: "I Have Letters", width: 320, valueKind: "longText" },
       { id: "status", title: "Status", width: 130, mobilePriority: 2 },
       { id: "campaignName", title: "Campaign", width: 240 },
       { id: "campaignStatus", title: "Campaign status", width: 150, defaultVisible: false },
       { id: "campaignTouch", title: "Touch", width: 120, valueKind: "currentTouch" },
-      { id: "nextAction", title: "Next action", width: 260 },
+      { id: "nextAction", title: "Next action", width: 260, wrapText: true },
       { id: "calendar", title: "Calendar", width: 220, valueKind: "calendar" }
     ],
     createRecord: {
