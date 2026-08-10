@@ -5,7 +5,7 @@ export default function LeadsPage() {
   return (
     <TablePage
       {...tables.leads}
-      endpoint="/api/crm/leads"
+      endpoint="/api/crm/leads?includeArchived=true"
       calendarFeedEndpoint="/api/crm/calendar-feed"
       documentUploadEndpoint="/api/crm/lead-intake/upload"
       leadSummariesEndpoint="/api/crm/leads/summaries"

@@ -1,7 +1,12 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { getCrm, handleRouteError, optionalText, parseJson, workspaceId } from "../../_shared";
+import { dateString, getCrm, handleRouteError, optionalText, parseJson, workspaceId } from "../../_shared";
 import { maybeAutoGenerateCommercialOfferForLead } from "../commercial-offers";
+
+const optionalLeadLanguage = z.preprocess(
+  (value) => (value === "" || value === "auto" ? null : value),
+  z.enum(["de", "ru", "en"]).nullable().optional()
+);
 
 const schema = z.object({
   id: z.string().optional(),
@@ -16,7 +21,15 @@ const schema = z.object({
   sourceChannel: optionalText,
   externalThreadId: optionalText,
   externalMessageId: optionalText,
-  notes: optionalText
+  notes: optionalText,
+  progressStage: z.number().int().min(0).max(7).optional(),
+  preferredLanguage: optionalLeadLanguage,
+  contractNumber: optionalText,
+  expectedFeeNet: z.number().finite().nullable().optional(),
+  olegPercent: z.number().finite().nullable().optional(),
+  handoffNote: optionalText,
+  lastPingAt: dateString.nullable().optional(),
+  clientType: optionalText
 });
 
 export async function POST(request: Request) {

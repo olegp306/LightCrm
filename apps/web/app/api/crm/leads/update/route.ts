@@ -1,7 +1,12 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { getCrm, handleRouteError, optionalText, parseJson, resolveWorkspaceId } from "../../_shared";
+import { dateString, getCrm, handleRouteError, optionalText, parseJson, resolveWorkspaceId } from "../../_shared";
 import { leadNoteFields, notesWithTabularPatch, readJsonNoteField, replaceJsonNoteField } from "../note-fields";
+
+const optionalLeadLanguage = z.preprocess(
+  (value) => (value === "" || value === "auto" ? null : value),
+  z.enum(["de", "ru", "en"]).nullable().optional()
+);
 
 const LeadPatch = z
   .object({
@@ -16,6 +21,14 @@ const LeadPatch = z
     "client.name": optionalText,
     "client.phone": optionalText,
     "client.email": optionalText,
+    progressStage: z.number().int().min(0).max(7).optional(),
+    preferredLanguage: optionalLeadLanguage,
+    contractNumber: optionalText,
+    expectedFeeNet: z.number().finite().nullable().optional(),
+    olegPercent: z.number().finite().nullable().optional(),
+    handoffNote: optionalText,
+    lastPingAt: dateString.nullable().optional(),
+    clientType: optionalText,
     projectName: optionalText,
     project: optionalText,
     area: optionalText,
@@ -54,6 +67,14 @@ type NativeLeadPatch = {
   whatsapp?: string | null;
   company?: string | null;
   status?: "new" | "contacted" | "qualified" | "lost" | "converted" | "archived";
+  progressStage?: number;
+  preferredLanguage?: "de" | "ru" | "en" | null;
+  contractNumber?: string | null;
+  expectedFeeNet?: number | null;
+  olegPercent?: number | null;
+  handoffNote?: string | null;
+  lastPingAt?: Date | null;
+  clientType?: string | null;
 };
 
 function appendSourceNote(notes: string | null | undefined, source?: { channel?: string | null; messageId?: string | null }) {
@@ -91,6 +112,14 @@ export async function POST(request: Request) {
     if (input.patch.whatsapp !== undefined) leadPatch.whatsapp = input.patch.whatsapp;
     if (input.patch.company !== undefined) leadPatch.company = input.patch.company;
     if (input.patch.status !== undefined) leadPatch.status = input.patch.status;
+    if (input.patch.progressStage !== undefined) leadPatch.progressStage = input.patch.progressStage;
+    if (input.patch.preferredLanguage !== undefined) leadPatch.preferredLanguage = input.patch.preferredLanguage;
+    if (input.patch.contractNumber !== undefined) leadPatch.contractNumber = input.patch.contractNumber;
+    if (input.patch.expectedFeeNet !== undefined) leadPatch.expectedFeeNet = input.patch.expectedFeeNet;
+    if (input.patch.olegPercent !== undefined) leadPatch.olegPercent = input.patch.olegPercent;
+    if (input.patch.handoffNote !== undefined) leadPatch.handoffNote = input.patch.handoffNote;
+    if (input.patch.lastPingAt !== undefined) leadPatch.lastPingAt = input.patch.lastPingAt;
+    if (input.patch.clientType !== undefined) leadPatch.clientType = input.patch.clientType;
     let nextClientId = input.patch.clientId ?? existing.clientId;
     if (hasClientPatch && existing.clientId) {
       const clients = await crm.listRecords({ entity: "client", workspaceId, includeArchived: true });

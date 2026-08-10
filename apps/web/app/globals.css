@@ -2017,7 +2017,7 @@ input {
   gap: 7px;
   height: 36px;
   justify-content: space-between;
-  max-width: min(100%, 460px);
+  max-width: min(100%, 620px);
   min-width: 0;
   padding: 0 6px 0 10px;
 }
@@ -2069,16 +2069,121 @@ input {
 }
 
 .bulkActionBar button.danger,
-.bulkActionDialog footer button.danger {
+.bulkActionBar button.spicy,
+.bulkActionDialog footer button.danger,
+.bulkActionDialog footer button.spicy {
   background: color-mix(in srgb, var(--danger-soft) 62%, var(--danger) 38%);
   border-color: color-mix(in srgb, var(--danger-line) 45%, var(--danger) 55%);
   color: color-mix(in srgb, var(--danger) 82%, #111827 18%);
   font-weight: 700;
 }
 
-.bulkActionBar button.danger {
+.bulkActionBar button.danger,
+.bulkActionBar button.spicy {
   min-width: 42px;
   padding: 0 7px;
+}
+
+.bulkActionBar button.spicy,
+.bulkActionDialog footer button.spicy {
+  background: color-mix(in srgb, #fff1e8 68%, #d65a31 32%);
+  border-color: color-mix(in srgb, #f2b097 45%, #d65a31 55%);
+  color: #9b2f1c;
+}
+
+[data-theme="dark"] .bulkActionBar button.spicy,
+[data-theme="dark"] .bulkActionDialog footer button.spicy {
+  background: color-mix(in srgb, #3a2022 68%, #ff7a4a 32%);
+  border-color: color-mix(in srgb, #693236 45%, #ff7a4a 55%);
+  color: #ffd7ca;
+}
+
+.spicyArchiveDialog {
+  box-shadow: 0 22px 70px rgba(154, 47, 28, 0.18);
+}
+
+.archiveBlast {
+  align-items: center;
+  display: flex;
+  inset: 88px 24px 72px;
+  justify-content: center;
+  pointer-events: none;
+  position: absolute;
+  z-index: 15;
+}
+
+.archiveBlastStamp {
+  align-items: center;
+  animation: archiveStamp 1180ms cubic-bezier(0.18, 0.9, 0.28, 1) both;
+  background: color-mix(in srgb, var(--panel) 88%, #ffdfcf 12%);
+  border: 2px solid color-mix(in srgb, #d65a31 70%, var(--line));
+  border-radius: 8px;
+  box-shadow: 0 16px 40px rgba(154, 47, 28, 0.2);
+  color: #9b2f1c;
+  display: inline-flex;
+  gap: 8px;
+  height: 48px;
+  padding: 0 15px;
+  transform: rotate(-4deg);
+}
+
+.archiveBlastStamp strong {
+  font-size: 16px;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.archiveBlastStamp span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.archiveBlastAsh {
+  animation: archiveAsh 1180ms ease-out both;
+  background:
+    radial-gradient(circle at 18% 44%, rgba(214, 90, 49, 0.72) 0 3px, transparent 4px),
+    radial-gradient(circle at 36% 24%, rgba(245, 179, 88, 0.78) 0 2px, transparent 3px),
+    radial-gradient(circle at 62% 38%, rgba(40, 44, 47, 0.32) 0 3px, transparent 4px),
+    radial-gradient(circle at 76% 64%, rgba(214, 90, 49, 0.58) 0 2px, transparent 3px),
+    radial-gradient(circle at 46% 72%, rgba(40, 44, 47, 0.26) 0 2px, transparent 3px);
+  height: 140px;
+  position: absolute;
+  width: 240px;
+}
+
+@keyframes archiveStamp {
+  0% {
+    opacity: 0;
+    transform: translateY(-24px) scale(1.24) rotate(-12deg);
+  }
+  28% {
+    opacity: 1;
+    transform: translateY(0) scale(0.94) rotate(-4deg);
+  }
+  44% {
+    transform: translateY(-3px) scale(1) rotate(-4deg);
+  }
+  84% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(16px) scale(0.96) rotate(-4deg);
+  }
+}
+
+@keyframes archiveAsh {
+  0% {
+    opacity: 0;
+    transform: scale(0.45);
+  }
+  24% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.5) translateY(-18px);
+  }
 }
 
 .bulkActionBar .clearSelectionButton {
@@ -4050,6 +4155,232 @@ input {
   gap: 4px;
 }
 
+.detailsOutreachProtocol {
+  border-top: 1px solid var(--line);
+  margin-top: 8px;
+  padding-top: 8px;
+}
+
+.detailsOutreachProtocolHeader {
+  align-items: baseline;
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 5px;
+}
+
+.detailsOutreachProtocolHeader span {
+  color: var(--ink);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.detailsOutreachProtocolHeader small,
+.detailsOutreachProtocolEmpty {
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.detailsOutreachProtocolList {
+  display: grid;
+  gap: 3px;
+}
+
+.detailsOutreachProtocolRow {
+  align-items: center;
+  display: grid;
+  gap: 7px;
+  grid-template-columns: 18px minmax(70px, 1fr) auto auto;
+  min-width: 0;
+  padding: 2px 0;
+}
+
+.detailsOutreachProtocolIndex,
+.detailsOutreachProtocolDate,
+.detailsOutreachProtocolChannel {
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.detailsOutreachProtocolIndex {
+  text-align: center;
+}
+
+.detailsOutreachProtocolChannel {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.detailsOutreachProtocolAuthor {
+  align-items: center;
+  color: var(--ink);
+  cursor: help;
+  display: inline-flex;
+  font-size: 10px;
+  gap: 5px;
+  min-width: 0;
+}
+
+.detailsOutreachProtocolAuthor strong {
+  align-items: center;
+  background: color-mix(in srgb, var(--accent) 14%, var(--panel));
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--line));
+  border-radius: 50%;
+  color: var(--accent);
+  display: inline-flex;
+  flex: 0 0 auto;
+  font-size: 10px;
+  height: 21px;
+  justify-content: center;
+  width: 21px;
+}
+
+.detailsOutreachProtocolAuthor span {
+  max-width: 90px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 640px) {
+  .detailsOutreachProtocolRow {
+    gap: 5px;
+    grid-template-columns: 18px minmax(0, 1fr) auto;
+  }
+
+  .detailsOutreachProtocolDate {
+    display: none;
+  }
+}
+
+/* Lead progress row: eight compact cards fit as one desktop overview. */
+.leadProgressHud {
+  display: block;
+  min-height: 0;
+  padding: 8px;
+}
+
+.leadProgressHeader {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0;
+  margin-bottom: 6px;
+  text-transform: uppercase;
+}
+
+.leadProgressScroller {
+  min-width: 0;
+  overflow: hidden;
+}
+
+.leadProgressTrack {
+  align-items: start;
+  display: grid;
+  gap: 5px;
+  grid-template-columns: repeat(8, minmax(0, 1fr));
+  min-width: 0;
+}
+
+.leadProgressTrackItem {
+  min-width: 0;
+}
+
+.leadProgressStep {
+  gap: 3px;
+  width: 100%;
+}
+
+.leadProgressStep:disabled {
+  cursor: not-allowed;
+}
+
+.leadProgressStep.state-locked {
+  cursor: not-allowed;
+  opacity: 0.42;
+}
+
+.leadProgressStep.state-available:hover,
+.leadProgressStep.state-current:hover,
+.leadProgressStep.state-completed:hover {
+  color: color-mix(in srgb, var(--achievement-color, var(--accent)) 76%, var(--ink));
+}
+
+.leadProgressStep.state-current .leadProgressIcon {
+  background: color-mix(in srgb, var(--achievement-color, var(--accent)) 12%, var(--panel));
+  border-color: color-mix(in srgb, var(--achievement-color, var(--accent)) 70%, var(--line));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--achievement-color, var(--accent)) 13%, transparent), 0 7px 16px color-mix(in srgb, var(--achievement-color, var(--accent)) 22%, transparent);
+  filter: none;
+  opacity: 1;
+  transform: translateY(-1px) scale(1.03);
+}
+
+.leadProgressStep.state-completed .leadProgressIcon {
+  border-color: color-mix(in srgb, var(--achievement-color, var(--accent)) 54%, var(--line));
+  filter: none;
+  opacity: 0.92;
+}
+
+.leadProgressStep.state-available .leadProgressIcon {
+  filter: grayscale(0.25) saturate(0.7);
+  opacity: 0.78;
+}
+
+.leadProgressStep.state-locked .leadProgressIcon {
+  filter: grayscale(1) saturate(0.05);
+}
+
+.leadProgressStep.feedback .leadProgressIcon {
+  animation: leadProgressPressFeedback 620ms cubic-bezier(0.16, 1.2, 0.28, 1);
+}
+
+.leadProgressStep.completion .leadProgressIcon::before {
+  animation: leadProgressCompletionRing 900ms ease-out;
+}
+
+.leadProgressStep:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+
+@keyframes leadProgressPressFeedback {
+  0% { transform: scale(0.92) translateY(1px); }
+  48% { transform: scale(1.08) translateY(-2px); }
+  100% { transform: scale(1); }
+}
+
+@keyframes leadProgressCompletionRing {
+  0% { opacity: 0; transform: scale(0.76); }
+  35% { opacity: 1; transform: scale(1.12); }
+  100% { opacity: 0; transform: scale(1.32); }
+}
+
+@media (max-width: 900px) {
+  .leadProgressScroller {
+    overflow-x: auto;
+    overscroll-behavior-inline: contain;
+    scrollbar-width: thin;
+  }
+
+  .leadProgressTrack {
+    grid-template-columns: repeat(8, minmax(96px, 1fr));
+    min-width: 780px;
+    padding: 2px 1px 5px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .leadProgressStep,
+  .leadProgressIcon {
+    transition: none;
+  }
+
+  .leadProgressStep.feedback .leadProgressIcon,
+  .leadProgressStep.completion .leadProgressIcon::before {
+    animation: none;
+  }
+}
+
 .detailsOutreachTouch {
   background: var(--panel);
   border: 1px solid var(--line);
@@ -4904,6 +5235,18 @@ input {
 
 .mobileTableRow.focused {
   animation: mobile-row-focus 2.2s ease-out;
+}
+
+.mobileTableRow.archived {
+  background: color-mix(in srgb, var(--panel) 72%, #8d9691 28%);
+  border-color: color-mix(in srgb, var(--line) 62%, #8d9691 38%);
+  filter: grayscale(0.82);
+  opacity: 0.72;
+}
+
+.mobileTableRow.archived.spicy {
+  background: color-mix(in srgb, var(--panel) 70%, #a06a60 30%);
+  border-color: color-mix(in srgb, var(--line) 58%, #a06a60 42%);
 }
 
 .mobileRowTitle {
@@ -7162,4 +7505,20 @@ input {
     display: grid;
     gap: 10px;
   }
+}
+
+/* Final lead-progress overrides keep the eight-stage row compact after legacy responsive rules. */
+.leadProgressHud { display: block; min-height: 0; }
+.leadProgressSets { display: none; }
+.leadProgressTrack { grid-template-columns: repeat(8, minmax(0, 1fr)); min-width: 0; }
+.leadProgressScroller { overflow: hidden; }
+
+@media (max-width: 900px) {
+  .leadProgressScroller { overflow-x: auto; }
+  .leadProgressTrack { grid-template-columns: repeat(8, minmax(96px, 1fr)); min-width: 780px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .leadProgressStep.feedback .leadProgressIcon,
+  .leadProgressStep.completion .leadProgressIcon::before { animation: none; }
 }

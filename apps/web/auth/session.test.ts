@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   allowedLoginEmails,
+  accountDisplayName,
+  accountShortCode,
   createSessionCookieValue,
   isValidInternalApiToken,
   isAllowedLoginEmail,
@@ -48,5 +50,16 @@ describe("LightCRM auth sessions", () => {
     expect(isValidInternalApiToken("tg-secret", "tg-secret")).toBe(true);
     expect(isValidInternalApiToken("Bearer wrong", "tg-secret")).toBe(false);
     expect(isValidInternalApiToken("Bearer tg-secret", "")).toBe(false);
+  });
+
+  it("maps CRM login emails to compact protocol author labels", () => {
+    expect(accountDisplayName("gubernatorova.juliya@gmail.com")).toBe("Юлия");
+    expect(accountShortCode("gubernatorova.juliya@gmail.com")).toBe("Ю");
+    expect(accountDisplayName("ekaterina.reyzbikh@gmail.com")).toBe("Екатерина");
+    expect(accountShortCode("ekaterina.reyzbikh@gmail.com")).toBe("Е");
+    expect(accountDisplayName("olegp306@gmail.com")).toBe("Олег");
+    expect(accountShortCode("olegp306@gmail.com")).toBe("О");
+    expect(accountDisplayName(null)).toBe("Не указан");
+    expect(accountShortCode(null)).toBe("—");
   });
 });

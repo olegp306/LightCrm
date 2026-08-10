@@ -18,6 +18,7 @@ type LiveTablePageProps = CrmTableProps & {
   outreachStartEndpoint?: string;
   outreachAdvanceEndpoint?: string;
   outreachDraftEndpoint?: string;
+  outreachProtocolEndpoint?: string;
 };
 
 type CrmSettingsResponse = {

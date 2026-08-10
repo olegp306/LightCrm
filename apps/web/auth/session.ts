@@ -6,6 +6,12 @@ export const allowedLoginEmails = [
   "olegp306@gmail.com"
 ] as const;
 
+const accountNames: Record<string, string> = {
+  "gubernatorova.juliya@gmail.com": "Юлия",
+  "ekaterina.reyzbikh@gmail.com": "Екатерина",
+  "olegp306@gmail.com": "Олег"
+};
+
 export type AuthSession = {
   email: string;
   issuedAt: number;
@@ -28,6 +34,15 @@ const sessionMaxAgeSeconds = 60 * 60 * 24 * 14;
 
 function normalizeEmail(value: string | null | undefined) {
   return value?.trim().toLowerCase() ?? "";
+}
+
+export function accountDisplayName(email: string | null | undefined) {
+  return accountNames[normalizeEmail(email)] ?? "Не указан";
+}
+
+export function accountShortCode(email: string | null | undefined) {
+  const name = accountDisplayName(email);
+  return name === "Не указан" ? "—" : name.slice(0, 1);
 }
 
 export function isAllowedLoginEmail(value: string | null | undefined) {

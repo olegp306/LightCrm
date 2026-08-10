@@ -386,11 +386,18 @@ function compareValues(left: CrmTableCellValue | undefined, right: CrmTableCellV
 }
 
 export function sortRows(rows: CrmTableRow[], sort: TableSort | null): CrmTableRow[] {
-  if (!sort) {
-    return rows;
-  }
-  const direction = sort.direction === "asc" ? 1 : -1;
-  return [...rows].sort((left, right) => direction * compareValues(left.values[sort.columnId], right.values[sort.columnId]));
+  const sortedRows = sort
+    ? [...rows].sort((left, right) => {
+        const direction = sort.direction === "asc" ? 1 : -1;
+        return direction * compareValues(left.values[sort.columnId], right.values[sort.columnId]);
+      })
+    : [...rows];
+  return sortedRows.sort((left, right) => archivedRowRank(left) - archivedRowRank(right));
+}
+
+function archivedRowRank(row: CrmTableRow): number {
+  const status = typeof row.values.status === "string" ? row.values.status.toLocaleLowerCase() : "";
+  return row.values.archivedAt || status === "archived" ? 1 : 0;
 }
 
 export function updateRowCell(

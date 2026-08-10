@@ -1,6 +1,8 @@
 import { getPrismaClient } from "@lightcrm/db";
 import { NextResponse } from "next/server";
+import { cookies } from "next/headers";
 import { z } from "zod";
+import { authSessionCookieName, readSessionCookieValue } from "../../../../../auth/session";
 import { getCrm, handleRouteError, resolveWorkspaceId } from "../../_shared";
 import { getCrmRuntimeSettings } from "../../settings/crm-settings-store";
 import { draftForCampaign } from "../draft-generator";
@@ -138,6 +140,7 @@ export async function POST(request: Request) {
     }
 
     const prisma = getPrismaClient();
+    const session = await readSessionCookieValue(cookies().get(authSessionCookieName)?.value);
     const [coldTarget, assignment] = await Promise.all([
       prisma.coldTarget.findFirst({ where: { id: input.coldTargetId, workspaceId, archivedAt: null } }),
       prisma.outreachCampaignAssignment.findUnique({
@@ -226,7 +229,8 @@ export async function POST(request: Request) {
         subject: sentSubject || assignment.draftSubject,
         body: sentBody || assignment.draftBody,
         occurredAt: new Date(),
-        outcome: "sent"
+        outcome: "sent",
+        actorEmail: session?.email ?? null
       }
     });
 
@@ -320,5 +324,3 @@ export async function POST(request: Request) {
     return handleRouteError(error);
   }
 }
-
-

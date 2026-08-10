@@ -16,10 +16,12 @@ import {
   type Theme
 } from "@glideapps/glide-data-grid";
 import {
+  Archive,
   Check,
   Columns3,
   Download,
   FileText,
+  Flame,
   Italic,
   Merge,
   MessageCircle,
@@ -42,7 +44,6 @@ import {
   documentDisplayLabel,
   documentExtensionLabel,
   formatAreaValue,
-  leadProgressReward,
   nextActionStateForTodo,
   recordToRow,
   shouldWrapTableColumn,
@@ -161,6 +162,17 @@ export type OutreachCampaign = {
   touchpoints: OutreachCampaignTouchpoint[];
 };
 
+type OutreachProtocolEntry = {
+  id: string;
+  channel: string;
+  subject: string | null;
+  occurredAt: string;
+  outcome: string | null;
+  authorEmail: string | null;
+  authorName: string;
+  authorCode: string;
+};
+
 function visibleClientReference(client: ClientOption): string | null {
   const code = client.code?.trim();
   if (code && !/^csv-client-/i.test(code)) {
@@ -203,6 +215,7 @@ export type CrmTableProps = {
   outreachStartEndpoint?: string;
   outreachAdvanceEndpoint?: string;
   outreachDraftEndpoint?: string;
+  outreachProtocolEndpoint?: string;
   sendToTelegramEndpoint?: string;
   clientOptionsEndpoint?: string;
   clientLinkEndpoint?: string;
@@ -276,7 +289,8 @@ type LongTextPreview = {
   text: string;
 };
 
-type BulkActionDialog = "delete" | "merge" | null;
+type BulkActionDialog = "archive" | "delete" | "merge" | "spicyArchive" | null;
+type ArchiveMood = "regular" | "spicy";
 
 type MobileEditTarget = {
   rowId: string;
@@ -367,56 +381,113 @@ const handoffBallIcons: Record<HandoffBallType, string> = {
 };
 const handoffInsightIcon = "\u{1F4A1}";
 
-type LeadAchievement = {
+export type LeadProgressState = "locked" | "available" | "current" | "completed";
+
+export type LeadProgressStage = {
   id: string;
   label: string;
   color: string;
+  description: string;
   image: string;
-  effect: "soft" | "bounce" | "wiggle" | "money";
 };
 
-type LeadAchievementSet = {
-  id: string;
-  title: string;
-  achievements: LeadAchievement[];
-};
-
-const leadProgressStorageKey = "lightcrm.leadProgressDemo.v1";
-
-const leadAchievementSets: LeadAchievementSet[] = [
+export const leadProgressStages: LeadProgressStage[] = [
   {
-    id: "funnel",
-    title: "Набор A",
-    achievements: [
-      { id: "mail-sent", label: "Письмо отправлено", color: "#f59e0b", image: "/lead-progress/01-mail-sent.png", effect: "soft" },
-      { id: "lead-replied", label: "Лид ответил", color: "#ef4444", image: "/lead-progress/02-lead-replied.png", effect: "bounce" },
-      { id: "client-written", label: "Написали клиенту", color: "#3b82f6", image: "/lead-progress/03-client-written.png", effect: "wiggle" },
-      { id: "proposal-sent", label: "КП отправлено", color: "#8b5cf6", image: "/lead-progress/04-proposal-sent.png", effect: "bounce" },
-      { id: "proposal-reworked", label: "КП доработано", color: "#06b6d4", image: "/lead-progress/05-proposal-reworked.png", effect: "wiggle" },
-      { id: "meeting-booked", label: "Встреча назначена", color: "#22c55e", image: "/lead-progress/06-meeting-booked.png", effect: "bounce" },
-      { id: "call-done", label: "Созвон состоялся", color: "#14b8a6", image: "/lead-progress/07-call-done.png", effect: "wiggle" },
-      { id: "client-agreed", label: "Клиент согласился", color: "#ec4899", image: "/lead-progress/08-client-agreed.png", effect: "bounce" },
-      { id: "client-thanks", label: "Спасибо от клиента", color: "#f97316", image: "/lead-progress/09-client-thanks.png", effect: "bounce" },
-      { id: "money-received", label: "Деньги получены", color: "#eab308", image: "/lead-progress/10-money-received.png", effect: "money" }
-    ]
+    id: "proposal",
+    label: "Proposal",
+    color: "#2563eb",
+    description: "Proposal prepared and sent.",
+    image: "/lead-progress/01-mail-sent.png"
   },
   {
-    id: "momentum",
-    title: "Набор B",
-    achievements: [
-      { id: "needs-detail", label: "Нужно уточнение", color: "#64748b", image: "/lead-progress/11-needs-detail.png", effect: "soft" },
-      { id: "deep-work", label: "Упорная работа", color: "#7c3aed", image: "/lead-progress/12-deep-work.png", effect: "wiggle" },
-      { id: "study-details", label: "Изучаю детали", color: "#0ea5e9", image: "/lead-progress/13-study-details.png", effect: "wiggle" },
-      { id: "in-progress", label: "В работе", color: "#2563eb", image: "/lead-progress/14-in-progress.png", effect: "bounce" },
-      { id: "almost-ready", label: "Почти готово", color: "#f59e0b", image: "/lead-progress/15-almost-ready.png", effect: "bounce" },
-      { id: "great-work", label: "Отличная работа!", color: "#f97316", image: "/lead-progress/16-great-work.png", effect: "bounce" },
-      { id: "under-control", label: "Всё под контролем", color: "#111827", image: "/lead-progress/17-under-control.png", effect: "soft" },
-      { id: "new-task", label: "Новая задача", color: "#eab308", image: "/lead-progress/18-new-task.png", effect: "bounce" },
-      { id: "good-news", label: "Отличные новости!", color: "#ef4444", image: "/lead-progress/19-good-news.png", effect: "wiggle" },
-      { id: "money-received-alt", label: "Деньги получены!", color: "#16a34a", image: "/lead-progress/20-money-received-alt.png", effect: "money" }
-    ]
+    id: "contract",
+    label: "Contract",
+    color: "#7c3aed",
+    description: "Contract shared and under review.",
+    image: "/lead-progress/02-lead-replied.png"
+  },
+  {
+    id: "prepayment-invoice",
+    label: "Prepayment invoice",
+    color: "#b45309",
+    description: "Prepayment invoice is ready to send.",
+    image: "/lead-progress/03-client-written.png"
+  },
+  {
+    id: "prepayment-confirmed",
+    label: "Prepayment confirmed",
+    color: "#15803d",
+    description: "Prepayment has been confirmed.",
+    image: "/lead-progress/04-proposal-sent.png"
+  },
+  {
+    id: "power-of-attorney",
+    label: "Power of attorney",
+    color: "#475569",
+    description: "Power of attorney is being collected.",
+    image: "/lead-progress/05-proposal-reworked.png"
+  },
+  {
+    id: "final-invoice",
+    label: "Final invoice",
+    color: "#0f766e",
+    description: "Final invoice is prepared for the client.",
+    image: "/lead-progress/06-meeting-booked.png"
+  },
+  {
+    id: "final-payment-confirmed",
+    label: "Final payment confirmed",
+    color: "#ea580c",
+    description: "Final payment has landed.",
+    image: "/lead-progress/07-call-done.png"
+  },
+  {
+    id: "client-review",
+    label: "Client review",
+    color: "#db2777",
+    description: "Client review requested and received.",
+    image: "/lead-progress/08-client-agreed.png"
   }
 ];
+
+const leadProgressFinalStageIndex = leadProgressStages.length - 1;
+
+export function normalizeLeadProgressStage(value: CrmTableCellValue | undefined): number {
+  const numeric =
+    typeof value === "number"
+      ? value
+      : typeof value === "string" && value.trim()
+        ? Number(value)
+        : Number.NaN;
+  return Number.isInteger(numeric) && numeric >= 0 && numeric <= leadProgressFinalStageIndex ? numeric : 0;
+}
+
+export function deriveLeadProgressState(stageIndex: number, selectedStage: number): LeadProgressState {
+  const normalizedStage = normalizeLeadProgressStage(selectedStage);
+  if (stageIndex < normalizedStage) {
+    return "completed";
+  }
+  if (stageIndex === normalizedStage) {
+    return "current";
+  }
+  if (stageIndex === normalizedStage + 1) {
+    return "available";
+  }
+  return "locked";
+}
+
+function isLeadProgressStageLocked(stageIndex: number, selectedStage: number): boolean {
+  return deriveLeadProgressState(stageIndex, selectedStage) === "locked";
+}
+
+export function buildLeadProgressUpdateRequest(updateRecordIdField: string, rowId: string, progressStage: number) {
+  return {
+    workspaceId: "default",
+    [updateRecordIdField]: rowId,
+    patch: { progressStage },
+    source: { channel: "web-details" as const }
+  };
+}
 
 function normalizedHandoffSide(value: CrmTableCellValue | undefined): "us" | "client" {
   const text = typeof value === "string" ? value.trim().toLowerCase() : "";
@@ -557,6 +628,18 @@ function selectedColumnIndexes(selection: GridSelection, columnCount: number): n
 function rowPublicRef(row: CrmTableRow): string {
   const code = row.values.code;
   return typeof code === "string" && code.trim() ? code.trim() : row.id;
+}
+
+function rowIsArchived(row: CrmTableRow | null | undefined): boolean {
+  if (!row) {
+    return false;
+  }
+  const status = typeof row.values.status === "string" ? row.values.status.toLocaleLowerCase() : "";
+  return Boolean(row.values.archivedAt) || status === "archived";
+}
+
+function rowArchiveMood(row: CrmTableRow | null | undefined): ArchiveMood {
+  return row?.values.archiveMood === "spicy" ? "spicy" : "regular";
 }
 
 function rowSelection(indexes: number[]): GridSelection {
@@ -2020,6 +2103,7 @@ export function CrmTable({
   outreachStartEndpoint,
   outreachAdvanceEndpoint,
   outreachDraftEndpoint,
+  outreachProtocolEndpoint,
   sendToTelegramEndpoint,
   clientOptionsEndpoint,
   clientLinkEndpoint,
@@ -2080,10 +2164,11 @@ export function CrmTable({
   const [styledOutreachDrafts, setStyledOutreachDrafts] = useState<Record<string, boolean>>({});
   const [selectedOutreachOutcome, setSelectedOutreachOutcome] = useState("interested");
   const [outreachCampaignError, setOutreachCampaignError] = useState<string | null>(null);
+  const [outreachProtocol, setOutreachProtocol] = useState<OutreachProtocolEntry[]>([]);
+  const [outreachProtocolError, setOutreachProtocolError] = useState<string | null>(null);
   const [isSendingToTelegram, setIsSendingToTelegram] = useState(false);
-  const [leadProgressMarks, setLeadProgressMarks] = useState<Record<string, Record<string, boolean>>>({});
-  const [leadProgressMarksLoaded, setLeadProgressMarksLoaded] = useState(false);
-  const [leadProgressBursts, setLeadProgressBursts] = useState<Record<string, number>>({});
+  const [leadProgressFeedback, setLeadProgressFeedback] = useState<Record<string, { stageIndex: number; kind: "advance" | "complete" }>>({});
+  const [leadProgressSavingRowId, setLeadProgressSavingRowId] = useState<string | null>(null);
   const [telegramSendNotice, setTelegramSendNotice] = useState<string | null>(null);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [createValues, setCreateValues] = useState<Record<string, string>>({});
@@ -2092,6 +2177,7 @@ export function CrmTable({
   const [isColorPickerOpen, setIsColorPickerOpen] = useState(false);
   const [linkedTableColor, setLinkedTableColor] = useState(defaultTableColor);
   const [bulkActionDialog, setBulkActionDialog] = useState<BulkActionDialog>(null);
+  const [archiveBlast, setArchiveBlast] = useState<{ key: number; count: number } | null>(null);
   const [mobileEditTarget, setMobileEditTarget] = useState<MobileEditTarget | null>(null);
   const [detailAnchorRowId, setDetailAnchorRowId] = useState<string | null>(null);
   const [detailsButtonPosition, setDetailsButtonPosition] = useState<DetailsButtonPosition | null>(null);
@@ -2205,6 +2291,38 @@ export function CrmTable({
           textMedium: "#6f4e00"
         }
   };
+  const activeArchivedRowTheme = {
+    regular: isDarkMode
+      ? {
+          bgCell: "#1f2326",
+          bgCellMedium: "#252a2e",
+          textDark: "#98a2ad",
+          textMedium: "#727d88",
+          accentColor: "#6f7782"
+        }
+      : {
+          bgCell: "#f2f3f2",
+          bgCellMedium: "#e6e8e6",
+          textDark: "#747d77",
+          textMedium: "#909993",
+          accentColor: "#9aa19c"
+        },
+    spicy: isDarkMode
+      ? {
+          bgCell: "#241f20",
+          bgCellMedium: "#302526",
+          textDark: "#a69b9d",
+          textMedium: "#887d80",
+          accentColor: "#a96f64"
+        }
+      : {
+          bgCell: "#efeeee",
+          bgCellMedium: "#e0dddc",
+          textDark: "#746d6c",
+          textMedium: "#938a88",
+          accentColor: "#a06a60"
+        }
+  };
 
   useEffect(() => {
     setEditableRows(rows);
@@ -2269,24 +2387,6 @@ export function CrmTable({
     }
     window.localStorage.setItem(storageKey, JSON.stringify(preferences));
   }, [loadedPreferencesKey, preferences, storageKey]);
-
-  useEffect(() => {
-    try {
-      const saved = window.localStorage.getItem(leadProgressStorageKey);
-      setLeadProgressMarks(saved ? (JSON.parse(saved) as Record<string, Record<string, boolean>>) : {});
-    } catch {
-      setLeadProgressMarks({});
-    } finally {
-      setLeadProgressMarksLoaded(true);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (!leadProgressMarksLoaded) {
-      return;
-    }
-    window.localStorage.setItem(leadProgressStorageKey, JSON.stringify(leadProgressMarks));
-  }, [leadProgressMarks, leadProgressMarksLoaded]);
 
   useEffect(() => {
     if (tableKey === "clients") {
@@ -2407,6 +2507,32 @@ export function CrmTable({
     [detailsModalColumns, isLeadTable]
   );
   const detailsPanelRow = detailsPanel ? editableRows.find((row) => row.id === detailsPanel.rowId) ?? null : null;
+  const loadOutreachProtocol = useCallback(async (coldTargetId: string) => {
+    if (!outreachProtocolEndpoint) {
+      return;
+    }
+    setOutreachProtocolError(null);
+    try {
+      const query = new URLSearchParams({ workspaceId: "default", coldTargetId });
+      const response = await fetch(`${outreachProtocolEndpoint}?${query.toString()}`);
+      const payload = (await response.json()) as OutreachProtocolEntry[] | { error?: string };
+      if (!response.ok || !Array.isArray(payload)) {
+        throw new Error((payload as { error?: string }).error ?? "Protocol load failed.");
+      }
+      setOutreachProtocol(payload);
+    } catch (reason) {
+      setOutreachProtocol([]);
+      setOutreachProtocolError(reason instanceof Error ? reason.message : "Protocol load failed.");
+    }
+  }, [outreachProtocolEndpoint]);
+  useEffect(() => {
+    if (!isColdTargetTable || !detailsPanelRow || !outreachProtocolEndpoint) {
+      setOutreachProtocol([]);
+      setOutreachProtocolError(null);
+      return;
+    }
+    void loadOutreachProtocol(detailsPanelRow.id);
+  }, [detailsPanelRow?.id, isColdTargetTable, loadOutreachProtocol, outreachProtocolEndpoint]);
   const detailsPanelDocuments = detailsPanelRow ? sortDocumentsByAdded(cellDocuments(detailsPanelRow.values.documents)) : [];
   const detailsPanelVisibleDocuments = detailsPanelDocuments.slice(0, 3);
   const detailsPanelExtraDocuments = detailsPanelDocuments.slice(3);
@@ -2437,12 +2563,8 @@ export function CrmTable({
         feeRows: offerFeeRows
       })
     : { status: "missing" as const, reason: "Open a lead to calculate offer" };
-  const detailsLeadProgressTotalGross =
-    "totalGross" in detailsOfferPreview && typeof detailsOfferPreview.totalGross === "number"
-      ? detailsOfferPreview.totalGross
-      : null;
-  const detailsLeadProgressReward = detailsPanelRow ? leadProgressReward(detailsPanelRow, detailsLeadProgressTotalGross) : "—";
-  const detailsLeadAchievementMarks = detailsPanelRow ? leadProgressMarks[detailsPanelRow.id] ?? {} : {};
+  const detailsLeadSelectedStage = detailsPanelRow ? normalizeLeadProgressStage(detailsPanelRow.values.progressStage) : 0;
+  const activeLeadProgressFeedback = detailsPanelRow ? leadProgressFeedback[detailsPanelRow.id] ?? null : null;
   const selectedOutreachCampaign =
     outreachCampaigns.find((campaign) => campaign.id === selectedOutreachCampaignId) ??
     outreachCampaigns.find((campaign) => campaign.status === "active") ??
@@ -2516,8 +2638,10 @@ export function CrmTable({
       const record = filteredRows[row];
       const value = record?.values[String(column?.id)] ?? "";
       const isDraftRow = record ? draftRowIds.has(record.id) : false;
+      const isArchivedRow = rowIsArchived(record);
       const isFlashing = record?.id === flashRowId;
-      const themeOverride = isFlashing ? activeDraftRowTheme.flash : isDraftRow ? activeDraftRowTheme.idle : undefined;
+      const archivedTheme = isArchivedRow ? activeArchivedRowTheme[rowArchiveMood(record)] : undefined;
+      const themeOverride = isFlashing ? activeDraftRowTheme.flash : isDraftRow ? activeDraftRowTheme.idle : archivedTheme;
       if (column?.valueKind === "calendar") {
         const items = visibleCalendarCellItems(cellCalendarItems(value));
         return {
@@ -2612,7 +2736,11 @@ export function CrmTable({
         };
       }
       const displayValue = value;
-      const displayData = Array.isArray(displayValue)
+      const displayData = isArchivedRow && column?.id === "status"
+        ? rowArchiveMood(record) === "spicy"
+          ? "В утиле"
+          : "Archived"
+        : Array.isArray(displayValue)
         ? displayValue.every(isCalendarCellItem)
           ? calendarCellDisplayData(displayValue)
           : documentCellDisplayData(cellDocuments(displayValue))
@@ -2627,7 +2755,7 @@ export function CrmTable({
         contentAlign: column?.id === "interest" ? "center" : undefined
       };
     },
-    [activeDraftRowTheme, activeTableTheme, configuredColumns, draftRowIds, filteredRows, handoffAnimations, pendingDocumentUploads, preferences.handoffBall, uploadPulse]
+    [activeArchivedRowTheme, activeDraftRowTheme, activeTableTheme, configuredColumns, draftRowIds, filteredRows, handoffAnimations, pendingDocumentUploads, preferences.handoffBall, uploadPulse]
   );
 
   const handleItemHovered = useCallback((args: GridMouseEventArgs) => {
@@ -3005,66 +3133,52 @@ export function CrmTable({
     }
   }, [preferences.handoffBall, preferences.handoffSoundEnabled]);
 
-  const playLeadAchievementSound = useCallback((achievement: LeadAchievement, enabled: boolean) => {
-    try {
-      if (preferences.handoffSoundEnabled === false) {
-        return;
+  const persistLeadProgressStage = useCallback(
+    async (row: CrmTableRow, selectedStage: number) => {
+      if (!updateRecordEndpoint || row.id.startsWith("draft-")) {
+        return false;
       }
-      const playPreset = (ballType: HandoffBallType, delayMs: number, volume: number) => {
-        window.setTimeout(() => {
-          try {
-            const audio = new Audio(handoffSoundPresets[ballType].src);
-            audio.volume = volume;
-            void audio.play();
-          } catch {
-            // Audio feedback is intentionally best-effort.
-          }
-        }, delayMs);
-      };
-      if (!enabled) {
-        playPreset("potato", 0, 0.18);
-        return;
-      }
-      if (achievement.effect === "money") {
-        playPreset("potato", 0, 0.28);
-        playPreset("basketball", 130, 0.34);
-        playPreset("football", 260, 0.38);
-        return;
-      }
-      if (achievement.effect === "wiggle") {
-        playPreset("volleyball", 0, 0.26);
-        playPreset("potato", 135, 0.2);
-        return;
-      }
-      playPreset(achievement.effect === "bounce" ? "basketball" : "potato", 0, achievement.effect === "bounce" ? 0.28 : 0.2);
-    } catch {
-      // Audio feedback is intentionally best-effort.
-    }
-  }, [preferences.handoffSoundEnabled]);
-
-  const toggleLeadAchievement = useCallback((rowId: string, achievement: LeadAchievement, isActive: boolean) => {
-    const willTurnOn = !isActive;
-    const burstKey = `${rowId}:${achievement.id}`;
-    setLeadProgressMarks((current) => {
-      const currentRow = current[rowId] ?? {};
-      return {
-        ...current,
-        [rowId]: {
-          ...currentRow,
-          [achievement.id]: willTurnOn
+      const progressStage = normalizeLeadProgressStage(selectedStage);
+      setLeadProgressSavingRowId(row.id);
+      try {
+        const response = await fetch(updateRecordEndpoint, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(buildLeadProgressUpdateRequest(updateRecordIdField, row.id, progressStage))
+        });
+        const payload = (await response.json()) as { error?: string };
+        if (!response.ok) {
+          throw new Error(payload.error ?? "Lead progress update failed.");
         }
-      };
-    });
-    setLeadProgressBursts((current) => ({ ...current, [burstKey]: Date.now() }));
-    window.setTimeout(() => {
-      setLeadProgressBursts((current) => {
-        const next = { ...current };
-        delete next[burstKey];
-        return next;
-      });
-    }, achievement.effect === "money" ? 1100 : 820);
-    playLeadAchievementSound(achievement, willTurnOn);
-  }, [playLeadAchievementSound]);
+        setEditableRows((current) => updateRowCell(current, row.id, "progressStage", progressStage));
+        setLeadProgressFeedback((current) => ({
+          ...current,
+          [row.id]: {
+            stageIndex: progressStage,
+            kind: progressStage === leadProgressFinalStageIndex ? "complete" : "advance"
+          }
+        }));
+        window.setTimeout(() => {
+          setLeadProgressFeedback((current) => {
+            if (!current[row.id] || current[row.id]?.stageIndex !== progressStage) {
+              return current;
+            }
+            const next = { ...current };
+            delete next[row.id];
+            return next;
+          });
+        }, progressStage === leadProgressFinalStageIndex ? 900 : 620);
+        setCreateError(null);
+        return true;
+      } catch (error) {
+        setCreateError(error instanceof Error ? error.message : "Lead progress update failed.");
+        return false;
+      } finally {
+        setLeadProgressSavingRowId((current) => (current === row.id ? null : current));
+      }
+    },
+    [updateRecordEndpoint, updateRecordIdField]
+  );
 
   const setDetailsValue = useCallback((columnId: string, value: string) => {
     setDetailsPanel((current) =>
@@ -4196,6 +4310,68 @@ export function CrmTable({
     setBulkActionDialog(null);
   }, [archiveEntity, selectedRows]);
 
+  const confirmArchiveSelectedRows = useCallback(
+    async (mood: ArchiveMood) => {
+      if (!archiveEntity || selectedRows.length === 0) {
+        setBulkActionDialog(null);
+        return;
+      }
+      const selectedIds = new Set(selectedRows.map((row) => row.id));
+      if (mood === "spicy") {
+        setArchiveBlast({ key: Date.now(), count: selectedRows.length });
+      }
+      const response = await fetch("/api/crm/archive", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ entity: archiveEntity, ids: [...selectedIds], mood })
+      });
+      if (!response.ok) {
+        const payload = (await response.json()) as { error?: string };
+        setCreateError(payload.error ? `Archive failed: ${payload.error}` : "Archive failed.");
+        setBulkActionDialog(null);
+        setArchiveBlast(null);
+        return;
+      }
+      const payload = (await response.json()) as { archived?: ApiRecord[] };
+      const archivedRows = new Map((payload.archived ?? []).map((record) => [record.id, recordToRow(record, columns)]));
+      const fallbackArchivedAt = new Date().toISOString();
+      setEditableRows((current) =>
+        current.map((row) => {
+          const archivedRow = archivedRows.get(row.id);
+          if (archivedRow) {
+            return archivedRow;
+          }
+          if (!selectedIds.has(row.id)) {
+            return row;
+          }
+          return {
+            ...row,
+            values: {
+              ...row.values,
+              status: "archived",
+              archivedAt: fallbackArchivedAt,
+              archiveMood: mood
+            }
+          };
+        })
+      );
+      setDraftRowIds((current) => {
+        const next = new Set(current);
+        selectedIds.forEach((id) => next.delete(id));
+        return next;
+      });
+      setSavingDraftIds((current) => {
+        const next = new Set(current);
+        selectedIds.forEach((id) => next.delete(id));
+        return next;
+      });
+      setGridSelection(emptySelection());
+      setBulkActionDialog(null);
+      window.setTimeout(() => setArchiveBlast(null), 1450);
+    },
+    [archiveEntity, columns, selectedRows]
+  );
+
   const confirmDeleteCellItem = useCallback(async () => {
     if (!cellDeleteTarget || isDeletingCellItem) {
       return;
@@ -4628,6 +4804,7 @@ export function CrmTable({
           throw new Error(payload.error ?? "Campaign update failed.");
         }
         applyOutreachResponseToRow(detailsPanelRow.id, payload);
+        void loadOutreachProtocol(detailsPanelRow.id);
       } catch (reason) {
         setOutreachCampaignError(reason instanceof Error ? reason.message : "Campaign update failed.");
       } finally {
@@ -4638,6 +4815,7 @@ export function CrmTable({
       advancingOutreachCampaign,
       applyOutreachResponseToRow,
       detailsPanelRow,
+      loadOutreachProtocol,
       outreachAdvanceEndpoint,
       selectedOutreachCampaign,
       selectedOutreachOutcome
@@ -4749,10 +4927,12 @@ export function CrmTable({
                         {isGeneratingOffer ? "Generating" : "Generate offer"}
                       </button>
                     ) : null}
-                    <button type="button" className="danger" onClick={() => setBulkActionDialog("delete")}>
-                      <Trash2 size={13} />
-                      Delete
-                    </button>
+                    {!archiveEntity ? (
+                      <button type="button" className="danger" onClick={() => setBulkActionDialog("delete")}>
+                        <Trash2 size={13} />
+                        Delete
+                      </button>
+                    ) : null}
                   </>
                 ) : (
                   <button type="button" onClick={() => setBulkActionDialog("merge")}>
@@ -4760,6 +4940,20 @@ export function CrmTable({
                     Try to merge
                   </button>
                 )}
+                {archiveEntity ? (
+                  <>
+                    <button type="button" onClick={() => setBulkActionDialog("archive")}>
+                      <Archive size={13} />
+                      Archive
+                    </button>
+                    {archiveEntity === "lead" ? (
+                      <button type="button" className="spicy" onClick={() => setBulkActionDialog("spicyArchive")}>
+                        <Flame size={13} />
+                        В утиль
+                      </button>
+                    ) : null}
+                  </>
+                ) : null}
                 <button type="button" className="clearSelectionButton" aria-label="Clear row selection" onClick={() => setGridSelection(emptySelection())}>
                   <X size={13} />
                 </button>
@@ -5120,6 +5314,16 @@ export function CrmTable({
           smoothScrollY
         />
       </div>
+      {archiveBlast ? (
+        <div className="archiveBlast" key={archiveBlast.key} aria-live="polite">
+          <div className="archiveBlastAsh" aria-hidden="true" />
+          <div className="archiveBlastStamp">
+            <Flame size={20} />
+            <strong>В утиль</strong>
+            <span>{archiveBlast.count === 1 ? "Lead closed" : `${archiveBlast.count} leads closed`}</span>
+          </div>
+        </div>
+      ) : null}
       {isLeadTable ? (
         <details className="leadFieldGuide">
           <summary>
@@ -5160,12 +5364,15 @@ export function CrmTable({
             { label: "Todo", value: textCellValue(row.values.todo) }
           ].filter((field) => Boolean(field.value));
           const mobileSecondaryFields = [
-            { label: "Status", value: textCellValue(row.values.status) }
+            {
+              label: "Status",
+              value: rowIsArchived(row) && rowArchiveMood(row) === "spicy" ? "В утиле" : textCellValue(row.values.status)
+            }
           ].filter((field) => Boolean(field.value));
           if (isLeadTable) {
             return (
               <article
-                className={`mobileTableRow mobileLeadCard${row.id === flashRowId ? " focused" : ""}`}
+                className={`mobileTableRow mobileLeadCard${row.id === flashRowId ? " focused" : ""}${rowIsArchived(row) ? ` archived ${rowArchiveMood(row)}` : ""}`}
                 key={row.id}
                 role="button"
                 tabIndex={0}
@@ -5402,7 +5609,7 @@ export function CrmTable({
           }
           return (
             <article
-              className={`mobileTableRow${row.id === flashRowId ? " focused" : ""}`}
+              className={`mobileTableRow${row.id === flashRowId ? " focused" : ""}${rowIsArchived(row) ? ` archived ${rowArchiveMood(row)}` : ""}`}
               key={row.id}
               ref={(element) => {
                 if (element) {
@@ -5657,38 +5864,59 @@ export function CrmTable({
 
             {isLeadTable ? (
               <section className="leadProgressHud" aria-label="Lead progress">
-                <div className="leadProgressSets">
-                  {leadAchievementSets.map((set) => (
-                    <div className="leadProgressSet" key={set.id}>
-                      <span className="leadProgressSetTitle">{set.title}</span>
-                      <div className="leadProgressTrack">
-                        {set.achievements.map((achievement) => {
-                          const isActive = Boolean(detailsLeadAchievementMarks[achievement.id]);
-                          const burstKey = detailsPanelRow ? `${detailsPanelRow.id}:${achievement.id}` : "";
-                          const isBursting = Boolean(burstKey && leadProgressBursts[burstKey]);
-                          return (
-                            <button
-                              type="button"
-                              className={`leadProgressStep effect-${achievement.effect}${isActive ? " done" : ""}${isBursting ? " burst" : ""}`}
-                              key={achievement.id}
-                              aria-pressed={isActive}
-                              style={{ "--achievement-color": achievement.color } as CSSProperties}
-                              onClick={() => detailsPanelRow && toggleLeadAchievement(detailsPanelRow.id, achievement, isActive)}
-                            >
-                              <span className="leadProgressIcon" aria-hidden="true">
-                                <img src={achievement.image} alt="" draggable={false} />
-                              </span>
-                              <span className="leadProgressLabel">{achievement.label}</span>
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  ))}
+                <div className="leadProgressHeader">
+                  <span>Katya progress</span>
                 </div>
-                <div className={`leadProgressReward${detailsLeadProgressReward !== "—" ? " ready" : ""}`}>
-                  <span>Reward</span>
-                  <strong>{detailsLeadProgressReward}</strong>
+                <div className="leadProgressScroller">
+                  <div className="leadProgressTrack" role="list" aria-label="Katya progress stages">
+                    {leadProgressStages.map((stage, stageIndex) => {
+                      const state = deriveLeadProgressState(stageIndex, detailsLeadSelectedStage);
+                      const isCurrent = state === "current";
+                      const isLocked = isLeadProgressStageLocked(stageIndex, detailsLeadSelectedStage);
+                      const isSavingRow = detailsPanelRow ? leadProgressSavingRowId === detailsPanelRow.id : false;
+                      const isFeedbackStage = activeLeadProgressFeedback?.stageIndex === stageIndex;
+                      const isDraftRow = Boolean(detailsPanelRow?.id.startsWith("draft-"));
+                      const isDisabled = !detailsPanelRow || !updateRecordEndpoint || isSavingRow || isLocked || isDraftRow;
+                      const stateLabel =
+                        state === "current"
+                          ? "current stage"
+                          : state === "completed"
+                            ? "completed stage"
+                            : state === "available"
+                              ? "available stage"
+                              : "locked stage";
+                      return (
+                        <div className="leadProgressTrackItem" role="listitem" key={stage.id}>
+                          <button
+                            type="button"
+                            className={`leadProgressStep state-${state}${isFeedbackStage ? " feedback" : ""}${
+                              isFeedbackStage && activeLeadProgressFeedback?.kind === "complete" ? " completion" : ""
+                            }`}
+                            aria-pressed={isCurrent}
+                            aria-current={isCurrent ? "step" : undefined}
+                            aria-label={`Stage ${stageIndex + 1} of ${leadProgressStages.length}: ${stage.label}, ${stateLabel}`}
+                            disabled={isDisabled}
+                            style={{ "--achievement-color": stage.color } as CSSProperties}
+                            title={stage.description}
+                            onClick={() => {
+                              if (!detailsPanelRow || isLocked || stageIndex === detailsLeadSelectedStage) {
+                                return;
+                              }
+                              void persistLeadProgressStage(detailsPanelRow, stageIndex);
+                            }}
+                          >
+                            <span className="leadProgressIndex" aria-hidden="true">
+                              {stageIndex + 1}
+                            </span>
+                            <span className="leadProgressIcon" aria-hidden="true">
+                              <img src={stage.image} alt="" draggable={false} />
+                            </span>
+                            <span className="leadProgressLabel">{stage.label}</span>
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
               </section>
             ) : null}
@@ -6017,6 +6245,40 @@ export function CrmTable({
                           </span>
                         </div>
                       </div>
+                      <section className="detailsOutreachProtocol" aria-label="Outreach protocol">
+                        <div className="detailsOutreachProtocolHeader">
+                          <span>Protocol</span>
+                          <small>{outreachProtocol.length} entries</small>
+                        </div>
+                        {outreachProtocolError ? <p className="detailsDrawerError">{outreachProtocolError}</p> : null}
+                        {!outreachProtocolError && outreachProtocol.length === 0 ? (
+                          <p className="detailsOutreachProtocolEmpty">No sent touches yet</p>
+                        ) : null}
+                        {outreachProtocol.length > 0 ? (
+                          <div className="detailsOutreachProtocolList">
+                            {outreachProtocol.map((entry, index) => {
+                              const date = new Intl.DateTimeFormat(undefined, {
+                                day: "2-digit",
+                                month: "short",
+                                hour: "2-digit",
+                                minute: "2-digit"
+                              }).format(new Date(entry.occurredAt));
+                              const tooltip = `${entry.authorName}${entry.authorEmail ? ` · ${entry.authorEmail}` : ""} · ${date}`;
+                              return (
+                                <div className="detailsOutreachProtocolRow" key={entry.id}>
+                                  <span className="detailsOutreachProtocolIndex">{outreachProtocol.length - index}</span>
+                                  <span className="detailsOutreachProtocolChannel">{entry.channel}</span>
+                                  <span className="detailsOutreachProtocolDate">{date}</span>
+                                  <span className="detailsOutreachProtocolAuthor" title={tooltip} aria-label={tooltip}>
+                                    <strong>{entry.authorCode}</strong>
+                                    <span>{entry.authorName}</span>
+                                  </span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        ) : null}
+                      </section>
                       {outreachCampaigns.length > 0 ? (
                         <div className="detailsOutreachPanel">
                           <label>
@@ -6494,6 +6756,55 @@ export function CrmTable({
               </button>
               <button type="button" className="danger" onClick={confirmDeleteSelectedRows}>
                 Delete
+              </button>
+            </footer>
+          </section>
+        </div>
+      ) : null}
+      {bulkActionDialog === "archive" ? (
+        <div className="documentModalBackdrop" role="presentation" onMouseDown={() => setBulkActionDialog(null)}>
+          <section className="bulkActionDialog" role="dialog" aria-modal="true" onMouseDown={(event) => event.stopPropagation()}>
+            <header>
+              <div>
+                <span>Archive record</span>
+                <h2>{selectedRows.length === 1 ? "Move this record to archive?" : `Move ${selectedRows.length} records to archive?`}</h2>
+              </div>
+              <button type="button" onClick={() => setBulkActionDialog(null)} aria-label="Close archive dialog">
+                <X size={18} />
+              </button>
+            </header>
+            <p>Archived leads stay visible at the bottom of the table in a muted state.</p>
+            <footer>
+              <button type="button" onClick={() => setBulkActionDialog(null)}>
+                Cancel
+              </button>
+              <button type="button" onClick={() => void confirmArchiveSelectedRows("regular")}>
+                Archive
+              </button>
+            </footer>
+          </section>
+        </div>
+      ) : null}
+      {bulkActionDialog === "spicyArchive" ? (
+        <div className="documentModalBackdrop" role="presentation" onMouseDown={() => setBulkActionDialog(null)}>
+          <section className="bulkActionDialog spicyArchiveDialog" role="dialog" aria-modal="true" onMouseDown={(event) => event.stopPropagation()}>
+            <header>
+              <div>
+                <span>Final archive</span>
+                <h2>{selectedRows.length === 1 ? "Send this lead to В утиль?" : `Send ${selectedRows.length} leads to В утиль?`}</h2>
+              </div>
+              <button type="button" onClick={() => setBulkActionDialog(null)} aria-label="Close final archive dialog">
+                <X size={18} />
+              </button>
+            </header>
+            <p>The lead stays at the bottom, greyed out, with a small “В утиле” status marker.</p>
+            <footer>
+              <button type="button" onClick={() => setBulkActionDialog(null)}>
+                Cancel
+              </button>
+              <button type="button" className="spicy" onClick={() => void confirmArchiveSelectedRows("spicy")}>
+                <Flame size={14} />
+                В утиль
               </button>
             </footer>
           </section>

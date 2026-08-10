@@ -177,6 +177,18 @@ function nullableOutreachLanguage(value: ColdTarget["preferredLanguage"] | undef
   return value === "de" || value === "ru" || value === "en" ? value : null;
 }
 
+function nullableLeadLanguage(value: Lead["preferredLanguage"] | undefined): Lead["preferredLanguage"] {
+  return value === "de" || value === "ru" || value === "en" ? value : null;
+}
+
+function sanitizeLeadProgressStage(value: number | null | undefined): number {
+  const stage = value ?? 0;
+  if (!Number.isInteger(stage) || stage < 0 || stage > 7) {
+    throw new Error("Lead progress stage must be an integer between 0 and 7.");
+  }
+  return stage;
+}
+
 function trimText(value: string | null | undefined): string | null {
   const trimmed = value?.trim();
   return trimmed ? trimmed : null;
@@ -474,6 +486,14 @@ export function createCrmService(repository: CrmRepository) {
       externalThreadId: nullable(input.externalThreadId ?? existing?.externalThreadId),
       externalMessageId: nullable(input.externalMessageId ?? existing?.externalMessageId),
       notes: nullable(input.notes ?? existing?.notes),
+      progressStage: sanitizeLeadProgressStage(input.progressStage ?? existing?.progressStage),
+      preferredLanguage: nullableLeadLanguage(input.preferredLanguage ?? existing?.preferredLanguage),
+      contractNumber: nullable(input.contractNumber ?? existing?.contractNumber),
+      expectedFeeNet: input.expectedFeeNet ?? existing?.expectedFeeNet ?? null,
+      olegPercent: input.olegPercent ?? existing?.olegPercent ?? null,
+      handoffNote: nullable(input.handoffNote ?? existing?.handoffNote),
+      lastPingAt: input.lastPingAt ?? existing?.lastPingAt ?? null,
+      clientType: nullable(input.clientType ?? existing?.clientType),
       createdAt: existing?.createdAt ?? timestamp,
       updatedAt: timestamp,
       archivedAt: existing?.archivedAt ?? null
@@ -544,6 +564,7 @@ export function createCrmService(repository: CrmRepository) {
       body: nullable(input.body),
       occurredAt: input.occurredAt,
       outcome: nullable(input.outcome),
+      actorEmail: nullable(input.actorEmail),
       createdAt: now()
     };
     await repository.save("outreachTouch", record);

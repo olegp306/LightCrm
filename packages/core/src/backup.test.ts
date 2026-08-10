@@ -44,7 +44,15 @@ describe("createCrmBackupModel", () => {
       sourceChannel: "whatsapp",
       externalThreadId: null,
       externalMessageId: null,
-      notes: "Project: EFH\n\nArea: 120 m2\n\nAddress: Berlin\n\nTodo: Prepare offer"
+      notes: "Project: EFH\n\nArea: 120 m2\n\nAddress: Berlin\n\nTodo: Prepare offer",
+      progressStage: 0,
+      preferredLanguage: null,
+      contractNumber: null,
+      expectedFeeNet: null,
+      olegPercent: null,
+      handoffNote: null,
+      lastPingAt: null,
+      clientType: null
     };
     const reminder: Reminder = {
       ...baseRecord("reminder-1"),

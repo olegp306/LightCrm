@@ -84,6 +84,15 @@ describe("table-model", () => {
     expect(sortRows(rows, { columnId: "client.name", direction: "desc" }).map((row) => row.id)).toEqual(["2", "1"]);
   });
 
+  it("keeps archived rows at the bottom after sorting", () => {
+    const mixedRows = [
+      { id: "archived", values: { name: "Aardvark", status: "archived", archivedAt: "2026-07-01T09:00:00.000Z" } },
+      { id: "active", values: { name: "Zebra", status: "new", archivedAt: null } }
+    ];
+
+    expect(sortRows(mixedRows, { columnId: "name", direction: "asc" }).map((row) => row.id)).toEqual(["active", "archived"]);
+  });
+
   it("maps nested linked records to dotted table columns", () => {
     const document = {
       id: "doc-1",

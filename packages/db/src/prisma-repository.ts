@@ -20,6 +20,14 @@ function ensureStatus<T extends string>(value: string, fallback: T): T {
   return (value || fallback) as T;
 }
 
+function ensureOutreachLanguage(value: string | null | undefined): Lead["preferredLanguage"] {
+  return value === "de" || value === "ru" || value === "en" ? value : null;
+}
+
+function ensureLeadProgressStage(value: number | null | undefined): number {
+  return typeof value === "number" && Number.isInteger(value) && value >= 0 && value <= 7 ? value : 0;
+}
+
 function mapClient(record: Awaited<ReturnType<PrismaClient["client"]["findFirst"]>>): Client {
   if (!record) {
     throw new Error("Client not found");
@@ -36,7 +44,9 @@ function mapLead(record: Awaited<ReturnType<PrismaClient["lead"]["findFirst"]>>)
   }
   return {
     ...record,
-    status: ensureStatus(record.status, "new")
+    status: ensureStatus(record.status, "new"),
+    progressStage: ensureLeadProgressStage(record.progressStage),
+    preferredLanguage: ensureOutreachLanguage(record.preferredLanguage)
   };
 }
 
@@ -44,14 +54,10 @@ function mapColdTarget(record: Awaited<ReturnType<PrismaClient["coldTarget"]["fi
   if (!record) {
     throw new Error("Cold target not found");
   }
-  const preferredLanguage =
-    record.preferredLanguage === "de" || record.preferredLanguage === "ru" || record.preferredLanguage === "en"
-      ? record.preferredLanguage
-      : null;
   return {
     ...record,
     status: ensureStatus(record.status, "new"),
-    preferredLanguage
+    preferredLanguage: ensureOutreachLanguage(record.preferredLanguage)
   };
 }
 

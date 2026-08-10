@@ -53,6 +53,14 @@ export type Lead = BaseRecord & {
   externalThreadId: string | null;
   externalMessageId: string | null;
   notes: string | null;
+  progressStage: number;
+  preferredLanguage: OutreachLanguage | null;
+  contractNumber: string | null;
+  expectedFeeNet: number | null;
+  olegPercent: number | null;
+  handoffNote: string | null;
+  lastPingAt: Date | null;
+  clientType: string | null;
 };
 
 export type ColdTarget = BaseRecord & {
@@ -84,6 +92,7 @@ export type OutreachTouch = {
   body: string | null;
   occurredAt: Date;
   outcome: string | null;
+  actorEmail: string | null;
   createdAt: Date;
 };
 
@@ -203,6 +212,14 @@ export type UpsertLeadInput = {
   externalThreadId?: string | null;
   externalMessageId?: string | null;
   notes?: string | null;
+  progressStage?: number;
+  preferredLanguage?: OutreachLanguage | null;
+  contractNumber?: string | null;
+  expectedFeeNet?: number | null;
+  olegPercent?: number | null;
+  handoffNote?: string | null;
+  lastPingAt?: Date | null;
+  clientType?: string | null;
 };
 
 export type UpsertColdTargetInput = {
@@ -330,6 +347,7 @@ export type CreateOutreachTouchInput = {
   body?: string | null;
   occurredAt: Date;
   outcome?: string | null;
+  actorEmail?: string | null;
 };
 
 export type GlobalSearchResult = {

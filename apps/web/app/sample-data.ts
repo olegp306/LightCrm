@@ -46,10 +46,11 @@ export const tables: Record<string, TableDefinition> = {
   leads: {
     title: "Leads",
     description: "Potential opportunities, optionally linked to client records.",
-    tableKey: "leads.v8",
+    tableKey: "leads.v9",
     archiveEntity: "lead",
     columns: [
       { id: "code", title: "Lead ID", width: 120, mobilePriority: 1 },
+      { id: "status", title: "Status", width: 120, mobilePriority: 6 },
       { id: "client.name", title: "Client", width: 190, mobilePriority: 2, group: "Client", wrapText: true },
       { id: "projectName", title: "Lead name", width: 230, mobilePriority: 3, wrapText: true },
       { id: "area", title: "Area", width: 120, mobilePriority: 4, valueKind: "area" },
@@ -63,6 +64,16 @@ export const tables: Record<string, TableDefinition> = {
       { id: "client.email", title: "Email", width: 230, group: "Client" },
       { id: "messenger", title: "Messenger", width: 150 },
       { id: "sourceChannel", title: "Source", width: 140 },
+      { id: "progressStage", title: "Katya stage", width: 120, defaultVisible: false },
+      { id: "preferredLanguage", title: "Language", width: 120, defaultVisible: false },
+      { id: "contractNumber", title: "Contract #", width: 130, defaultVisible: false },
+      { id: "expectedFeeNet", title: "Expected fee net", width: 150, defaultVisible: false },
+      { id: "olegPercent", title: "Oleg %", width: 110, defaultVisible: false },
+      { id: "clientType", title: "Client type", width: 130, defaultVisible: false },
+      { id: "handoffNote", title: "Handoff note", width: 240, valueKind: "longText", defaultVisible: false },
+      { id: "lastPingAt", title: "Last ping", width: 170, defaultVisible: false },
+      { id: "archivedAt", title: "Archived at", width: 170, defaultVisible: false },
+      { id: "archiveMood", title: "Archive type", width: 130, defaultVisible: false },
       { id: "summaryShort", title: "Summary", width: 240, valueKind: "longText", defaultVisible: false },
       { id: "summaryLong", title: "Full summary", width: 360, valueKind: "longText", defaultVisible: false },
       { id: "summaryUpdatedAt", title: "Summary updated", width: 170, defaultVisible: false },
@@ -130,6 +141,14 @@ export const tables: Record<string, TableDefinition> = {
           "client.email": "ada@example.com",
           messenger: "TG",
           sourceChannel: "telegram",
+          progressStage: 4,
+          preferredLanguage: "de",
+          contractNumber: "CTR-204",
+          expectedFeeNet: 12500,
+          olegPercent: 22.5,
+          clientType: "private",
+          handoffNote: "Hand off after permit call.",
+          lastPingAt: "2026-08-10T09:30:00.000Z",
           documents: [
             {
               id: "sample-doc-1",
@@ -161,7 +180,8 @@ export const tables: Record<string, TableDefinition> = {
           interest: "warm",
           todo: "Clarify area",
           messenger: "WhatsApp",
-          sourceChannel: "referral"
+          sourceChannel: "referral",
+          progressStage: 1
         }
       }
     ]
