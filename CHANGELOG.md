@@ -2,6 +2,11 @@
 
 All notable LightCrm releases are documented here. Starting with `0.2.0`, every version bump must include a changelog entry.
 
+## 0.3.53 - 2026-08-10
+
+- Published the compact Cold Target Outreach details layout with the current touch and next two touches visible at a glance.
+- Tightened the desktop and mobile details card actions so the footer remains visible.
+
 ## 0.3.52 - 2026-07-02
 
 - Moved the signed-in logout/account action into the lower sidebar controls above Light Mode.
