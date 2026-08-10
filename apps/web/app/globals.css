@@ -7040,7 +7040,9 @@ input {
   }
 
   .detailsDrawer footer {
-    margin: 0 -12px -12px;
+    align-items: center;
+    margin: 0 -12px;
+    min-height: 51px;
     padding: 8px 12px 12px;
   }
 
