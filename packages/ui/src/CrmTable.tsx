@@ -20,6 +20,7 @@ import {
   Columns3,
   Download,
   FileText,
+  Globe2,
   Italic,
   Merge,
   MessageCircle,
@@ -41,7 +42,9 @@ import {
   compactDocumentTitle,
   documentDisplayLabel,
   documentExtensionLabel,
+  filterRowsByCountry,
   formatAreaValue,
+  formatOutreachProtocolItem,
   leadProgressReward,
   nextActionStateForTodo,
   recordToRow,
@@ -54,6 +57,7 @@ import {
   type ColumnTextStyle,
   type CreateRecordFieldValue,
   type CreateRecordPayloadConfig,
+  type OutreachProtocolItem,
   type TablePreferences,
   type TableSort
 } from "./table-model";
@@ -102,7 +106,9 @@ export type CalendarCellItem = {
 
 export type CalendarCellValue = CalendarCellItem[];
 
-export type CrmTableCellValue = string | number | null | DocumentCellValue | CalendarCellValue;
+export type OutreachProtocolValue = OutreachProtocolItem[];
+
+export type CrmTableCellValue = string | number | null | DocumentCellValue | CalendarCellValue | OutreachProtocolValue;
 
 export type CrmTableRow = {
   id: string;
@@ -367,6 +373,17 @@ const handoffBallIcons: Record<HandoffBallType, string> = {
   potato: "\u{1F954}"
 };
 const handoffInsightIcon = "\u{1F4A1}";
+
+const firstTouchChannelOptions = [
+  { value: "", label: "Auto" },
+  { value: "email", label: "Email" },
+  { value: "linkedin", label: "LinkedIn" },
+  { value: "phone", label: "Call" }
+] as const;
+
+function countryFilterLabel(value: string): string {
+  return value.trim().toLocaleLowerCase() === "germany" ? "Germany" : value.trim();
+}
 
 type LeadAchievement = {
   id: string;
@@ -850,6 +867,10 @@ function isCalendarCellItem(value: unknown): value is CalendarCellItem {
   return Boolean(value && typeof value === "object" && "startsAt" in value && "title" in value);
 }
 
+function isOutreachProtocolItem(value: unknown): value is OutreachProtocolItem {
+  return Boolean(value && typeof value === "object" && "channel" in value && "occurredAt" in value);
+}
+
 function calendarTimeLabel(value: string): string {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) {
@@ -1028,6 +1049,10 @@ function sortDocumentsByAdded(documents: DocumentCellValue): DocumentCellValue {
 
 function cellCalendarItems(value: CrmTableCellValue | undefined): CalendarCellValue {
   return Array.isArray(value) && value.every(isCalendarCellItem) ? value : [];
+}
+
+function cellOutreachProtocol(value: CrmTableCellValue | undefined): OutreachProtocolValue {
+  return Array.isArray(value) && value.every(isOutreachProtocolItem) ? value : [];
 }
 
 function currentColorTheme(): "light" | "dark" {
@@ -2029,6 +2054,7 @@ export function CrmTable({
   createRecord
 }: CrmTableProps) {
   const [query, setQuery] = useState("");
+  const [countryFilter, setCountryFilter] = useState("");
   const gridRef = useRef<DataEditorRef | null>(null);
   const gridFrameRef = useRef<HTMLDivElement | null>(null);
   const toolbarRef = useRef<HTMLDivElement | null>(null);
@@ -2316,6 +2342,19 @@ export function CrmTable({
   }, [clientOptionsEndpoint]);
 
   const configuredColumns = useMemo(() => applyTablePreferences(columns, preferences), [columns, preferences]);
+  const countryOptions = useMemo(() => {
+    if (!isColdTargetTable) {
+      return [];
+    }
+    return Array.from(
+      new Set(
+        editableRows
+          .map((row) => (typeof row.values.country === "string" ? row.values.country.trim() : ""))
+          .filter(Boolean)
+          .map(countryFilterLabel)
+      )
+    ).sort((left, right) => left.localeCompare(right));
+  }, [editableRows, isColdTargetTable]);
   const createTargetColumnIndex = useMemo(() => {
     if (!createRecord) {
       return 0;
@@ -2351,8 +2390,8 @@ export function CrmTable({
           Object.values(row.values).some((value) => String(value ?? "").toLowerCase().includes(normalized))
         )
       : editableRows;
-    return sortRows(searchedRows, sort);
-  }, [editableRows, query, sort]);
+    return sortRows(filterRowsByCountry(searchedRows, countryFilter), sort);
+  }, [countryFilter, editableRows, query, sort]);
 
   useEffect(() => {
     if (!initialFocusRowId || filteredRows.length === 0 || configuredColumns.length === 0) {
@@ -2413,6 +2452,7 @@ export function CrmTable({
   const detailsPanelVisibleDocuments = detailsPanelDocuments.slice(0, 3);
   const detailsPanelExtraDocuments = detailsPanelDocuments.slice(3);
   const detailsPanelCalendarItems = detailsPanelRow ? sortCalendarItemsByStart(cellCalendarItems(detailsPanelRow.values.calendar)) : [];
+  const detailsPanelOutreachProtocol = detailsPanelRow ? cellOutreachProtocol(detailsPanelRow.values.outreachProtocol) : [];
   const detailsPanelSummary = detailsPanelRow ? mobileLeadSummary(detailsPanelRow) : null;
   const detailsPanelOfferMissingFields = detailsPanelRow ? offerMissingFieldChips(detailsPanelRow.values.offerMissingFields) : [];
   const detailsOfferMissingInputs = detailsPanelOfferMissingFields.map(offerMissingInputForField);
@@ -4809,6 +4849,20 @@ export function CrmTable({
             <Search size={16} aria-hidden="true" />
             <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search" />
           </label>
+          {isColdTargetTable ? (
+            <label className={`countryFilter ${countryFilter ? "active" : ""}`}>
+              <Globe2 size={15} aria-hidden="true" />
+              <select value={countryFilter} onChange={(event) => setCountryFilter(event.target.value)} aria-label="Filter by country">
+                <option value="">All countries</option>
+                {countryOptions.includes("Germany") ? null : <option value="Germany">Germany</option>}
+                {countryOptions.map((country) => (
+                  <option key={country} value={country}>
+                    {country}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : null}
           <button
             type="button"
             className="toolbarIconButton toolbarCreateButton"
@@ -5848,7 +5902,18 @@ export function CrmTable({
                         {column.title}
                         {guide ? <i title={`${guide.source}: ${guide.meaning}`}>?</i> : null}
                       </span>
-                      {isMobileMultilineColumn(column.id) ? (
+                      {column.id === "firstTouchChannel" ? (
+                        <select
+                          value={detailsPanel.values[column.id] ?? ""}
+                          onChange={(event) => setDetailsValue(column.id, event.target.value)}
+                        >
+                          {firstTouchChannelOptions.map((option) => (
+                            <option key={option.value || "auto"} value={option.value}>
+                              {option.label}
+                            </option>
+                          ))}
+                        </select>
+                      ) : isMobileMultilineColumn(column.id) ? (
                         <textarea
                           rows={detailsTextareaRows(column.id, detailsPanel.values[column.id] ?? detailsPanelRow.values[column.id])}
                           value={detailsPanel.values[column.id] ?? ""}
@@ -6239,6 +6304,26 @@ export function CrmTable({
                                   <strong>{mobileDisplayValue(detailsPanelRow.values.nextAction)}</strong>
                                 </div>
                               ) : null}
+                              <details className="detailsOutreachProtocol" open={detailsPanelOutreachProtocol.length > 0}>
+                                <summary>
+                                  <span>Protocol</span>
+                                  <strong>
+                                    {detailsPanelOutreachProtocol.length} {detailsPanelOutreachProtocol.length === 1 ? "touch" : "touches"}
+                                  </strong>
+                                </summary>
+                                {detailsPanelOutreachProtocol.length > 0 ? (
+                                  <ul>
+                                    {detailsPanelOutreachProtocol.map((item) => (
+                                      <li key={item.id}>
+                                        <span>{formatOutreachProtocolItem(item)}</span>
+                                        {item.subject ? <small>{item.subject}</small> : null}
+                                      </li>
+                                    ))}
+                                  </ul>
+                                ) : (
+                                  <p>No outreach touches yet.</p>
+                                )}
+                              </details>
                               {outreachCampaignError ? <p className="detailsDrawerError">{outreachCampaignError}</p> : null}
                               {detailsPanelRow.values.campaignName ? (
                                 <div className="detailsOutreachWorkflow">
@@ -6719,7 +6804,19 @@ export function CrmTable({
             {createRecord.fields.map((field) => (
               <label className={field.multiline ? "formField wide" : "formField"} key={field.id}>
                 <span>{field.label}</span>
-                {field.multiline ? (
+                {field.id === "firstTouchChannel" ? (
+                  <select
+                    value={createValues[field.id] ?? ""}
+                    onChange={(event) => setCreateValues((current) => ({ ...current, [field.id]: event.target.value }))}
+                    required={field.required}
+                  >
+                    {firstTouchChannelOptions.map((option) => (
+                      <option key={option.value || "auto"} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                ) : field.multiline ? (
                   <textarea
                     rows={3}
                     value={createValues[field.id] ?? ""}

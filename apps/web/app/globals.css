@@ -2214,6 +2214,42 @@ input {
   font-weight: 400;
 }
 
+.countryFilter {
+  align-items: center;
+  background: var(--control);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--muted);
+  display: flex;
+  gap: 7px;
+  height: 36px;
+  padding: 0 9px;
+  transition:
+    background 160ms ease,
+    border-color 160ms ease,
+    box-shadow 160ms ease,
+    color 160ms ease;
+}
+
+.countryFilter:focus-within,
+.countryFilter.active {
+  background: var(--panel-raised);
+  border-color: color-mix(in srgb, var(--accent) 58%, var(--line));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 15%, transparent);
+  color: var(--accent);
+}
+
+.countryFilter select {
+  appearance: none;
+  background: transparent;
+  border: 0;
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 600;
+  min-width: 118px;
+  outline: 0;
+}
+
 .gridFrame {
   background: var(--panel);
   border: 1px solid var(--line);
@@ -4276,6 +4312,74 @@ input {
   font-size: 12px;
 }
 
+.detailsOutreachProtocol {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+}
+
+.detailsOutreachProtocol summary {
+  align-items: center;
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  list-style: none;
+  padding: 6px 8px;
+}
+
+.detailsOutreachProtocol summary::-webkit-details-marker {
+  display: none;
+}
+
+.detailsOutreachProtocol summary span {
+  color: var(--muted);
+  font-size: calc(11px * var(--table-font-scale, 1));
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.detailsOutreachProtocol summary strong {
+  color: var(--ink);
+  font-size: calc(12px * var(--table-font-scale, 1));
+}
+
+.detailsOutreachProtocol ul {
+  border-top: 1px solid var(--line);
+  display: grid;
+  gap: 5px;
+  list-style: none;
+  margin: 0;
+  padding: 6px;
+}
+
+.detailsOutreachProtocol li {
+  background: var(--control);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  display: grid;
+  gap: 3px;
+  grid-template-columns: minmax(0, 1fr);
+  padding: 6px 7px;
+}
+
+.detailsOutreachProtocol li span {
+  color: var(--ink);
+  font-size: calc(12px * var(--table-font-scale, 1));
+  font-weight: 750;
+}
+
+.detailsOutreachProtocol li small,
+.detailsOutreachProtocol p {
+  color: var(--muted);
+  font-size: calc(11px * var(--table-font-scale, 1));
+  margin: 0;
+}
+
+.detailsOutreachProtocol p {
+  border-top: 1px solid var(--line);
+  padding: 7px 8px;
+}
+
 .detailsOutreachWorkflow {
   background: var(--panel);
   border: 1px solid var(--line);
@@ -4871,11 +4975,13 @@ input {
 }
 
 .recordCreateForm input,
-.recordCreateForm textarea {
+.recordCreateForm textarea,
+.recordCreateForm select {
   background: var(--control);
   border: 1px solid var(--line);
   border-radius: 6px;
   color: var(--ink);
+  font: inherit;
   min-width: 0;
   padding: 9px 10px;
   resize: vertical;
@@ -6614,6 +6720,20 @@ input {
   .toolbar .searchBox {
     min-width: 0;
     width: 100%;
+  }
+
+  .toolbar:has(.countryFilter) {
+    grid-template-columns: minmax(108px, 1fr) minmax(122px, auto) repeat(4, 30px);
+  }
+
+  .toolbar .countryFilter {
+    height: 30px;
+    min-width: 0;
+  }
+
+  .toolbar .countryFilter select {
+    font-size: 12px;
+    min-width: 92px;
   }
 
   .toolbar button {

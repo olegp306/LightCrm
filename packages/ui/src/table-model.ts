@@ -55,6 +55,15 @@ export type ApiRecord = Record<string, unknown> & {
 
 export type CreateRecordFieldValue = string | number | null;
 
+export type OutreachProtocolItem = {
+  id: string;
+  channel: string | null;
+  occurredAt: string | null;
+  direction: string | null;
+  outcome: string | null;
+  subject?: string | null;
+};
+
 export type CreateRecordPayloadConfig = {
   workspaceId?: string;
   payloadMap?: Record<string, string>;
@@ -76,6 +85,40 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function optionalString(value: unknown): string | null {
   return typeof value === "string" && value.trim() ? value : null;
+}
+
+function normalizedFilterLabel(value: unknown): string {
+  return String(value ?? "").trim().toLocaleLowerCase();
+}
+
+function channelLabel(value: string | null | undefined): string {
+  switch (value?.toLocaleLowerCase()) {
+    case "email":
+      return "Email";
+    case "linkedin":
+      return "LinkedIn";
+    case "phone":
+      return "Call";
+    default:
+      return value?.trim() || "Touch";
+  }
+}
+
+export function filterRowsByCountry(rows: CrmTableRow[], country: string): CrmTableRow[] {
+  const selectedCountry = normalizedFilterLabel(country);
+  if (!selectedCountry) {
+    return rows;
+  }
+  return rows.filter((row) => normalizedFilterLabel(row.values.country) === selectedCountry);
+}
+
+export function formatOutreachProtocolItem(item: OutreachProtocolItem): string {
+  const occurredAt = item.occurredAt ? new Date(item.occurredAt) : null;
+  const dateLabel =
+    occurredAt && !Number.isNaN(occurredAt.getTime())
+      ? occurredAt.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+      : "No date";
+  return [channelLabel(item.channel), dateLabel, item.direction, item.outcome].filter(Boolean).join(" | ");
 }
 
 function displaySourceChannel(value: string | null): string | null {
@@ -141,6 +184,33 @@ export function normalizeCalendarCellValue(value: unknown): CalendarCellValue {
         endsAt: optionalString(item.endsAt),
         status: optionalString(item.status),
         sourceChannel: displaySourceChannel(optionalString(item.sourceChannel))
+      }
+    ];
+  });
+}
+
+export function normalizeOutreachProtocolValue(value: unknown): OutreachProtocolItem[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value.flatMap((item): OutreachProtocolItem[] => {
+    if (!isRecord(item)) {
+      return [];
+    }
+    const id = optionalString(item.id);
+    const channel = optionalString(item.channel);
+    const occurredAt = optionalString(item.occurredAt);
+    if (!id || !channel || !occurredAt) {
+      return [];
+    }
+    return [
+      {
+        id,
+        channel,
+        occurredAt,
+        direction: optionalString(item.direction),
+        outcome: optionalString(item.outcome),
+        subject: optionalString(item.subject)
       }
     ];
   });
@@ -283,20 +353,24 @@ export function leadProgressSteps(row: CrmTableRow, offerTotalGross?: number | n
 }
 
 export function recordToRow(record: ApiRecord, columns: CrmTableColumn[]): CrmTableRow {
+  const values = Object.fromEntries(
+    columns.map((column) => {
+      const value = valueAtPath(record, column.id);
+      if (column.valueKind === "documents") {
+        return [column.id, normalizeDocumentCellValue(value)];
+      }
+      if (column.valueKind === "calendar") {
+        return [column.id, normalizeCalendarCellValue(value)];
+      }
+      return [column.id, formatTableValue(value)];
+    })
+  );
+  if ("outreachProtocol" in record) {
+    values.outreachProtocol = normalizeOutreachProtocolValue(record.outreachProtocol);
+  }
   return {
     id: record.id,
-    values: Object.fromEntries(
-      columns.map((column) => {
-        const value = valueAtPath(record, column.id);
-        if (column.valueKind === "documents") {
-          return [column.id, normalizeDocumentCellValue(value)];
-        }
-        if (column.valueKind === "calendar") {
-          return [column.id, normalizeCalendarCellValue(value)];
-        }
-        return [column.id, formatTableValue(value)];
-      })
-    )
+    values
   };
 }
 
@@ -460,7 +534,13 @@ export function compactDocumentTitle(fileName: string, maxLength = 20): string {
 function csvEscape(value: CrmTableCellValue | undefined): string {
   const text = Array.isArray(value)
     ? value
-        .map((item) => ("fileName" in item ? item.fileName : `${item.startsAt} ${item.title}`))
+        .map((item) =>
+          "fileName" in item
+            ? item.fileName
+            : "startsAt" in item
+              ? `${item.startsAt} ${item.title}`
+              : formatOutreachProtocolItem(item)
+        )
         .join("; ")
     : String(value ?? "");
   if (/[",\r\n]/.test(text)) {

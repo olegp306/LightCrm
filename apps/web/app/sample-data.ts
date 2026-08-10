@@ -208,6 +208,7 @@ export const tables: Record<string, TableDefinition> = {
         { id: "phone", label: "Phone" },
         { id: "website", label: "Website" },
         { id: "preferredLanguage", label: "Language (blank/auto, de, ru, en)" },
+        { id: "firstTouchChannel", label: "First touch" },
         { id: "notesResearch", label: "Node Research", multiline: true },
         { id: "archivedLetters", label: "I Have Letters", multiline: true },
         { id: "linkedinUrl", label: "LinkedIn" }

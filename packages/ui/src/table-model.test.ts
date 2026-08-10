@@ -5,7 +5,9 @@ import {
   compactDocumentTitle,
   documentDisplayLabel,
   documentExtensionLabel,
+  filterRowsByCountry,
   formatAreaValue,
+  formatOutreachProtocolItem,
   leadProgressReward,
   leadProgressSteps,
   nextActionStateForTodo,
@@ -89,6 +91,30 @@ describe("table-model", () => {
   it("sorts rows by a selected column in both directions", () => {
     expect(sortRows(rows, { columnId: "name", direction: "asc" }).map((row) => row.id)).toEqual(["1", "2"]);
     expect(sortRows(rows, { columnId: "client.name", direction: "desc" }).map((row) => row.id)).toEqual(["2", "1"]);
+  });
+
+  it("filters rows by country using case-insensitive exact labels", () => {
+    const countryRows: CrmTableRow[] = [
+      { id: "1", values: { name: "One", country: "Germany" } },
+      { id: "2", values: { name: "Two", country: "germany " } },
+      { id: "3", values: { name: "Three", country: "United Kingdom" } },
+      { id: "4", values: { name: "Four", country: "" } }
+    ];
+
+    expect(filterRowsByCountry(countryRows, "Germany").map((row) => row.id)).toEqual(["1", "2"]);
+    expect(filterRowsByCountry(countryRows, "").map((row) => row.id)).toEqual(["1", "2", "3", "4"]);
+  });
+
+  it("formats outreach protocol rows with channel, date, direction, and outcome", () => {
+    expect(
+      formatOutreachProtocolItem({
+        id: "touch-1",
+        channel: "linkedin",
+        occurredAt: "2026-08-10T09:30:00.000Z",
+        direction: "outbound",
+        outcome: "sent"
+      })
+    ).toBe("LinkedIn | Aug 10, 2026 | outbound | sent");
   });
 
   it("maps nested linked records to dotted table columns", () => {
