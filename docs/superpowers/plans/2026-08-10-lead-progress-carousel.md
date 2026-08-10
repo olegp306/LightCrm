@@ -2,17 +2,17 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use `superpowers:subagent-driven-development` (recommended) or `superpowers:executing-plans` to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Replace the current demo achievement groups in lead details with Katya's eight-stage document/progress path, using 40 local visual states, a compact 9.5-card carousel, pleasant touch feedback, and a persisted progress bar.
+**Goal:** Replace the current demo achievement groups in lead details with Katya's eight-stage document/progress path, using eight local images in one compact row with pleasant touch feedback.
 
-**Architecture:** Keep the existing lead details HUD in `packages/ui/src/CrmTable.tsx`, but replace the four unrelated achievement sets with one ordered `leadProgressStages` definition. Persist the selected stage on the Lead record as `progressStage`; the existing business `status` remains separate. The UI derives each card's visual state from the selected stage and renders the current stage first while preserving the canonical stage order for the carousel.
+**Architecture:** Keep the existing lead details HUD in `packages/ui/src/CrmTable.tsx`, but replace the four unrelated achievement sets with one ordered `leadProgressStages` definition. Persist the selected stage on the Lead record as `progressStage`; the existing business `status` remains separate. The UI derives muted/current/completed states with CSS and renders all eight stages in canonical order.
 
 **Tech Stack:** Next.js, React, TypeScript, Prisma/PostgreSQL, `@lightcrm/ui`, CSS keyframes, local PNG assets, Vitest, TypeScript checks.
 
 ## Global Constraints
 
 - The canonical progress order is exactly Katya's eight levels: Proposal, Contract, Prepayment invoice, Prepayment confirmed, Power of attorney, Final invoice, Final payment confirmed, Client review.
-- There are exactly 8 logical stages and exactly 40 local visual assets: 5 states per stage (`locked`, `available`, `current`, `completed`, `celebrate`).
-- The current stage is always the first visible card; the carousel viewport intentionally reveals 9.5 cards on desktop to communicate that it is scrollable.
+- There are exactly 8 logical stages and exactly 8 local visual assets: one image per stage. `locked`, `current`, and `completed` are CSS states, not separate files.
+- All eight stage cards are visible together on desktop; only narrow screens may horizontally scroll the row.
 - Selecting a stage is an explicit user action and persists to the lead; no automatic stage advancement is introduced in this iteration.
 - Business `Lead.status` (`new`, `contacted`, `qualified`, `lost`, `converted`, `archived`) is not repurposed as the eight-stage progress value.
 - The interaction must support mouse, keyboard, touch, reduced-motion preferences, and a clear disabled/locked visual state.
@@ -27,9 +27,9 @@
 - Modify `packages/db/src/prisma-repository.ts`: preserve the new Prisma fields in lead mapping.
 - Modify `apps/web/app/api/crm/leads/upsert/route.ts` and `apps/web/app/api/crm/leads/update/route.ts`: validate and accept the new fields.
 - Modify `apps/web/app/sample-data.ts`: add the eight-stage lead columns and representative values without breaking existing sample rows.
-- Modify `packages/ui/src/CrmTable.tsx`: replace demo sets with the eight-stage carousel, stage-state derivation, persistence callback, progress bar, and interaction feedback.
-- Modify `apps/web/app/globals.css`: add the 9.5-card viewport, current-card focus, progress bar, celebration effects, mobile overflow, and reduced-motion rules.
-- Create or replace assets in `apps/web/public/lead-progress/`: exactly 40 consistently framed local PNGs, five states for each canonical stage.
+- Modify `packages/ui/src/CrmTable.tsx`: replace demo sets with the eight-stage row, stage-state derivation, persistence callback, and interaction feedback.
+- Modify `apps/web/app/globals.css`: add the eight-card row, current-card focus, press/selection effects, mobile overflow, and reduced-motion rules.
+- Use eight consistently framed local PNGs under `apps/web/public/lead-progress/`, one for each canonical stage.
 - Add focused tests beside existing UI/core/auth tests for stage ordering, state derivation, persistence payloads, and metadata mapping.
 
 ---
@@ -81,18 +81,18 @@
 - Test: `packages/ui/src/lead-progress.test.ts`
 
 **Interfaces:**
-- Define one ordered `LeadProgressStage` list with eight entries and one `LeadProgressState` union: `locked | available | current | completed | celebrate`.
-- Each stage has `id`, `label`, `color`, `description`, and five asset paths. The exact order is the order in the Global Constraints section.
+- Define one ordered `LeadProgressStage` list with eight entries and one `LeadProgressState` union: `locked | available | current | completed`.
+- Each stage has `id`, `label`, `color`, `description`, and one asset path. The exact order is the order in the Global Constraints section.
 - `deriveLeadProgressState(stageIndex: number, selectedStage: number): LeadProgressState` must be pure and deterministic.
 
-- [ ] Write failing tests asserting there are exactly 8 stages, exactly 5 assets per stage, and 40 unique asset paths.
+- [ ] Write failing tests asserting there are exactly 8 stages, one asset per stage, and 8 unique asset paths.
 - [ ] Add tests for stage `0`, middle stage, final stage, and an invalid persisted value falling back to stage `0`.
 - [ ] Replace `leadAchievementSets`, `leadProgressMarks`, and the demo localStorage marks with the typed stage definition plus a single selected stage per lead.
-- [ ] Keep the existing reward/fee summary only if it remains semantically useful; rename it so it does not imply that clicking a stage grants money.
+- [ ] Remove the percentage/progress reward/status footer from this HUD; the selected card itself is the only progress indicator.
 - [ ] Run the focused UI test and verify the existing 21 UI tests remain green.
 - [ ] Commit as `refactor: model lead progress as eight stages`.
 
-### Task 4: Build the 9.5-card interactive carousel
+### Task 4: Build the eight-card progress row
 
 **Files:**
 - Modify: `packages/ui/src/CrmTable.tsx`
@@ -100,33 +100,32 @@
 - Test: `packages/ui/src/lead-progress.test.ts`
 
 **Interfaces:**
-- The carousel exposes previous/next controls with accessible labels, a horizontally scrollable track, and an `aria-current` marker for the selected stage.
-- The selected stage is rendered first in the visible sequence; remaining stages follow the canonical order without mutating the stored order.
+- The row exposes eight focusable cards in canonical order and an `aria-current` marker for the selected stage.
+- All eight stages are visible on desktop; the row may scroll horizontally only on narrow layouts.
 - Selecting a non-locked stage calls the existing row update endpoint with `{ id, progressStage }` and updates the local row only after a successful response.
 
-- [ ] Add failing tests for current-first ordering, previous/next wrapping/clamping, locked-card prevention, and progress percentage (`stage / 7`).
-- [ ] Implement a pure `orderedVisibleStages` helper and use it from the component.
-- [ ] Use a fixed card width and viewport math that reveals nine full cards plus approximately half of the tenth on desktop; use horizontal scroll/snap on touch layouts.
-- [ ] Add a thin progress bar below the cards with current label, `n / 8`, and percentage; animate width changes with a short ease-out transition.
+- [ ] Add failing tests for canonical ordering, locked-card prevention, and row persistence.
+- [ ] Implement the row with stable card dimensions that fit all eight cards on desktop; use horizontal scroll/snap only on touch layouts where needed.
+- [ ] Do not render a progress bar, percentage, or separate status footer.
 - [ ] Make the selected card visually calm and clear: stronger border, elevated image, label, and a small current marker; completed cards remain colorful, future cards are muted/locked.
 - [ ] Run focused UI tests and typecheck.
 - [ ] Commit as `feat: add lead progress carousel`.
 
-### Task 5: Add the 40 visual states and polished feedback
+### Task 5: Add the eight visual assets and polished feedback
 
 **Files:**
-- Create/modify: `apps/web/public/lead-progress/*.png`
+- Use: `apps/web/public/lead-progress/01-*.png` through `08-*.png`
 - Modify: `packages/ui/src/CrmTable.tsx`
 - Modify: `apps/web/app/globals.css`
 - Test: `packages/ui/src/lead-progress.test.ts`
 
 **Interfaces:**
-- Asset naming is deterministic: `stage-01-<slug>-locked.png`, `...-available.png`, `...-current.png`, `...-completed.png`, `...-celebrate.png`.
+- Asset naming is deterministic: `stage-01-<slug>.png` through `stage-08-<slug>.png`.
 - Every image uses the same canvas, transparent framing, character scale, and no decorative border/halo outside the intended artwork.
 
-- [ ] Add an asset manifest test that checks all 40 paths are present and all files have the expected dimensions/aspect ratio.
-- [ ] Replace/reframe existing unrelated achievement images where needed so each of the eight Katya stages has its own coherent illustration and five controlled states.
-- [ ] On press, use a brief scale-down and spring return; on selection, animate only the changed card and progress bar; on completion, use a restrained glow/sparkle rather than a large burst.
+- [ ] Add an asset manifest test that checks all 8 paths are present and all files have the expected dimensions/aspect ratio.
+- [ ] Reuse or reframe eight existing local images where needed so each of Katya's stages has its own coherent illustration.
+- [ ] On press, use a brief scale-down and spring return; on selection, animate only the changed card; on completion, use a restrained glow/sparkle rather than a large burst.
 - [ ] Add `prefers-reduced-motion: reduce` rules that remove transforms and keyframe movement while preserving focus, state color, and progress changes.
 - [ ] Verify keyboard focus, `aria-pressed`/`aria-current`, image alt handling, and no layout shift while the image changes.
 - [ ] Run asset tests, UI tests, typechecks, and `git diff --check`.
@@ -138,11 +137,11 @@
 - Modify: `apps/web/app/globals.css` or `packages/ui/src/CrmTable.tsx` only if QA finds a concrete issue.
 - Test: existing UI tests plus a browser/e2e checklist artifact under `docs/superpowers/verification/`.
 
-- [ ] Verify a new lead starts at `КП`, shows `1 / 8` and `0%`, and has only the appropriate next stages available.
-- [ ] Select each of the eight stages, reload the page, reopen the same lead, and confirm the selected stage and progress bar persist.
-- [ ] Verify the current stage is first, 9.5 cards are visible on desktop, touch scrolling works, and the mobile layout does not clip labels or buttons.
+- [ ] Verify a new lead starts at `КП`, with the first asset current and later stages muted/locked as defined.
+- [ ] Select each of the eight stages, reload the page, reopen the same lead, and confirm the selected stage persists.
+- [ ] Verify all eight cards are visible on desktop, touch scrolling works on narrow layouts, and the mobile layout does not clip labels or buttons.
 - [ ] Verify pressing a locked stage does nothing, clicking the current stage is idempotent, and a failed save restores the previous selected stage with an error notice.
-- [ ] Verify all five visual states, completion feedback, reduced-motion behavior, and no halo/shimmer/size jumping around the images.
+- [ ] Verify locked/current/completed CSS states, completion feedback, reduced-motion behavior, and no halo/shimmer/size jumping around the images.
 - [ ] Run `pnpm --filter @lightcrm/ui test`, UI/web/DB typechecks, and any available browser smoke test.
 - [ ] Capture desktop and mobile screenshots for review before deploy.
 
@@ -165,12 +164,12 @@
 
 | Scenario | Expected result |
 |---|---|
-| New lead | `КП`, stage `1 / 8`, 0% progress, first asset is current and later assets are locked/available according to the model |
-| Select stage 2-7 | Selected card moves first, progress bar updates, row saves `progressStage`, no business `status` mutation |
-| Select stage 8 | `8 / 8`, 100%, final celebration state appears once, no layout jump |
+| New lead | `КП`, first asset is current and later assets are muted/locked according to the model |
+| Select stage 2-7 | Selected card changes state, row saves `progressStage`, no business `status` mutation |
+| Select stage 8 | Final card is current, completion feedback appears once, no layout jump |
 | Reload after save | Same lead reopens at the saved stage |
 | Locked stage click | No request and no visual state change |
-| Desktop carousel | 9.5 cards visible, clear next-card affordance, arrows and wheel/trackpad work |
+| Desktop progress row | All 8 cards visible together and selectable without a separate carousel control |
 | Mobile carousel | Horizontal touch scroll/snap, labels fit, no clipped controls |
 | Reduced motion | State changes remain clear without keyframe movement |
 | Old production lead | Missing/null new fields render safely with neutral defaults |
