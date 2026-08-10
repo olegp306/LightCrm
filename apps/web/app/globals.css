@@ -2818,11 +2818,11 @@ input {
   color: var(--ink);
   font-size: calc(13px * var(--table-font-scale, 1));
   display: grid;
-  gap: 12px;
+  gap: 8px;
   grid-template-rows: auto auto minmax(0, 1fr) auto;
   max-height: min(950px, calc(100vh - 36px));
   max-width: min(1500px, calc(100vw - 36px));
-  padding: 16px;
+  padding: 12px 14px 10px;
   width: 1430px;
 }
 
@@ -2882,21 +2882,21 @@ input {
   border-radius: 8px;
   box-shadow: inset 0 1px 0 color-mix(in srgb, #ffffff 54%, transparent);
   display: grid;
-  gap: 10px;
-  grid-template-columns: minmax(0, 1fr) minmax(132px, auto);
-  min-height: 208px;
-  padding: 8px;
+  gap: 8px;
+  grid-template-columns: minmax(0, 1fr) minmax(112px, auto);
+  min-height: 166px;
+  padding: 7px;
 }
 
 .leadProgressSets {
   display: grid;
-  gap: 8px;
+  gap: 6px;
   min-width: 0;
 }
 
 .leadProgressSet {
   display: grid;
-  gap: 5px;
+  gap: 4px;
   min-width: 0;
 }
 
@@ -2912,8 +2912,8 @@ input {
 .leadProgressTrack {
   align-items: start;
   display: grid;
-  gap: 8px;
-  grid-template-columns: repeat(10, minmax(108px, 1fr));
+  gap: 6px;
+  grid-template-columns: repeat(10, minmax(92px, 1fr));
   min-width: 0;
 }
 
@@ -2950,7 +2950,7 @@ input {
   border-radius: 7px;
   display: inline-flex;
   filter: grayscale(1) saturate(0.15);
-  height: 88px;
+  height: 68px;
   justify-content: center;
   opacity: 0.72;
   overflow: hidden;
@@ -2962,7 +2962,7 @@ input {
     filter 180ms ease,
     opacity 180ms ease,
     transform 180ms ease;
-  width: 108px;
+  width: 92px;
 }
 
 .leadProgressIcon img {
@@ -3085,7 +3085,7 @@ input {
   border-radius: 8px;
   display: grid;
   min-width: 0;
-  padding: 7px 10px;
+  padding: 6px 8px;
 }
 
 .leadProgressReward span {
@@ -3099,7 +3099,7 @@ input {
 .leadProgressReward strong {
   color: color-mix(in srgb, var(--warn) 80%, var(--ink));
   font-family: ui-rounded, "SF Pro Rounded", "Trebuchet MS", system-ui, sans-serif;
-  font-size: calc(23px * var(--table-font-scale, 1));
+  font-size: calc(19px * var(--table-font-scale, 1));
   font-variant-numeric: tabular-nums;
   font-weight: 900;
   letter-spacing: 0;
@@ -3361,7 +3361,7 @@ input {
 
 .detailsDrawerBody {
   display: grid;
-  gap: 12px;
+  gap: 10px;
   grid-template-columns: minmax(0, 1.08fr) minmax(280px, 0.92fr);
   min-height: 0;
   overflow: hidden;
@@ -3381,6 +3381,7 @@ input {
 
 .detailsDrawerFieldsPanel {
   display: grid;
+  grid-template-rows: minmax(0, 1fr);
   min-height: 0;
   overflow: hidden;
 }
@@ -3392,17 +3393,20 @@ input {
 .detailsDrawerFields {
   align-content: start;
   display: grid;
-  gap: 8px;
+  gap: 7px 8px;
   grid-template-columns: repeat(2, minmax(0, 1fr));
+  min-height: 0;
   overflow: auto;
-  padding-right: 2px;
+  padding: 0 2px 8px 0;
 }
 
 .detailsDrawerFields label,
-.detailsDrawerField {
+.detailsDrawerField,
+.detailsClientSection {
   display: grid;
-  gap: 5px;
   min-width: 0;
+  padding-top: 6px;
+  position: relative;
 }
 
 .detailsDrawerFields label.wide {
@@ -3418,6 +3422,26 @@ input {
   font-weight: 700;
 }
 
+.detailsDrawerFields > label > .detailsFieldLabel,
+.detailsDrawerField > .detailsFieldLabel,
+.detailsClientSection > .detailsFieldLabel {
+  align-items: center;
+  background: var(--panel-raised);
+  border-radius: 999px;
+  display: inline-flex;
+  gap: 4px;
+  left: 8px;
+  line-height: 1;
+  max-width: calc(100% - 16px);
+  overflow: hidden;
+  padding: 0 4px;
+  position: absolute;
+  text-overflow: ellipsis;
+  top: 0;
+  white-space: nowrap;
+  z-index: 1;
+}
+
 .detailsDrawerFields input,
 .detailsDrawerFields select,
 .detailsDrawerFields textarea,
@@ -3429,13 +3453,13 @@ input {
   font: inherit;
   font-size: calc(13px * var(--table-font-scale, 1));
   min-width: 0;
-  padding: 8px 9px;
+  padding: 10px 9px 6px;
 }
 
 .detailsDrawerField strong {
   font-weight: 650;
-  line-height: 1.35;
-  min-height: 36px;
+  line-height: 1.25;
+  min-height: 34px;
   overflow-wrap: anywhere;
 }
 
@@ -3444,7 +3468,7 @@ input {
 }
 
 .detailsDrawerFields textarea {
-  line-height: 1.35;
+  line-height: 1.25;
   min-height: 0;
   overflow-wrap: anywhere;
   resize: vertical;
@@ -3456,10 +3480,10 @@ input {
   border: 1px solid color-mix(in srgb, var(--line) 78%, transparent);
   border-radius: 8px;
   display: grid;
-  gap: 8px;
+  gap: 7px;
   grid-column: 1 / -1;
   margin-top: 2px;
-  padding: 8px;
+  padding: 7px;
 }
 
 .detailsSecondaryFields header {
@@ -3508,9 +3532,7 @@ input {
 }
 
 .detailsClientSection {
-  display: grid;
   gap: 4px;
-  position: relative;
 }
 
 .detailsClientSection > header {
@@ -4916,9 +4938,16 @@ input {
 }
 
 .detailsDrawer footer {
+  background: linear-gradient(180deg, color-mix(in srgb, var(--panel-raised) 72%, transparent), var(--panel-raised) 42%);
+  border-top: 1px solid color-mix(in srgb, var(--line) 82%, transparent);
   display: flex;
   gap: 8px;
   justify-content: flex-end;
+  margin: 0 -14px -10px;
+  padding: 8px 14px 10px;
+  position: sticky;
+  bottom: 0;
+  z-index: 3;
 }
 
 .detailsDrawer footer button {
@@ -4928,10 +4957,10 @@ input {
   color: var(--ink);
   cursor: pointer;
   font: inherit;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 700;
-  min-height: 34px;
-  padding: 7px 11px;
+  min-height: 31px;
+  padding: 6px 10px;
 }
 
 .detailsDrawer footer button.primary {
@@ -6914,6 +6943,11 @@ input {
     min-height: 100%;
     padding: 12px;
     width: 100%;
+  }
+
+  .detailsDrawer footer {
+    margin: 0 -12px -12px;
+    padding: 8px 12px 12px;
   }
 
   .detailsDrawerBody {
