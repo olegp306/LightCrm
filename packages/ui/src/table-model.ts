@@ -148,6 +148,51 @@ export function currentTouchChipTone(value: CrmTableCellValue | undefined): Curr
   };
 }
 
+export type OutreachTouchProgress = {
+  current: number;
+  total: number;
+};
+
+export const outreachOutcomeOptions = [
+  { value: "interested", label: "Interested" },
+  { value: "later", label: "Follow up later" },
+  { value: "existing_architect", label: "Already has architect" },
+  { value: "remove_me", label: "Asked to be removed" },
+  { value: "silent_8_touches", label: "No response after cadence" },
+  { value: "not_a_fit", label: "Not a fit" }
+] as const;
+
+export function parseOutreachTouchProgress(
+  value: CrmTableCellValue | undefined,
+  fallbackTotal?: number
+): OutreachTouchProgress | null {
+  const text = typeof value === "string" ? value.trim() : "";
+  const match = text.match(/(?:touch\s*)?(\d+)(?:\s*\/\s*(\d+))?/i);
+  if (!match) {
+    return null;
+  }
+  const current = Number(match[1]);
+  const total = match[2] ? Number(match[2]) : fallbackTotal;
+  if (
+    !Number.isSafeInteger(current) ||
+    typeof total !== "number" ||
+    !Number.isSafeInteger(total) ||
+    current < 1 ||
+    total < 1
+  ) {
+    return null;
+  }
+  return { current, total };
+}
+
+export function formatOutreachTouchProgressLabel(progress: OutreachTouchProgress | null): string {
+  return progress ? `Touch ${progress.current} of ${progress.total}` : "No active touch";
+}
+
+export function formatOutreachTouchActionLabel(progress: OutreachTouchProgress | null): string {
+  return progress ? `Mark Touch ${progress.current} Sent` : "Mark Current Touch Sent";
+}
+
 export function handoffSideTone(side: "us" | "client"): HandoffVisualTone {
   return side === "client"
     ? {

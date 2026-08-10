@@ -4120,6 +4120,16 @@ input {
   min-width: 0;
 }
 
+.detailsOutreachTouch.current {
+  background: color-mix(in srgb, var(--accent) 13%, var(--panel));
+  border-color: color-mix(in srgb, var(--accent) 54%, var(--line));
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 10%, transparent);
+}
+
+.detailsOutreachTouch.past {
+  opacity: 0.72;
+}
+
 .detailsOutreachTouch summary {
   align-items: center;
   cursor: pointer;
@@ -4161,6 +4171,16 @@ input {
 .detailsOutreachTouch summary small {
   color: var(--muted);
   font-size: calc(11px * var(--table-font-scale, 1));
+}
+
+.detailsOutreachTouch.current summary small {
+  background: var(--accent);
+  border-radius: 999px;
+  color: #fff;
+  font-size: calc(10px * var(--table-font-scale, 1));
+  font-weight: 800;
+  padding: 3px 7px;
+  text-transform: uppercase;
 }
 
 .detailsOutreachDraft {
@@ -4327,7 +4347,7 @@ input {
 
 .detailsOutreachCurrent {
   background: color-mix(in srgb, var(--panel) 74%, var(--accent));
-  border: 1px solid var(--line);
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--line));
   border-radius: 6px;
   display: grid;
   gap: 3px;
@@ -4337,6 +4357,12 @@ input {
 .detailsOutreachCurrent strong {
   color: var(--ink);
   font-size: 12px;
+}
+
+.detailsOutreachCurrent small {
+  color: var(--ink-soft);
+  font-size: calc(11px * var(--table-font-scale, 1));
+  line-height: 1.25;
 }
 
 .detailsOutreachProtocol {
@@ -4411,13 +4437,35 @@ input {
   background: var(--panel);
   border: 1px solid var(--line);
   border-radius: 7px;
+  align-items: center;
   display: grid;
   gap: 7px;
+  grid-template-columns: minmax(0, 1fr) minmax(170px, 0.8fr);
   padding: 7px;
 }
 
+.detailsOutreachWorkflow div {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.detailsOutreachWorkflow span,
+.detailsOutreachOutcome span {
+  color: var(--muted);
+  font-size: calc(11px * var(--table-font-scale, 1));
+  font-weight: 800;
+}
+
+.detailsOutreachWorkflow strong {
+  color: var(--ink);
+  font-size: calc(13px * var(--table-font-scale, 1));
+}
+
 .detailsOutreachWorkflow button,
-.detailsOutreachWorkflow select {
+.detailsOutreachWorkflow select,
+.detailsOutreachOutcome button,
+.detailsOutreachOutcome select {
   background: var(--control);
   border: 1px solid var(--line);
   border-radius: 6px;
@@ -4433,20 +4481,57 @@ input {
   font-weight: 700;
 }
 
+.detailsOutreachWorkflow button.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
 .detailsOutreachWorkflow button:hover,
-.detailsOutreachWorkflow select:focus {
+.detailsOutreachWorkflow select:focus,
+.detailsOutreachOutcome button:hover,
+.detailsOutreachOutcome select:focus {
   border-color: color-mix(in srgb, var(--accent) 46%, var(--line));
 }
 
-.detailsOutreachWorkflow button:disabled {
+.detailsOutreachWorkflow button:disabled,
+.detailsOutreachOutcome button:disabled {
   cursor: wait;
   opacity: 0.62;
+}
+
+.detailsOutreachOutcome {
+  background: color-mix(in srgb, var(--control) 54%, var(--panel));
+  border: 1px solid color-mix(in srgb, var(--line) 82%, transparent);
+  border-radius: 7px;
+  display: grid;
+  gap: 7px;
+  grid-template-columns: minmax(0, 1fr) minmax(136px, auto);
+  padding: 7px;
+}
+
+.detailsOutreachOutcome label {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.detailsOutreachOutcome button {
+  align-self: end;
+  cursor: pointer;
+  font-weight: 750;
+}
+
+.detailsOutreachOutcome small {
+  color: var(--muted);
+  font-size: calc(11px * var(--table-font-scale, 1));
+  grid-column: 1 / -1;
 }
 
 .detailsOutreachActions {
   display: grid;
   gap: 6px;
-  grid-template-columns: 1fr;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .detailsOutreachActions button {

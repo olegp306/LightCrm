@@ -43,6 +43,25 @@ function calendarItemForReminder(reminder: {
   };
 }
 
+function protocolItemForTouch(touch: {
+  id: string;
+  channel: string;
+  direction: string;
+  subject: string | null;
+  occurredAt: Date;
+  outcome: string | null;
+}) {
+  return {
+    id: touch.id,
+    actor: "CRM",
+    channel: touch.channel,
+    direction: touch.direction,
+    subject: touch.subject,
+    occurredAt: touch.occurredAt.toISOString(),
+    outcome: touch.outcome
+  };
+}
+
 function stoppedStatusForOutcome(outcome: string | undefined) {
   if (!outcome) {
     return "stopped";
@@ -217,7 +236,7 @@ export async function POST(request: Request) {
     const sentSubject = draftSubjectFromDescription(currentReminder?.description ?? null);
     const sentBody = draftBodyFromDescription(currentReminder?.description ?? null);
 
-    await prisma.outreachTouch.create({
+    const sentTouch = await prisma.outreachTouch.create({
       data: {
         workspaceId,
         coldTargetId: coldTarget.id,
@@ -248,9 +267,10 @@ export async function POST(request: Request) {
           campaignName: completedAssignment.campaignName,
           campaignStatus: completedAssignment.status,
           campaignTouch: `${campaign.touchpoints.length}/${campaign.touchpoints.length}`,
-          nextAction: "Completed: silent_8_touches"
+        nextAction: "Completed: silent_8_touches"
         },
-        calendarItems: currentReminder ? [calendarItemForReminder({ ...currentReminder, status: "done" }, coldTarget.id)] : []
+        calendarItems: currentReminder ? [calendarItemForReminder({ ...currentReminder, status: "done" }, coldTarget.id)] : [],
+        outreachProtocolItems: [protocolItemForTouch(sentTouch)]
       });
     }
 
@@ -314,11 +334,11 @@ export async function POST(request: Request) {
       calendarItems: [
         ...(currentReminder ? [calendarItemForReminder({ ...currentReminder, status: "done" }, coldTarget.id)] : []),
         calendarItemForReminder(nextReminder, coldTarget.id)
-      ]
+      ],
+      outreachProtocolItems: [protocolItemForTouch(sentTouch)]
     });
   } catch (error) {
     return handleRouteError(error);
   }
 }
-
 

@@ -8,11 +8,15 @@ import {
   filterRowsByCountry,
   formatAreaValue,
   formatOutreachProtocolItem,
+  formatOutreachTouchActionLabel,
+  formatOutreachTouchProgressLabel,
   currentTouchChipTone,
   handoffSideTone,
   leadProgressReward,
   leadProgressSteps,
   nextActionStateForTodo,
+  outreachOutcomeOptions,
+  parseOutreachTouchProgress,
   recordToRow,
   recordsToRows,
   shouldWrapTableColumn,
@@ -129,6 +133,28 @@ describe("table-model", () => {
       dot: "#3478f6"
     });
     expect(currentTouchChipTone(null)).toBeNull();
+  });
+
+  it("parses and labels the current outreach touch", () => {
+    expect(parseOutreachTouchProgress("Touch 1/8")).toEqual({ current: 1, total: 8 });
+    expect(parseOutreachTouchProgress("1/8")).toEqual({ current: 1, total: 8 });
+    expect(parseOutreachTouchProgress("Touch 1", 8)).toEqual({ current: 1, total: 8 });
+    expect(parseOutreachTouchProgress("n/a")).toBeNull();
+    expect(formatOutreachTouchProgressLabel({ current: 2, total: 8 })).toBe("Touch 2 of 8");
+    expect(formatOutreachTouchProgressLabel(null)).toBe("No active touch");
+    expect(formatOutreachTouchActionLabel({ current: 2, total: 8 })).toBe("Mark Touch 2 Sent");
+    expect(formatOutreachTouchActionLabel(null)).toBe("Mark Current Touch Sent");
+  });
+
+  it("uses human-readable outreach stop outcomes", () => {
+    expect(outreachOutcomeOptions.map((option) => option.label)).toEqual([
+      "Interested",
+      "Follow up later",
+      "Already has architect",
+      "Asked to be removed",
+      "No response after cadence",
+      "Not a fit"
+    ]);
   });
 
   it("uses pink handoff tone when the ball is with the client", () => {

@@ -46,9 +46,13 @@ import {
   filterRowsByCountry,
   formatAreaValue,
   formatOutreachProtocolItem,
+  formatOutreachTouchActionLabel,
+  formatOutreachTouchProgressLabel,
   handoffSideTone,
   leadProgressReward,
   nextActionStateForTodo,
+  outreachOutcomeOptions,
+  parseOutreachTouchProgress,
   recordToRow,
   shouldWrapTableColumn,
   sortRows,
@@ -2577,6 +2581,16 @@ export function CrmTable({
     outreachCampaigns.find((campaign) => campaign.status === "active") ??
     outreachCampaigns[0] ??
     null;
+  const detailsOutreachProgress = parseOutreachTouchProgress(
+    detailsPanelRow?.values.campaignTouch,
+    selectedOutreachCampaign?.touchpoints.length
+  );
+  const detailsCurrentOutreachTouch =
+    selectedOutreachCampaign && detailsOutreachProgress
+      ? selectedOutreachCampaign.touchpoints.find((touch) => touch.touchNumber === detailsOutreachProgress.current) ?? null
+      : null;
+  const detailsOutreachProgressLabel = formatOutreachTouchProgressLabel(detailsOutreachProgress);
+  const detailsMarkSentLabel = formatOutreachTouchActionLabel(detailsOutreachProgress);
   const hasDetailsDocumentsSection = detailsPanelDocuments.length > 0 || columns.some((column) => column.id === "documents");
   const hasDetailsCalendarSection = detailsPanelCalendarItems.length > 0 || columns.some((column) => column.id === "calendar");
   const hasDetailsSideSections =
@@ -4540,6 +4554,7 @@ export function CrmTable({
     rowPatch?: Record<string, string | null>;
     calendarItem?: CalendarCellItem | null;
     calendarItems?: CalendarCellItem[];
+    outreachProtocolItems?: OutreachProtocolItem[];
   }) => {
     setEditableRows((current) =>
       current.map((row) => {
@@ -4558,6 +4573,15 @@ export function CrmTable({
               (item) => !nextCalendarItems.some((nextItem) => nextItem.kind === item.kind && nextItem.id === item.id)
             ),
             ...nextCalendarItems
+          ];
+        }
+        if (payload.outreachProtocolItems && payload.outreachProtocolItems.length > 0) {
+          const existingProtocolItems = cellOutreachProtocol(row.values.outreachProtocol);
+          patchedValues.outreachProtocol = [
+            ...payload.outreachProtocolItems,
+            ...existingProtocolItems.filter(
+              (item) => !payload.outreachProtocolItems?.some((nextItem) => nextItem.id === item.id)
+            )
           ];
         }
         return { ...row, values: patchedValues };
@@ -4653,6 +4677,13 @@ export function CrmTable({
     },
     [applyOutreachResponseToRow, detailsPanelRow, outreachDraftEndpoint, outreachDrafts, selectedOutreachCampaign]
   );
+
+  useEffect(() => {
+    if (!detailsCurrentOutreachTouch) {
+      return;
+    }
+    void loadOutreachDraftForDetailsRow(detailsCurrentOutreachTouch);
+  }, [detailsCurrentOutreachTouch, loadOutreachDraftForDetailsRow]);
 
   const updateOutreachDraftForDetailsRow = useCallback(
     (key: string, patch: Partial<OutreachDraftState>) => {
@@ -4847,6 +4878,7 @@ export function CrmTable({
           error?: string;
           rowPatch?: Record<string, string | null>;
           calendarItems?: CalendarCellItem[];
+          outreachProtocolItems?: OutreachProtocolItem[];
         };
         if (!response.ok) {
           throw new Error(payload.error ?? "Campaign update failed.");
@@ -6297,11 +6329,25 @@ export function CrmTable({
                           {selectedOutreachCampaign ? (
                             <>
                               <p>{selectedOutreachCampaign.summary}</p>
+                              {detailsPanelRow.values.campaignName ? (
+                                <div className="detailsOutreachCurrent">
+                                  <span>Current touch</span>
+                                  <strong>
+                                    {detailsOutreachProgressLabel}
+                                    {detailsCurrentOutreachTouch ? ` · ${detailsCurrentOutreachTouch.title}` : ""}
+                                  </strong>
+                                  {detailsPanelRow.values.nextAction ? (
+                                    <small>{mobileDisplayValue(detailsPanelRow.values.nextAction)}</small>
+                                  ) : null}
+                                </div>
+                              ) : null}
                               <div className="detailsOutreachTouches">
                                 {selectedOutreachCampaign.touchpoints.map((touch) => {
                                   const key = outreachDraftKey(detailsPanelRow.id, selectedOutreachCampaign.id, touch.id);
                                   const draft = outreachDrafts[key];
-                                  const isStyledDraft = styledOutreachDrafts[key] ?? true;
+                                  const isPreviewDraft = styledOutreachDrafts[key] ?? false;
+                                  const isCurrentTouch = detailsOutreachProgress?.current === touch.touchNumber;
+                                  const isPastTouch = Boolean(detailsOutreachProgress && touch.touchNumber < detailsOutreachProgress.current);
                                   const autosaveStatus = draft
                                     ? autosaveLabelForDraft({
                                         saving: draft.saving,
@@ -6312,7 +6358,8 @@ export function CrmTable({
                                     : null;
                                   return (
                                     <details
-                                      className="detailsOutreachTouch"
+                                      className={`detailsOutreachTouch${isCurrentTouch ? " current" : ""}${isPastTouch ? " past" : ""}`}
+                                      open={isCurrentTouch || Boolean(draft && !draft.loading)}
                                       key={touch.id}
                                       onToggle={(event) => {
                                         if (event.currentTarget.open) {
@@ -6325,22 +6372,22 @@ export function CrmTable({
                                           <span>D+{touch.dayOffset}</span>
                                           <strong>{touch.title}</strong>
                                         </span>
-                                        <small>{touch.channel}</small>
+                                        <small>{isCurrentTouch ? "current" : touch.channel}</small>
                                       </summary>
                                       <div className="detailsOutreachDraft">
                                         <div className="detailsOutreachDraftHeader">
                                           <p>{touch.action}</p>
                                           <button
                                             type="button"
-                                            aria-pressed={isStyledDraft}
+                                            aria-pressed={isPreviewDraft}
                                             onClick={() =>
                                               setStyledOutreachDrafts((current) => ({
                                                 ...current,
-                                                [key]: !isStyledDraft
+                                                [key]: !isPreviewDraft
                                               }))
                                             }
                                           >
-                                            {isStyledDraft ? "Styled" : "Plain"}
+                                            {isPreviewDraft ? "Edit" : "Preview"}
                                           </button>
                                         </div>
                                         {!draft || draft.loading ? <p className="detailsOutreachDraftStatus">Preparing draft...</p> : null}
@@ -6362,23 +6409,8 @@ export function CrmTable({
                                             </label>
                                             <label>
                                               <span>Email</span>
-                                              {isStyledDraft ? (
-                                                <div
-                                                  className="detailsOutreachEmailPreview editable"
-                                                  contentEditable
-                                                  role="textbox"
-                                                  aria-label="Email body"
-                                                  suppressContentEditableWarning
-                                                  onInput={(event) => {
-                                                    const body = event.currentTarget.innerText.trim();
-                                                    editOutreachDraftForDetailsRow(key, { body });
-                                                  }}
-                                                  onBlur={(event) => {
-                                                    const body = event.currentTarget.innerText.trim();
-                                                    updateOutreachDraftForDetailsRow(key, { body, message: null });
-                                                    saveOutreachDraftImmediately(key, { body });
-                                                  }}
-                                                >
+                                              {isPreviewDraft ? (
+                                                <div className="detailsOutreachEmailPreview" aria-label="Email body preview">
                                                   {emailBodyParagraphs(draft.body).map((paragraph, paragraphIndex, paragraphs) => (
                                                     <p
                                                       className={
@@ -6457,12 +6489,6 @@ export function CrmTable({
                                   );
                                 })}
                               </div>
-                              {detailsPanelRow.values.nextAction ? (
-                                <div className="detailsOutreachCurrent">
-                                  <span>Current next action</span>
-                                  <strong>{mobileDisplayValue(detailsPanelRow.values.nextAction)}</strong>
-                                </div>
-                              ) : null}
                               <details className="detailsOutreachProtocol" open={detailsPanelOutreachProtocol.length > 0}>
                                 <summary>
                                   <span>Protocol</span>
@@ -6485,41 +6511,50 @@ export function CrmTable({
                               </details>
                               {outreachCampaignError ? <p className="detailsDrawerError">{outreachCampaignError}</p> : null}
                               {detailsPanelRow.values.campaignName ? (
-                                <div className="detailsOutreachWorkflow">
-                                  <button
-                                    type="button"
-                                    onClick={() => void advanceOutreachCampaignForDetailsRow("mark_sent")}
-                                    disabled={advancingOutreachCampaign || !outreachAdvanceEndpoint}
-                                  >
-                                    {advancingOutreachCampaign ? "Updating" : "Mark touch sent"}
-                                  </button>
-                                  <label>
-                                    <span>Outcome</span>
-                                    <select
-                                      value={selectedOutreachOutcome}
-                                      onChange={(event) => setSelectedOutreachOutcome(event.target.value)}
+                                <>
+                                  <div className="detailsOutreachWorkflow">
+                                    <div>
+                                      <span>Current step action</span>
+                                      <strong>{detailsOutreachProgressLabel}</strong>
+                                    </div>
+                                    <button
+                                      type="button"
+                                      className="primary"
+                                      onClick={() => void advanceOutreachCampaignForDetailsRow("mark_sent")}
+                                      disabled={advancingOutreachCampaign || !outreachAdvanceEndpoint}
                                     >
-                                      <option value="interested">interested</option>
-                                      <option value="later">later</option>
-                                      <option value="existing_architect">existing architect</option>
-                                      <option value="remove_me">remove me</option>
-                                      <option value="silent_8_touches">silent after 8 touches</option>
-                                      <option value="not_a_fit">not a fit</option>
-                                    </select>
-                                  </label>
-                                  <button
-                                    type="button"
-                                    onClick={() => void advanceOutreachCampaignForDetailsRow("stop")}
-                                    disabled={advancingOutreachCampaign || !outreachAdvanceEndpoint}
-                                  >
-                                    Stop with outcome
-                                  </button>
-                                </div>
+                                      {advancingOutreachCampaign ? "Updating" : detailsMarkSentLabel}
+                                    </button>
+                                  </div>
+                                  <div className="detailsOutreachOutcome">
+                                    <label>
+                                      <span>Close campaign outcome</span>
+                                      <select
+                                        value={selectedOutreachOutcome}
+                                        onChange={(event) => setSelectedOutreachOutcome(event.target.value)}
+                                      >
+                                        {outreachOutcomeOptions.map((option) => (
+                                          <option key={option.value} value={option.value}>
+                                            {option.label}
+                                          </option>
+                                        ))}
+                                      </select>
+                                    </label>
+                                    <button
+                                      type="button"
+                                      onClick={() => void advanceOutreachCampaignForDetailsRow("stop")}
+                                      disabled={advancingOutreachCampaign || !outreachAdvanceEndpoint}
+                                    >
+                                      Stop Campaign
+                                    </button>
+                                    <small>Saves the selected outcome and stops the cadence.</small>
+                                  </div>
+                                </>
                               ) : null}
                               <div className="detailsOutreachActions">
                                 <button
                                   type="button"
-                                  className="primary"
+                                  className={detailsPanelRow.values.campaignName ? undefined : "primary"}
                                   onClick={() => void startOutreachCampaignForDetailsRow("next")}
                                   disabled={startingOutreachCampaign || !outreachStartEndpoint}
                                 >
@@ -6534,7 +6569,7 @@ export function CrmTable({
                                   onClick={() => void startOutreachCampaignForDetailsRow("allDraft")}
                                   disabled={startingOutreachCampaign || !outreachStartEndpoint}
                                 >
-                                  Draft full cadence
+                                  Draft all touches
                                 </button>
                               </div>
                             </>
