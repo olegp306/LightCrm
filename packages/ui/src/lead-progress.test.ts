@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 
 vi.mock("@glideapps/glide-data-grid/dist/index.css", () => ({}));
@@ -40,6 +42,16 @@ describe("lead progress helpers", () => {
       "/lead-progress/07-call-done.png",
       "/lead-progress/08-client-agreed.png"
     ]);
+  });
+
+  it("ships every stage asset with the shared 208x150 canvas", () => {
+    for (const stage of leadProgressStages) {
+      const filePath = resolve(process.cwd(), "../../apps/web/public", stage.image.slice(1));
+      const bytes = readFileSync(filePath);
+      expect(bytes.subarray(0, 8)).toEqual(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]));
+      expect(bytes.readUInt32BE(16)).toBe(208);
+      expect(bytes.readUInt32BE(20)).toBe(150);
+    }
   });
 
   it("derives current, available, and locked states for the first stage", () => {
