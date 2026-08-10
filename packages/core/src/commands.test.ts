@@ -236,6 +236,7 @@ describe("createCrmService", () => {
     const target = await crm.upsertColdTarget({
       workspaceId: "workspace-1",
       name: "German Builder",
+      hook: "Mention their new Munich project.",
       country: "Germany",
       firstTouchChannel: "linkedin",
       ballSide: "us"
@@ -249,6 +250,7 @@ describe("createCrmService", () => {
     });
 
     expect(updated.country).toBe("Germany");
+    expect(updated.hook).toBe("Mention their new Munich project.");
     expect(updated.firstTouchChannel).toBe("linkedin");
     expect(updated.ballSide).toBe("us");
   });

@@ -115,6 +115,7 @@ model ColdTarget {
   name                        String
   company                     String?
   role                        String?
+  hook                        String?
   email                       String?
   phone                       String?
   linkedinUrl                 String?

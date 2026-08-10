@@ -9,6 +9,7 @@ const schema = z.object({
   name: z.string().trim().min(1),
   company: optionalText,
   role: optionalText,
+  hook: optionalText,
   email: optionalText,
   phone: optionalText,
   linkedinUrl: optionalText,
