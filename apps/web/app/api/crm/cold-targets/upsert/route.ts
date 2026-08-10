@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { getCrm, handleRouteError, optionalText, parseJson, workspaceId } from "../../_shared";
+import { getCrm, handleRouteError, jsonError, optionalText, workspaceId } from "../../_shared";
 
 const schema = z.object({
   id: z.string().optional(),
@@ -28,10 +28,53 @@ const schema = z.object({
   ballSide: z.enum(["us", "client"]).nullable().optional()
 });
 
+const patchSchema = schema
+  .omit({ name: true })
+  .extend({
+    name: z.string().trim().min(1).optional()
+  })
+  .partial()
+  .strict();
+
+const tablePatchSchema = z.object({
+  id: z.string().min(1),
+  workspaceId,
+  patch: patchSchema,
+  source: z
+    .object({
+      channel: optionalText,
+      messageId: optionalText
+    })
+    .optional()
+});
+
 export async function POST(request: Request) {
   try {
-    const input = await parseJson(request, schema);
-    return NextResponse.json(await getCrm().upsertColdTarget(input));
+    const body = await request.json();
+    const tablePatch = tablePatchSchema.safeParse(body);
+    const crm = getCrm();
+    if (tablePatch.success) {
+      const existing = (
+        await crm.listRecords({
+          workspaceId: tablePatch.data.workspaceId,
+          entity: "coldTarget",
+          includeArchived: true
+        })
+      ).find((target) => target.id === tablePatch.data.id);
+      if (!existing) {
+        return jsonError("Cold target not found", 404);
+      }
+      return NextResponse.json(
+        await crm.upsertColdTarget({
+          ...existing,
+          ...tablePatch.data.patch,
+          workspaceId: tablePatch.data.workspaceId,
+          id: tablePatch.data.id
+        })
+      );
+    }
+    const input = schema.parse(body);
+    return NextResponse.json(await crm.upsertColdTarget(input));
   } catch (error) {
     return handleRouteError(error);
   }
