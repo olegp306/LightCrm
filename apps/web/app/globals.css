@@ -3695,6 +3695,15 @@ input {
   color: var(--ink);
 }
 
+.detailsHandoffControl.client {
+  border-color: color-mix(in srgb, #d9468f 46%, var(--line));
+  box-shadow: 0 0 0 2px color-mix(in srgb, #d9468f 12%, transparent);
+}
+
+.detailsHandoffControl.client .detailsHandoffSide:last-child {
+  color: #d9468f;
+}
+
 .detailsHandoffTrack {
   align-items: center;
   display: block;
@@ -3713,6 +3722,10 @@ input {
   transition:
     left 80ms linear,
     transform 80ms linear;
+}
+
+.detailsHandoffControl.client .detailsHandoffTrack b {
+  filter: drop-shadow(0 0 8px rgba(217, 70, 143, 0.38));
 }
 
 .detailsHandoffControl.animating .detailsHandoffTrack b {

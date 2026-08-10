@@ -57,11 +57,25 @@ export type CreateRecordFieldValue = string | number | null;
 
 export type OutreachProtocolItem = {
   id: string;
+  actor?: string | null;
   channel: string | null;
   occurredAt: string | null;
   direction: string | null;
   outcome: string | null;
   subject?: string | null;
+};
+
+export type CurrentTouchChipTone = {
+  fill: string;
+  stroke: string;
+  text: string;
+  dot: string;
+};
+
+export type HandoffVisualTone = {
+  accent: string;
+  glow: string;
+  soft: string;
 };
 
 export type CreateRecordPayloadConfig = {
@@ -118,7 +132,34 @@ export function formatOutreachProtocolItem(item: OutreachProtocolItem): string {
     occurredAt && !Number.isNaN(occurredAt.getTime())
       ? occurredAt.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
       : "No date";
-  return [channelLabel(item.channel), dateLabel, item.direction, item.outcome].filter(Boolean).join(" | ");
+  return [item.actor, channelLabel(item.channel), dateLabel, item.direction, item.outcome].filter(Boolean).join(" | ");
+}
+
+export function currentTouchChipTone(value: CrmTableCellValue | undefined): CurrentTouchChipTone | null {
+  const text = typeof value === "string" ? value.trim() : "";
+  if (!text || text === "n/a") {
+    return null;
+  }
+  return {
+    fill: "#e7f0ff",
+    stroke: "#9bbcfb",
+    text: "#1f5aa6",
+    dot: "#3478f6"
+  };
+}
+
+export function handoffSideTone(side: "us" | "client"): HandoffVisualTone {
+  return side === "client"
+    ? {
+        accent: "#d9468f",
+        glow: "rgba(217, 70, 143, 0.34)",
+        soft: "rgba(217, 70, 143, 0.16)"
+      }
+    : {
+        accent: "#4f7df3",
+        glow: "rgba(79, 125, 243, 0.28)",
+        soft: "rgba(79, 125, 243, 0.14)"
+      };
 }
 
 function displaySourceChannel(value: string | null): string | null {
@@ -206,6 +247,7 @@ export function normalizeOutreachProtocolValue(value: unknown): OutreachProtocol
     return [
       {
         id,
+        actor: optionalString(item.actor),
         channel,
         occurredAt,
         direction: optionalString(item.direction),

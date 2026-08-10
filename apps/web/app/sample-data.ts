@@ -190,7 +190,7 @@ export const tables: Record<string, TableDefinition> = {
       { id: "status", title: "Status", width: 130, mobilePriority: 2 },
       { id: "campaignName", title: "Campaign", width: 240 },
       { id: "campaignStatus", title: "Campaign status", width: 150, defaultVisible: false },
-      { id: "campaignTouch", title: "Touch", width: 120 },
+      { id: "campaignTouch", title: "Touch", width: 120, valueKind: "currentTouch" },
       { id: "nextAction", title: "Next action", width: 260 },
       { id: "calendar", title: "Calendar", width: 220, valueKind: "calendar" }
     ],

@@ -4,11 +4,11 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 
 export function coldTargetPingTone(value: string | null | undefined, now = new Date()): ColdTargetPingTone {
   if (!value) {
-    return "fresh";
+    return "overdue";
   }
   const pingAt = new Date(value);
   if (Number.isNaN(pingAt.getTime())) {
-    return "fresh";
+    return "overdue";
   }
   const ageDays = Math.max(0, now.getTime() - pingAt.getTime()) / DAY_MS;
   if (ageDays >= 30) {

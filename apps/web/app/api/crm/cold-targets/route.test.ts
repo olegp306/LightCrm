@@ -71,6 +71,7 @@ describe("cold targets route", () => {
       outreachProtocol: [
         {
           id: "touch-2",
+          actor: "CRM",
           channel: "linkedin",
           direction: "outbound",
           occurredAt: "2026-08-10T09:30:00.000Z",

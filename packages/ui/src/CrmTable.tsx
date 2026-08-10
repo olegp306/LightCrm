@@ -40,11 +40,13 @@ import {
   applyTablePreferences,
   buildCreateRecordPayload,
   compactDocumentTitle,
+  currentTouchChipTone,
   documentDisplayLabel,
   documentExtensionLabel,
   filterRowsByCountry,
   formatAreaValue,
   formatOutreachProtocolItem,
+  handoffSideTone,
   leadProgressReward,
   nextActionStateForTodo,
   recordToRow,
@@ -77,7 +79,7 @@ export type CrmTableColumn = {
   defaultVisible?: boolean;
   mobilePriority?: number;
   group?: string;
-  valueKind?: "text" | "link" | "documents" | "calendar" | "area" | "longText" | "action" | "handoff" | "ping";
+  valueKind?: "text" | "link" | "documents" | "calendar" | "area" | "longText" | "action" | "handoff" | "ping" | "currentTouch";
   wrapText?: boolean;
   textStyle?: ColumnTextStyle;
 };
@@ -1960,6 +1962,7 @@ const handoffCellRenderer: CustomRenderer<HandoffCustomCell> = {
     const arcLift = progress === null ? 0 : Math.sin(Math.PI * progress) * Math.min(18, rect.height * 0.42);
     const ballY = centerY - arcLift;
     const insightHover = displaySide === "us" && hoverAmount > 0;
+    const activeTone = handoffSideTone(displaySide);
 
     ctx.save();
     ctx.beginPath();
@@ -1984,14 +1987,14 @@ const handoffCellRenderer: CustomRenderer<HandoffCustomCell> = {
       ["client", rightX]
     ] as const) {
       const active = displaySide === label;
-      ctx.fillStyle = active ? (label === "us" && insightHover ? "#d79316" : theme.accentColor) : theme.textMedium;
+      ctx.fillStyle = active ? (label === "us" && insightHover ? "#d79316" : activeTone.accent) : theme.textMedium;
       ctx.font = "700 8px Inter, sans-serif";
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
       ctx.fillText(label === "us" ? "us" : "client", x, railY, 26);
       if (active) {
         ctx.globalAlpha = label === "us" && insightHover ? 0.72 : 0.45;
-        ctx.fillStyle = label === "us" && insightHover ? "#f5b84b" : theme.accentColor;
+        ctx.fillStyle = label === "us" && insightHover ? "#f5b84b" : activeTone.accent;
         ctx.beginPath();
         ctx.arc(x, railY + 10, 2, 0, Math.PI * 2);
         ctx.fill();
@@ -2015,13 +2018,21 @@ const handoffCellRenderer: CustomRenderer<HandoffCustomCell> = {
       ctx.beginPath();
       ctx.arc(ballX, ballY, 23, 0, Math.PI * 2);
       ctx.fill();
+    } else if (displaySide === "client") {
+      const glow = ctx.createRadialGradient(ballX, ballY, 2, ballX, ballY, 22);
+      glow.addColorStop(0, activeTone.glow);
+      glow.addColorStop(1, "rgba(217, 70, 143, 0)");
+      ctx.fillStyle = glow;
+      ctx.beginPath();
+      ctx.arc(ballX, ballY, 20, 0, Math.PI * 2);
+      ctx.fill();
     }
 
     ctx.font = `${Math.max(17, Math.min(22, rect.height - 10))}px \"Segoe UI Emoji\", \"Apple Color Emoji\", sans-serif`;
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.shadowColor = insightHover ? "rgba(245, 184, 75, 0.72)" : "rgba(15, 23, 42, 0.22)";
-    ctx.shadowBlur = insightHover ? 11 : 4;
+    ctx.shadowColor = insightHover ? "rgba(245, 184, 75, 0.72)" : displaySide === "client" ? activeTone.glow : "rgba(15, 23, 42, 0.22)";
+    ctx.shadowBlur = insightHover ? 11 : displaySide === "client" ? 8 : 4;
     ctx.shadowOffsetY = insightHover ? 0 : 1;
     ctx.fillText(icon, ballX, ballY + (progress === null ? 0 : Math.sin(progress * Math.PI * 4) * 1.2));
     ctx.restore();
@@ -3179,6 +3190,9 @@ export function CrmTable({
       if (column.valueKind === "ping") {
         return;
       }
+      if (column.valueKind === "currentTouch") {
+        return;
+      }
       const nextRow = {
         ...row,
         values: { ...row.values, [column.id]: value.data }
@@ -4146,6 +4160,41 @@ export function CrmTable({
         ctx.fillStyle = colors.text;
         ctx.textBaseline = "middle";
         ctx.fillText(label, chipX + 19, rect.y + rect.height / 2, chipWidth - 24);
+        ctx.restore();
+        drawSearchMatchHighlight(args, query, isDarkMode);
+        return;
+      }
+
+      if (column?.valueKind === "currentTouch" && args.cell.kind === GridCellKind.Text) {
+        const row = filteredRows[args.row];
+        const tone = currentTouchChipTone(row?.values[column.id]);
+        if (!tone) {
+          drawContent();
+          drawSearchMatchHighlight(args, query, isDarkMode);
+          return;
+        }
+        const text = args.cell.displayData || args.cell.data || "";
+        const { ctx, rect, theme } = args;
+        ctx.save();
+        const chipHeight = Math.max(18, Math.min(rect.height - 8, 24));
+        const chipWidth = Math.min(rect.width - 12, Math.max(72, String(text).length * 7 + 30));
+        const chipX = rect.x + Math.max(6, (rect.width - chipWidth) / 2);
+        const chipY = rect.y + (rect.height - chipHeight) / 2;
+        ctx.beginPath();
+        ctx.roundRect(chipX, chipY, chipWidth, chipHeight, chipHeight / 2);
+        ctx.fillStyle = isDarkMode ? "#162b4c" : tone.fill;
+        ctx.fill();
+        ctx.strokeStyle = isDarkMode ? "#2d63be" : tone.stroke;
+        ctx.lineWidth = 1;
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.arc(chipX + 11, rect.y + rect.height / 2, 3, 0, Math.PI * 2);
+        ctx.fillStyle = tone.dot;
+        ctx.fill();
+        ctx.font = `700 11px ${theme.fontFamily ?? "Inter, sans-serif"}`;
+        ctx.fillStyle = isDarkMode ? "#b8d3ff" : tone.text;
+        ctx.textBaseline = "middle";
+        ctx.fillText(String(text), chipX + 19, rect.y + rect.height / 2, chipWidth - 24);
         ctx.restore();
         drawSearchMatchHighlight(args, query, isDarkMode);
         return;

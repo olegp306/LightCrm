@@ -33,6 +33,7 @@ export async function GET(request: Request) {
       Array<{
         id: string;
         channel: string;
+        actor: string;
         direction: string;
         subject: string | null;
         occurredAt: string;
@@ -46,6 +47,7 @@ export async function GET(request: Request) {
           if (protocol.length < 8) {
             protocol.push({
               id: touch.id,
+              actor: "CRM",
               channel: touch.channel,
               direction: touch.direction,
               subject: touch.subject,
@@ -61,6 +63,7 @@ export async function GET(request: Request) {
       const protocol = protocolByTarget.get(touch.coldTargetId) ?? [];
       protocol.push({
         id: touch.id,
+        actor: "CRM",
         channel: touch.channel,
         direction: touch.direction,
         subject: touch.subject,

@@ -8,6 +8,8 @@ import {
   filterRowsByCountry,
   formatAreaValue,
   formatOutreachProtocolItem,
+  currentTouchChipTone,
+  handoffSideTone,
   leadProgressReward,
   leadProgressSteps,
   nextActionStateForTodo,
@@ -36,7 +38,7 @@ const rows: CrmTableRow[] = [
 
 describe("table-model", () => {
   it("marks cold target pings as fresh, overdue, or dormant", () => {
-    expect(coldTargetPingTone(null, new Date("2026-08-10T12:00:00.000Z"))).toBe("fresh");
+    expect(coldTargetPingTone(null, new Date("2026-08-10T12:00:00.000Z"))).toBe("overdue");
     expect(coldTargetPingTone("2026-08-01T12:00:00.000Z", new Date("2026-08-10T12:00:00.000Z"))).toBe("overdue");
     expect(coldTargetPingTone("2026-07-01T12:00:00.000Z", new Date("2026-08-10T12:00:00.000Z"))).toBe("dormant");
   });
@@ -105,16 +107,32 @@ describe("table-model", () => {
     expect(filterRowsByCountry(countryRows, "").map((row) => row.id)).toEqual(["1", "2", "3", "4"]);
   });
 
-  it("formats outreach protocol rows with channel, date, direction, and outcome", () => {
+  it("formats outreach protocol rows with actor, channel, date, direction, and outcome", () => {
     expect(
       formatOutreachProtocolItem({
         id: "touch-1",
+        actor: "CRM",
         channel: "linkedin",
         occurredAt: "2026-08-10T09:30:00.000Z",
         direction: "outbound",
         outcome: "sent"
       })
-    ).toBe("LinkedIn | Aug 10, 2026 | outbound | sent");
+    ).toBe("CRM | LinkedIn | Aug 10, 2026 | outbound | sent");
+  });
+
+  it("uses a blue current-touch chip tone only when a touch exists", () => {
+    expect(currentTouchChipTone("Touch 3")).toEqual({
+      fill: "#e7f0ff",
+      stroke: "#9bbcfb",
+      text: "#1f5aa6",
+      dot: "#3478f6"
+    });
+    expect(currentTouchChipTone(null)).toBeNull();
+  });
+
+  it("uses pink handoff tone when the ball is with the client", () => {
+    expect(handoffSideTone("client").accent).toBe("#d9468f");
+    expect(handoffSideTone("us").accent).toBe("#4f7df3");
   });
 
   it("maps nested linked records to dotted table columns", () => {
