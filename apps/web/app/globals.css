@@ -2319,6 +2319,42 @@ input {
   font-weight: 400;
 }
 
+.countryFilter {
+  align-items: center;
+  background: var(--control);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--muted);
+  display: flex;
+  gap: 7px;
+  height: 36px;
+  padding: 0 9px;
+  transition:
+    background 160ms ease,
+    border-color 160ms ease,
+    box-shadow 160ms ease,
+    color 160ms ease;
+}
+
+.countryFilter:focus-within,
+.countryFilter.active {
+  background: var(--panel-raised);
+  border-color: color-mix(in srgb, var(--accent) 58%, var(--line));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 15%, transparent);
+  color: var(--accent);
+}
+
+.countryFilter select {
+  appearance: none;
+  background: transparent;
+  border: 0;
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 600;
+  min-width: 118px;
+  outline: 0;
+}
+
 .gridFrame {
   background: var(--panel);
   border: 1px solid var(--line);
@@ -2426,6 +2462,20 @@ input {
 
 .calendarCellTooltip {
   max-width: 320px;
+}
+
+.wrappedTextCellTooltip {
+  max-height: min(380px, calc(100vh - 220px));
+  max-width: min(520px, calc(100vw - 320px));
+  overflow: auto;
+  pointer-events: auto;
+  width: max-content;
+}
+
+.wrappedTextCellTooltip span {
+  max-width: 500px;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
 }
 
 .documentCellTooltip strong,
@@ -2873,11 +2923,11 @@ input {
   color: var(--ink);
   font-size: calc(13px * var(--table-font-scale, 1));
   display: grid;
-  gap: 12px;
+  gap: 8px;
   grid-template-rows: auto auto minmax(0, 1fr) auto;
   max-height: min(950px, calc(100vh - 36px));
   max-width: min(1500px, calc(100vw - 36px));
-  padding: 16px;
+  padding: 12px 14px 10px;
   width: 1430px;
 }
 
@@ -2937,21 +2987,21 @@ input {
   border-radius: 8px;
   box-shadow: inset 0 1px 0 color-mix(in srgb, #ffffff 54%, transparent);
   display: grid;
-  gap: 10px;
-  grid-template-columns: minmax(0, 1fr) minmax(132px, auto);
-  min-height: 208px;
-  padding: 8px;
+  gap: 8px;
+  grid-template-columns: minmax(0, 1fr) minmax(112px, auto);
+  min-height: 166px;
+  padding: 7px;
 }
 
 .leadProgressSets {
   display: grid;
-  gap: 8px;
+  gap: 6px;
   min-width: 0;
 }
 
 .leadProgressSet {
   display: grid;
-  gap: 5px;
+  gap: 4px;
   min-width: 0;
 }
 
@@ -2967,8 +3017,8 @@ input {
 .leadProgressTrack {
   align-items: start;
   display: grid;
-  gap: 8px;
-  grid-template-columns: repeat(10, minmax(108px, 1fr));
+  gap: 6px;
+  grid-template-columns: repeat(10, minmax(92px, 1fr));
   min-width: 0;
 }
 
@@ -3005,7 +3055,7 @@ input {
   border-radius: 7px;
   display: inline-flex;
   filter: grayscale(1) saturate(0.15);
-  height: 88px;
+  height: 68px;
   justify-content: center;
   opacity: 0.72;
   overflow: hidden;
@@ -3017,7 +3067,7 @@ input {
     filter 180ms ease,
     opacity 180ms ease,
     transform 180ms ease;
-  width: 108px;
+  width: 92px;
 }
 
 .leadProgressIcon img {
@@ -3140,7 +3190,7 @@ input {
   border-radius: 8px;
   display: grid;
   min-width: 0;
-  padding: 7px 10px;
+  padding: 6px 8px;
 }
 
 .leadProgressReward span {
@@ -3154,7 +3204,7 @@ input {
 .leadProgressReward strong {
   color: color-mix(in srgb, var(--warn) 80%, var(--ink));
   font-family: ui-rounded, "SF Pro Rounded", "Trebuchet MS", system-ui, sans-serif;
-  font-size: calc(23px * var(--table-font-scale, 1));
+  font-size: calc(19px * var(--table-font-scale, 1));
   font-variant-numeric: tabular-nums;
   font-weight: 900;
   letter-spacing: 0;
@@ -3416,7 +3466,7 @@ input {
 
 .detailsDrawerBody {
   display: grid;
-  gap: 12px;
+  gap: 10px;
   grid-template-columns: minmax(0, 1.08fr) minmax(280px, 0.92fr);
   min-height: 0;
   overflow: hidden;
@@ -3436,6 +3486,7 @@ input {
 
 .detailsDrawerFieldsPanel {
   display: grid;
+  grid-template-rows: minmax(0, 1fr);
   min-height: 0;
   overflow: hidden;
 }
@@ -3447,17 +3498,20 @@ input {
 .detailsDrawerFields {
   align-content: start;
   display: grid;
-  gap: 8px;
+  gap: 7px 8px;
   grid-template-columns: repeat(2, minmax(0, 1fr));
+  min-height: 0;
   overflow: auto;
-  padding-right: 2px;
+  padding: 0 2px 8px 0;
 }
 
 .detailsDrawerFields label,
-.detailsDrawerField {
+.detailsDrawerField,
+.detailsClientSection {
   display: grid;
-  gap: 5px;
   min-width: 0;
+  padding-top: 6px;
+  position: relative;
 }
 
 .detailsDrawerFields label.wide {
@@ -3473,6 +3527,26 @@ input {
   font-weight: 700;
 }
 
+.detailsDrawerFields > label > .detailsFieldLabel,
+.detailsDrawerField > .detailsFieldLabel,
+.detailsClientSection > .detailsFieldLabel {
+  align-items: center;
+  background: var(--panel-raised);
+  border-radius: 999px;
+  display: inline-flex;
+  gap: 4px;
+  left: 8px;
+  line-height: 1;
+  max-width: calc(100% - 16px);
+  overflow: hidden;
+  padding: 0 4px;
+  position: absolute;
+  text-overflow: ellipsis;
+  top: 0;
+  white-space: nowrap;
+  z-index: 1;
+}
+
 .detailsDrawerFields input,
 .detailsDrawerFields select,
 .detailsDrawerFields textarea,
@@ -3484,13 +3558,13 @@ input {
   font: inherit;
   font-size: calc(13px * var(--table-font-scale, 1));
   min-width: 0;
-  padding: 8px 9px;
+  padding: 10px 9px 6px;
 }
 
 .detailsDrawerField strong {
   font-weight: 650;
-  line-height: 1.35;
-  min-height: 36px;
+  line-height: 1.25;
+  min-height: 34px;
   overflow-wrap: anywhere;
 }
 
@@ -3499,7 +3573,7 @@ input {
 }
 
 .detailsDrawerFields textarea {
-  line-height: 1.35;
+  line-height: 1.25;
   min-height: 0;
   overflow-wrap: anywhere;
   resize: vertical;
@@ -3511,10 +3585,10 @@ input {
   border: 1px solid color-mix(in srgb, var(--line) 78%, transparent);
   border-radius: 8px;
   display: grid;
-  gap: 8px;
+  gap: 7px;
   grid-column: 1 / -1;
   margin-top: 2px;
-  padding: 8px;
+  padding: 7px;
 }
 
 .detailsSecondaryFields header {
@@ -3563,9 +3637,7 @@ input {
 }
 
 .detailsClientSection {
-  display: grid;
   gap: 4px;
-  position: relative;
 }
 
 .detailsClientSection > header {
@@ -3764,6 +3836,15 @@ input {
   color: var(--ink);
 }
 
+.detailsHandoffControl.client {
+  border-color: color-mix(in srgb, #d9468f 46%, var(--line));
+  box-shadow: 0 0 0 2px color-mix(in srgb, #d9468f 12%, transparent);
+}
+
+.detailsHandoffControl.client .detailsHandoffSide:last-child {
+  color: #d9468f;
+}
+
 .detailsHandoffTrack {
   align-items: center;
   display: block;
@@ -3782,6 +3863,10 @@ input {
   transition:
     left 80ms linear,
     transform 80ms linear;
+}
+
+.detailsHandoffControl.client .detailsHandoffTrack b {
+  filter: drop-shadow(0 0 8px rgba(217, 70, 143, 0.38));
 }
 
 .detailsHandoffControl.animating .detailsHandoffTrack b {
@@ -3815,6 +3900,35 @@ input {
 
 .detailsDrawerSection.outreach {
   background: color-mix(in srgb, var(--accent) 8%, var(--control));
+  gap: 5px;
+  padding: 7px 8px;
+}
+
+.detailsOutreachHeader {
+  align-items: center;
+  display: flex;
+  min-height: 20px;
+}
+
+.detailsOutreachHeaderTitle {
+  align-items: baseline;
+  display: inline-flex !important;
+  gap: 7px !important;
+}
+
+.detailsOutreachHeaderTitle span {
+  color: var(--ink);
+  font-size: calc(12px * var(--table-font-scale, 1));
+  font-weight: 850;
+}
+
+.detailsOutreachHeaderTitle strong {
+  background: color-mix(in srgb, var(--accent) 14%, var(--panel));
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--line));
+  border-radius: 999px;
+  color: var(--accent);
+  font-size: calc(10px * var(--table-font-scale, 1));
+  padding: 2px 7px;
 }
 
 .detailsDrawerSectionHeader {
@@ -4080,6 +4194,21 @@ input {
   gap: 6px;
 }
 
+.detailsOutreachPanel > .detailsOutreachCampaignField {
+  padding-top: 5px;
+  position: relative;
+}
+
+.detailsOutreachPanel > .detailsOutreachCampaignField > span {
+  background: var(--panel-raised);
+  border-radius: 999px;
+  left: 7px;
+  padding: 0 4px;
+  position: absolute;
+  top: 0;
+  z-index: 1;
+}
+
 .detailsOutreachPanel label {
   display: grid;
   gap: 4px;
@@ -4100,7 +4229,7 @@ input {
   font: inherit;
   font-size: calc(13px * var(--table-font-scale, 1));
   min-width: 0;
-  padding: 6px 8px;
+  padding: 5px 8px;
 }
 
 .detailsOutreachPanel p {
@@ -4108,6 +4237,12 @@ input {
   font-size: calc(13px * var(--table-font-scale, 1));
   line-height: 1.25;
   margin: 0;
+}
+
+.detailsOutreachSummary {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .detailsOutreachPanel ol {
@@ -4153,6 +4288,10 @@ input {
 .detailsOutreachTouches {
   display: grid;
   gap: 4px;
+  max-height: 94px;
+  overflow-y: auto;
+  padding: 1px 2px 1px 0;
+  scrollbar-width: thin;
 }
 
 .detailsOutreachProtocol {
@@ -4388,6 +4527,16 @@ input {
   min-width: 0;
 }
 
+.detailsOutreachTouch.current {
+  background: color-mix(in srgb, var(--accent) 13%, var(--panel));
+  border-color: color-mix(in srgb, var(--accent) 54%, var(--line));
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 10%, transparent);
+}
+
+.detailsOutreachTouch.past {
+  opacity: 0.72;
+}
+
 .detailsOutreachTouch summary {
   align-items: center;
   cursor: pointer;
@@ -4429,6 +4578,16 @@ input {
 .detailsOutreachTouch summary small {
   color: var(--muted);
   font-size: calc(11px * var(--table-font-scale, 1));
+}
+
+.detailsOutreachTouch.current summary small {
+  background: var(--accent);
+  border-radius: 999px;
+  color: #fff;
+  font-size: calc(10px * var(--table-font-scale, 1));
+  font-weight: 800;
+  padding: 3px 7px;
+  text-transform: uppercase;
 }
 
 .detailsOutreachDraft {
@@ -4595,29 +4754,165 @@ input {
 
 .detailsOutreachCurrent {
   background: color-mix(in srgb, var(--panel) 74%, var(--accent));
-  border: 1px solid var(--line);
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--line));
   border-radius: 6px;
   display: grid;
-  gap: 3px;
-  padding: 6px 8px;
+  gap: 1px;
+  padding: 8px 8px 6px;
+  position: relative;
 }
 
 .detailsOutreachCurrent strong {
   color: var(--ink);
-  font-size: 12px;
+  display: block;
+  font-size: calc(12px * var(--table-font-scale, 1));
+  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.detailsOutreachCurrent strong b {
+  color: var(--accent);
+  font-size: calc(15px * var(--table-font-scale, 1));
+  font-weight: 900;
+}
+
+.detailsOutreachCurrent small {
+  color: var(--ink-soft);
+  font-size: calc(11px * var(--table-font-scale, 1));
+  line-height: 1.25;
+}
+
+.detailsOutreachProtocol {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+}
+
+.detailsOutreachProtocol summary {
+  align-items: center;
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  list-style: none;
+  padding: 6px 8px;
+}
+
+.detailsOutreachProtocol summary::-webkit-details-marker {
+  display: none;
+}
+
+.detailsOutreachProtocol summary span {
+  color: var(--muted);
+  font-size: calc(11px * var(--table-font-scale, 1));
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.detailsOutreachProtocol summary strong {
+  color: var(--ink);
+  font-size: calc(12px * var(--table-font-scale, 1));
+}
+
+.detailsOutreachProtocol ul {
+  border-top: 1px solid var(--line);
+  display: grid;
+  gap: 5px;
+  list-style: none;
+  margin: 0;
+  padding: 6px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.detailsOutreachProtocol li {
+  background: var(--control);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  display: grid;
+  gap: 3px;
+  grid-template-columns: minmax(0, 1fr);
+  padding: 6px 7px;
+}
+
+.detailsOutreachProtocol li span {
+  color: var(--ink);
+  font-size: calc(12px * var(--table-font-scale, 1));
+  font-weight: 750;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.detailsOutreachProtocol li small,
+.detailsOutreachProtocol p {
+  color: var(--muted);
+  font-size: calc(11px * var(--table-font-scale, 1));
+  margin: 0;
+}
+
+.detailsOutreachProtocol li small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.detailsDrawerSections > .detailsDrawerDetails {
+  gap: 5px;
+  padding: 6px 8px;
+}
+
+.detailsDrawerSections > .detailsDrawerDetails > summary {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+  list-style: none;
+  min-height: 18px;
+  white-space: nowrap;
+}
+
+.detailsDrawerSections > .detailsDrawerDetails > summary::-webkit-details-marker {
+  display: none;
+}
+
+.detailsOutreachProtocol p {
+  border-top: 1px solid var(--line);
+  padding: 7px 8px;
 }
 
 .detailsOutreachWorkflow {
   background: var(--panel);
   border: 1px solid var(--line);
   border-radius: 7px;
+  align-items: center;
   display: grid;
   gap: 7px;
+  grid-template-columns: minmax(0, 1fr) minmax(170px, 0.8fr);
   padding: 7px;
 }
 
+.detailsOutreachWorkflow div {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.detailsOutreachWorkflow span,
+.detailsOutreachOutcome span {
+  color: var(--muted);
+  font-size: calc(11px * var(--table-font-scale, 1));
+  font-weight: 800;
+}
+
+.detailsOutreachWorkflow strong {
+  color: var(--ink);
+  font-size: calc(13px * var(--table-font-scale, 1));
+}
+
 .detailsOutreachWorkflow button,
-.detailsOutreachWorkflow select {
+.detailsOutreachWorkflow select,
+.detailsOutreachOutcome button,
+.detailsOutreachOutcome select {
   background: var(--control);
   border: 1px solid var(--line);
   border-radius: 6px;
@@ -4633,20 +4928,57 @@ input {
   font-weight: 700;
 }
 
+.detailsOutreachWorkflow button.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
 .detailsOutreachWorkflow button:hover,
-.detailsOutreachWorkflow select:focus {
+.detailsOutreachWorkflow select:focus,
+.detailsOutreachOutcome button:hover,
+.detailsOutreachOutcome select:focus {
   border-color: color-mix(in srgb, var(--accent) 46%, var(--line));
 }
 
-.detailsOutreachWorkflow button:disabled {
+.detailsOutreachWorkflow button:disabled,
+.detailsOutreachOutcome button:disabled {
   cursor: wait;
   opacity: 0.62;
+}
+
+.detailsOutreachOutcome {
+  background: color-mix(in srgb, var(--control) 54%, var(--panel));
+  border: 1px solid color-mix(in srgb, var(--line) 82%, transparent);
+  border-radius: 7px;
+  display: grid;
+  gap: 7px;
+  grid-template-columns: minmax(0, 1fr) minmax(136px, auto);
+  padding: 7px;
+}
+
+.detailsOutreachOutcome label {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.detailsOutreachOutcome button {
+  align-self: end;
+  cursor: pointer;
+  font-weight: 750;
+}
+
+.detailsOutreachOutcome small {
+  color: var(--muted);
+  font-size: calc(11px * var(--table-font-scale, 1));
+  grid-column: 1 / -1;
 }
 
 .detailsOutreachActions {
   display: grid;
   gap: 6px;
-  grid-template-columns: 1fr;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .detailsOutreachActions button {
@@ -5031,9 +5363,16 @@ input {
 }
 
 .detailsDrawer footer {
+  background: linear-gradient(180deg, color-mix(in srgb, var(--panel-raised) 72%, transparent), var(--panel-raised) 42%);
+  border-top: 1px solid color-mix(in srgb, var(--line) 82%, transparent);
   display: flex;
   gap: 8px;
   justify-content: flex-end;
+  margin: 0 -14px -10px;
+  padding: 8px 14px 10px;
+  position: sticky;
+  bottom: 0;
+  z-index: 3;
 }
 
 .detailsDrawer footer button {
@@ -5043,10 +5382,10 @@ input {
   color: var(--ink);
   cursor: pointer;
   font: inherit;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 700;
-  min-height: 34px;
-  padding: 7px 11px;
+  min-height: 31px;
+  padding: 6px 10px;
 }
 
 .detailsDrawer footer button.primary {
@@ -5202,11 +5541,13 @@ input {
 }
 
 .recordCreateForm input,
-.recordCreateForm textarea {
+.recordCreateForm textarea,
+.recordCreateForm select {
   background: var(--control);
   border: 1px solid var(--line);
   border-radius: 6px;
   color: var(--ink);
+  font: inherit;
   min-width: 0;
   padding: 9px 10px;
   resize: vertical;
@@ -6959,6 +7300,20 @@ input {
     width: 100%;
   }
 
+  .toolbar:has(.countryFilter) {
+    grid-template-columns: minmax(108px, 1fr) minmax(122px, auto) repeat(4, 30px);
+  }
+
+  .toolbar .countryFilter {
+    height: 30px;
+    min-width: 0;
+  }
+
+  .toolbar .countryFilter select {
+    font-size: 12px;
+    min-width: 92px;
+  }
+
   .toolbar button {
     height: 30px;
     width: 30px;
@@ -7025,6 +7380,13 @@ input {
     min-height: 100%;
     padding: 12px;
     width: 100%;
+  }
+
+  .detailsDrawer footer {
+    align-items: center;
+    margin: 0 -12px;
+    min-height: 51px;
+    padding: 8px 12px 12px;
   }
 
   .detailsDrawerBody {
@@ -7146,6 +7508,14 @@ input {
 
   .detailsDrawerSection.outreach {
     padding: 10px;
+  }
+
+  .detailsOutreachProtocol ul {
+    grid-template-columns: 1fr;
+  }
+
+  .detailsOutreachCurrent strong {
+    white-space: normal;
   }
 
   .content {

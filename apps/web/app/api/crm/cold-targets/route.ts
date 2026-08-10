@@ -19,12 +19,66 @@ export async function GET(request: Request) {
       },
       orderBy: [{ updatedAt: "desc" }]
     });
+    const touches = await prisma.outreachTouch.findMany({
+      where: {
+        workspaceId,
+        coldTargetId: { in: rows.map((row) => row.id) }
+      },
+      orderBy: [{ occurredAt: "desc" }]
+    });
     const byTarget = new Map(assignments.map((assignment) => [assignment.coldTargetId, assignment]));
+    const latestTouchByTarget = new Map<string, Date>();
+    const protocolByTarget = new Map<
+      string,
+      Array<{
+        id: string;
+        channel: string;
+        actor: string;
+        direction: string;
+        subject: string | null;
+        occurredAt: string;
+        outcome: string | null;
+      }>
+    >();
+    for (const touch of touches) {
+      if (!touch.coldTargetId || latestTouchByTarget.has(touch.coldTargetId)) {
+        if (touch.coldTargetId) {
+          const protocol = protocolByTarget.get(touch.coldTargetId) ?? [];
+          if (protocol.length < 8) {
+            protocol.push({
+              id: touch.id,
+              actor: "CRM",
+              channel: touch.channel,
+              direction: touch.direction,
+              subject: touch.subject,
+              occurredAt: touch.occurredAt.toISOString(),
+              outcome: touch.outcome
+            });
+            protocolByTarget.set(touch.coldTargetId, protocol);
+          }
+        }
+        continue;
+      }
+      latestTouchByTarget.set(touch.coldTargetId, touch.occurredAt);
+      const protocol = protocolByTarget.get(touch.coldTargetId) ?? [];
+      protocol.push({
+        id: touch.id,
+        actor: "CRM",
+        channel: touch.channel,
+        direction: touch.direction,
+        subject: touch.subject,
+        occurredAt: touch.occurredAt.toISOString(),
+        outcome: touch.outcome
+      });
+      protocolByTarget.set(touch.coldTargetId, protocol);
+    }
     return NextResponse.json(
       rows.map((row) => {
         const assignment = byTarget.get(row.id);
         return {
           ...row,
+          pingAt: latestTouchByTarget.get(row.id)?.toISOString() ?? null,
+          outreachProtocol: protocolByTarget.get(row.id) ?? [],
           campaignName: assignment?.campaignName ?? null,
           campaignStatus: assignment?.status ?? null,
           campaignTouch: assignment ? `Touch ${assignment.currentTouchIndex + 1}` : null,

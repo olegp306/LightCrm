@@ -5,18 +5,29 @@ import {
   compactDocumentTitle,
   documentDisplayLabel,
   documentExtensionLabel,
+  filterRowsByCountry,
   formatAreaValue,
+  formatOutreachProtocolItem,
+  formatOutreachTouchActionLabel,
+  formatOutreachTouchProgressLabel,
+  orderOutreachTouchpoints,
+  currentTouchChipTone,
+  handoffSideTone,
   leadProgressReward,
   leadProgressSteps,
   nextActionStateForTodo,
+  outreachOutcomeOptions,
+  parseOutreachTouchProgress,
   recordToRow,
   recordsToRows,
   shouldWrapTableColumn,
   sortRows,
   toCsv,
   updateRowCell,
+  wrappedTableRowHeight,
   wrapMeasuredTextLines
 } from "./table-model";
+import { coldTargetPingTone } from "./cold-target-model";
 import type { CrmTableColumn, CrmTableRow } from "./CrmTable";
 
 const columns: CrmTableColumn[] = [
@@ -32,6 +43,27 @@ const rows: CrmTableRow[] = [
 ];
 
 describe("table-model", () => {
+  it("puts the current outreach touch first, followed by the next two touches", () => {
+    const touchpoints = [1, 2, 3, 4, 5, 6, 7, 8].map((touchNumber) => ({
+      id: `touch-${touchNumber}`,
+      touchNumber,
+      dayOffset: touchNumber,
+      channel: "email" as const,
+      title: `Touch ${touchNumber}`,
+      action: "Send message"
+    }));
+
+    expect(orderOutreachTouchpoints(touchpoints, 3).map((touch) => touch.touchNumber)).toEqual([
+      3, 4, 5, 1, 2, 6, 7, 8
+    ]);
+  });
+
+  it("marks cold target pings as fresh, overdue, or dormant", () => {
+    expect(coldTargetPingTone(null, new Date("2026-08-10T12:00:00.000Z"))).toBe("overdue");
+    expect(coldTargetPingTone("2026-08-01T12:00:00.000Z", new Date("2026-08-10T12:00:00.000Z"))).toBe("overdue");
+    expect(coldTargetPingTone("2026-07-01T12:00:00.000Z", new Date("2026-08-10T12:00:00.000Z"))).toBe("dormant");
+  });
+
   it("applies saved order, width, and hidden column preferences", () => {
     expect(
       applyTablePreferences(columns, {
@@ -91,6 +123,68 @@ describe("table-model", () => {
     ];
 
     expect(sortRows(mixedRows, { columnId: "name", direction: "asc" }).map((row) => row.id)).toEqual(["active", "archived"]);
+  });
+
+  it("filters rows by country using case-insensitive exact labels", () => {
+    const countryRows: CrmTableRow[] = [
+      { id: "1", values: { name: "One", country: "Germany" } },
+      { id: "2", values: { name: "Two", country: "germany " } },
+      { id: "3", values: { name: "Three", country: "United Kingdom" } },
+      { id: "4", values: { name: "Four", country: "" } }
+    ];
+
+    expect(filterRowsByCountry(countryRows, "Germany").map((row) => row.id)).toEqual(["1", "2"]);
+    expect(filterRowsByCountry(countryRows, "").map((row) => row.id)).toEqual(["1", "2", "3", "4"]);
+  });
+
+  it("formats outreach protocol rows with actor, channel, date, direction, and outcome", () => {
+    expect(
+      formatOutreachProtocolItem({
+        id: "touch-1",
+        actor: "CRM",
+        channel: "linkedin",
+        occurredAt: "2026-08-10T09:30:00.000Z",
+        direction: "outbound",
+        outcome: "sent"
+      })
+    ).toBe("CRM | LinkedIn | Aug 10, 2026 | outbound | sent");
+  });
+
+  it("uses a blue current-touch chip tone only when a touch exists", () => {
+    expect(currentTouchChipTone("Touch 3")).toEqual({
+      fill: "#e7f0ff",
+      stroke: "#9bbcfb",
+      text: "#1f5aa6",
+      dot: "#3478f6"
+    });
+    expect(currentTouchChipTone(null)).toBeNull();
+  });
+
+  it("parses and labels the current outreach touch", () => {
+    expect(parseOutreachTouchProgress("Touch 1/8")).toEqual({ current: 1, total: 8 });
+    expect(parseOutreachTouchProgress("1/8")).toEqual({ current: 1, total: 8 });
+    expect(parseOutreachTouchProgress("Touch 1", 8)).toEqual({ current: 1, total: 8 });
+    expect(parseOutreachTouchProgress("n/a")).toBeNull();
+    expect(formatOutreachTouchProgressLabel({ current: 2, total: 8 })).toBe("Touch 2 of 8");
+    expect(formatOutreachTouchProgressLabel(null)).toBe("No active touch");
+    expect(formatOutreachTouchActionLabel({ current: 2, total: 8 })).toBe("Mark Touch 2 Sent");
+    expect(formatOutreachTouchActionLabel(null)).toBe("Mark Current Touch Sent");
+  });
+
+  it("uses human-readable outreach stop outcomes", () => {
+    expect(outreachOutcomeOptions.map((option) => option.label)).toEqual([
+      "Interested",
+      "Follow up later",
+      "Already has architect",
+      "Asked to be removed",
+      "No response after cadence",
+      "Not a fit"
+    ]);
+  });
+
+  it("uses pink handoff tone when the ball is with the client", () => {
+    expect(handoffSideTone("client").accent).toBe("#d9468f");
+    expect(handoffSideTone("us").accent).toBe("#4f7df3");
   });
 
   it("maps nested linked records to dotted table columns", () => {
@@ -213,7 +307,14 @@ describe("table-model", () => {
 
   it("detects columns that should render with wrapped table text", () => {
     expect(shouldWrapTableColumn({ id: "client.name", title: "Client", wrapText: true })).toBe(true);
+    expect(shouldWrapTableColumn({ id: "hook", title: "Hook", valueKind: "longText" })).toBe(true);
     expect(shouldWrapTableColumn({ id: "status", title: "Status" })).toBe(false);
+  });
+
+  it("derives a capped three-line row height for wrapped table text", () => {
+    expect(wrappedTableRowHeight(13)).toBe(65);
+    expect(wrappedTableRowHeight(13, 2)).toBe(48);
+    expect(wrappedTableRowHeight(13, 20)).toBe(354);
   });
 
   it("fills the final wrapped table line before reporting overflow", () => {

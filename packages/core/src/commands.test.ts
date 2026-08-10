@@ -230,6 +230,31 @@ describe("createCrmService", () => {
     expect(archived.status).toBe("archived");
   });
 
+  it("keeps cold target outreach setup fields when updating a target", async () => {
+    const repository = new MemoryCrmRepository();
+    const crm = createCrmService(repository);
+    const target = await crm.upsertColdTarget({
+      workspaceId: "workspace-1",
+      name: "German Builder",
+      hook: "Mention their new Munich project.",
+      country: "Germany",
+      firstTouchChannel: "linkedin",
+      ballSide: "us"
+    });
+
+    const updated = await crm.upsertColdTarget({
+      id: target.id,
+      workspaceId: "workspace-1",
+      name: target.name,
+      company: "Updated Company"
+    });
+
+    expect(updated.country).toBe("Germany");
+    expect(updated.hook).toBe("Mention their new Munich project.");
+    expect(updated.firstTouchChannel).toBe("linkedin");
+    expect(updated.ballSide).toBe("us");
+  });
+
   it("lists active records for table screens without archived rows", async () => {
     const repository = new MemoryCrmRepository();
     const crm = createCrmService(repository);

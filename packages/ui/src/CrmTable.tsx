@@ -22,6 +22,7 @@ import {
   Download,
   FileText,
   Flame,
+  Globe2,
   Italic,
   Merge,
   MessageCircle,
@@ -41,20 +42,32 @@ import {
   applyTablePreferences,
   buildCreateRecordPayload,
   compactDocumentTitle,
+  currentTouchChipTone,
   documentDisplayLabel,
   documentExtensionLabel,
+  filterRowsByCountry,
   formatAreaValue,
+  formatOutreachProtocolItem,
+  formatOutreachTouchActionLabel,
+  formatOutreachTouchProgressLabel,
+  handoffSideTone,
+  leadProgressReward,
   nextActionStateForTodo,
+  orderOutreachTouchpoints,
+  outreachOutcomeOptions,
+  parseOutreachTouchProgress,
   recordToRow,
   shouldWrapTableColumn,
   sortRows,
   toCsv,
   updateRowCell,
+  wrappedTableRowHeight,
   wrapMeasuredTextLines,
   type ApiRecord,
   type ColumnTextStyle,
   type CreateRecordFieldValue,
   type CreateRecordPayloadConfig,
+  type OutreachProtocolItem,
   type TablePreferences,
   type TableSort
 } from "./table-model";
@@ -62,6 +75,7 @@ import {
   autosaveLabelForDraft,
   shouldSaveOutreachDraft
 } from "./outreach-draft-autosave";
+import { coldTargetPingLabel, coldTargetPingTone } from "./cold-target-model";
 import { darkTableTheme, lightTableTheme, scaledTableTheme } from "./table-theme";
 
 type DrawCellArgs = Parameters<NonNullable<ComponentProps<typeof DataEditor>["drawCell"]>>[0];
@@ -73,7 +87,7 @@ export type CrmTableColumn = {
   defaultVisible?: boolean;
   mobilePriority?: number;
   group?: string;
-  valueKind?: "text" | "link" | "documents" | "calendar" | "area" | "longText" | "action" | "handoff";
+  valueKind?: "text" | "link" | "documents" | "calendar" | "area" | "longText" | "action" | "handoff" | "ping" | "currentTouch";
   wrapText?: boolean;
   textStyle?: ColumnTextStyle;
 };
@@ -102,7 +116,9 @@ export type CalendarCellItem = {
 
 export type CalendarCellValue = CalendarCellItem[];
 
-export type CrmTableCellValue = string | number | null | DocumentCellValue | CalendarCellValue;
+export type OutreachProtocolValue = OutreachProtocolItem[];
+
+export type CrmTableCellValue = string | number | null | DocumentCellValue | CalendarCellValue | OutreachProtocolValue;
 
 export type CrmTableRow = {
   id: string;
@@ -291,6 +307,20 @@ type LongTextPreview = {
 
 type BulkActionDialog = "archive" | "delete" | "merge" | "spicyArchive" | null;
 type ArchiveMood = "regular" | "spicy";
+type WrappedTextTooltip = {
+  left: number;
+  top: number;
+  placement: "above" | "below";
+  title: string;
+  text: string;
+};
+
+type CellBounds = {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+};
 
 type MobileEditTarget = {
   rowId: string;
@@ -389,6 +419,25 @@ export type LeadProgressStage = {
   color: string;
   description: string;
   image: string;
+};
+
+const firstTouchChannelOptions = [
+  { value: "", label: "Auto" },
+  { value: "email", label: "Email" },
+  { value: "linkedin", label: "LinkedIn" },
+  { value: "phone", label: "Call" }
+] as const;
+
+function countryFilterLabel(value: string): string {
+  return value.trim().toLocaleLowerCase() === "germany" ? "Germany" : value.trim();
+}
+
+type LeadAchievement = {
+  id: string;
+  label: string;
+  color: string;
+  image: string;
+  effect: "soft" | "bounce" | "wiggle" | "money";
 };
 
 export const leadProgressStages: LeadProgressStage[] = [
@@ -725,6 +774,48 @@ function wrappedCanvasLines(ctx: CanvasRenderingContext2D, text: string, maxWidt
   return wrapMeasuredTextLines(text, maxWidth, maxLines, (value) => ctx.measureText(value).width);
 }
 
+function wrappedCellTooltipForHover(input: {
+  column: CrmTableColumn | undefined;
+  row: CrmTableRow | undefined;
+  bounds: CellBounds;
+  frameBounds: DOMRect;
+  theme: Partial<Theme>;
+}): WrappedTextTooltip | null {
+  const { column, row, bounds, frameBounds, theme } = input;
+  if (!column || !row || !(shouldWrapTableColumn(column) || isWrappedAddressColumn(column))) {
+    return null;
+  }
+  const text = textCellValue(row.values[column.id]);
+  if (!text) {
+    return null;
+  }
+  const fontSize = fontSizeFromTheme(theme, 13);
+  const fontFamily = theme.fontFamily ?? "Inter, sans-serif";
+  const padding = theme.cellHorizontalPadding ?? 8;
+  const availableWidth = Math.max(10, bounds.width - padding * 2);
+  const canvas = document.createElement("canvas");
+  const ctx = canvas.getContext("2d");
+  if (!ctx) {
+    return null;
+  }
+  ctx.font = `${theme.baseFontStyle ?? `${fontSize}px`} ${fontFamily}`;
+  const maxLines = isWrappedAddressColumn(column) ? 2 : 3;
+  const wrapped = wrapMeasuredTextLines(text, availableWidth, maxLines, (value) => ctx.measureText(value).width);
+  if (!wrapped.overflow) {
+    return null;
+  }
+  const relativeTop = bounds.y - frameBounds.top;
+  const showBelow = relativeTop < 140;
+  const preferredLeft = bounds.x - frameBounds.left + Math.min(Math.max(bounds.width / 2, 160), Math.max(160, bounds.width - 24));
+  return {
+    left: Math.max(170, Math.min(frameBounds.width - 170, preferredLeft)),
+    top: showBelow ? relativeTop + bounds.height + 8 : Math.max(8, relativeTop - 8),
+    placement: showBelow ? "below" : "above",
+    title: column.title,
+    text
+  };
+}
+
 function fitTextWithEllipsis(ctx: CanvasRenderingContext2D, text: string, maxWidth: number): string {
   if (ctx.measureText(text).width <= maxWidth) {
     return text;
@@ -932,6 +1023,10 @@ function isCalendarCellItem(value: unknown): value is CalendarCellItem {
   return Boolean(value && typeof value === "object" && "startsAt" in value && "title" in value);
 }
 
+function isOutreachProtocolItem(value: unknown): value is OutreachProtocolItem {
+  return Boolean(value && typeof value === "object" && "channel" in value && "occurredAt" in value);
+}
+
 function calendarTimeLabel(value: string): string {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) {
@@ -1110,6 +1205,10 @@ function sortDocumentsByAdded(documents: DocumentCellValue): DocumentCellValue {
 
 function cellCalendarItems(value: CrmTableCellValue | undefined): CalendarCellValue {
   return Array.isArray(value) && value.every(isCalendarCellItem) ? value : [];
+}
+
+function cellOutreachProtocol(value: CrmTableCellValue | undefined): OutreachProtocolValue {
+  return Array.isArray(value) && value.every(isOutreachProtocolItem) ? value : [];
 }
 
 function currentColorTheme(): "light" | "dark" {
@@ -1639,6 +1738,7 @@ const mobileReadonlyColumnIds = new Set([
   "offerStatus",
   "offerTotalGross",
   "offerMissingFields",
+  "pingAt",
   "summaryShort",
   "summaryLong",
   "summaryUpdatedAt"
@@ -1662,7 +1762,7 @@ function isDetailsEditableColumn(column: CrmTableColumn): boolean {
       "campaignTouch",
       "campaignStatus",
       "nextAction"
-    ].includes(column.id)
+    ].includes(column.id) && column.valueKind !== "ping"
   );
 }
 
@@ -1673,7 +1773,21 @@ function isLeadSecondaryColumn(column: CrmTableColumn): boolean {
 }
 
 function isMobileMultilineColumn(columnId: string): boolean {
-  return ["description", "todo", "address", "notes", "rawInput"].includes(columnId);
+  return [
+    "description",
+    "todo",
+    "address",
+    "notes",
+    "rawInput",
+    "role",
+    "hook",
+    "notesResearch",
+    "archivedLetters",
+    "nextAction",
+    "summaryShort",
+    "summaryLong",
+    "offerMissingFields"
+  ].includes(columnId);
 }
 
 function detailsTextareaRows(columnId: string, value: string | null | undefined): number {
@@ -1684,7 +1798,7 @@ function detailsTextareaRows(columnId: string, value: string | null | undefined)
   const softWrapRows = Math.ceil(text.length / 72);
   const hardWrapRows = text.split(/\r\n|\r|\n/).length;
   const desiredRows = Math.max(2, softWrapRows, hardWrapRows);
-  return Math.min(columnId === "address" ? 5 : 7, desiredRows);
+  return Math.min(3, desiredRows);
 }
 
 function documentTypeIndex(documents: DocumentCellValue, documentIndex: number): number {
@@ -2016,6 +2130,7 @@ const handoffCellRenderer: CustomRenderer<HandoffCustomCell> = {
     const arcLift = progress === null ? 0 : Math.sin(Math.PI * progress) * Math.min(18, rect.height * 0.42);
     const ballY = centerY - arcLift;
     const insightHover = displaySide === "us" && hoverAmount > 0;
+    const activeTone = handoffSideTone(displaySide);
 
     ctx.save();
     ctx.beginPath();
@@ -2040,14 +2155,14 @@ const handoffCellRenderer: CustomRenderer<HandoffCustomCell> = {
       ["client", rightX]
     ] as const) {
       const active = displaySide === label;
-      ctx.fillStyle = active ? (label === "us" && insightHover ? "#d79316" : theme.accentColor) : theme.textMedium;
+      ctx.fillStyle = active ? (label === "us" && insightHover ? "#d79316" : activeTone.accent) : theme.textMedium;
       ctx.font = "700 8px Inter, sans-serif";
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
       ctx.fillText(label === "us" ? "us" : "client", x, railY, 26);
       if (active) {
         ctx.globalAlpha = label === "us" && insightHover ? 0.72 : 0.45;
-        ctx.fillStyle = label === "us" && insightHover ? "#f5b84b" : theme.accentColor;
+        ctx.fillStyle = label === "us" && insightHover ? "#f5b84b" : activeTone.accent;
         ctx.beginPath();
         ctx.arc(x, railY + 10, 2, 0, Math.PI * 2);
         ctx.fill();
@@ -2071,13 +2186,21 @@ const handoffCellRenderer: CustomRenderer<HandoffCustomCell> = {
       ctx.beginPath();
       ctx.arc(ballX, ballY, 23, 0, Math.PI * 2);
       ctx.fill();
+    } else if (displaySide === "client") {
+      const glow = ctx.createRadialGradient(ballX, ballY, 2, ballX, ballY, 22);
+      glow.addColorStop(0, activeTone.glow);
+      glow.addColorStop(1, "rgba(217, 70, 143, 0)");
+      ctx.fillStyle = glow;
+      ctx.beginPath();
+      ctx.arc(ballX, ballY, 20, 0, Math.PI * 2);
+      ctx.fill();
     }
 
     ctx.font = `${Math.max(17, Math.min(22, rect.height - 10))}px \"Segoe UI Emoji\", \"Apple Color Emoji\", sans-serif`;
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.shadowColor = insightHover ? "rgba(245, 184, 75, 0.72)" : "rgba(15, 23, 42, 0.22)";
-    ctx.shadowBlur = insightHover ? 11 : 4;
+    ctx.shadowColor = insightHover ? "rgba(245, 184, 75, 0.72)" : displaySide === "client" ? activeTone.glow : "rgba(15, 23, 42, 0.22)";
+    ctx.shadowBlur = insightHover ? 11 : displaySide === "client" ? 8 : 4;
     ctx.shadowOffsetY = insightHover ? 0 : 1;
     ctx.fillText(icon, ballX, ballY + (progress === null ? 0 : Math.sin(progress * Math.PI * 4) * 1.2));
     ctx.restore();
@@ -2111,6 +2234,7 @@ export function CrmTable({
   createRecord
 }: CrmTableProps) {
   const [query, setQuery] = useState("");
+  const [countryFilter, setCountryFilter] = useState("");
   const gridRef = useRef<DataEditorRef | null>(null);
   const gridFrameRef = useRef<HTMLDivElement | null>(null);
   const toolbarRef = useRef<HTMLDivElement | null>(null);
@@ -2189,6 +2313,7 @@ export function CrmTable({
   const [summaryHistoryTarget, setSummaryHistoryTarget] = useState<LeadSummaryHistoryTarget | null>(null);
   const [leadSummaryDraft, setLeadSummaryDraft] = useState<LeadSummaryDraft>({ shortSummary: "", longSummary: "", saving: false });
   const [longTextPreview, setLongTextPreview] = useState<LongTextPreview | null>(null);
+  const [wrappedTextTooltip, setWrappedTextTooltip] = useState<WrappedTextTooltip | null>(null);
   const [archivingSummaryIds, setArchivingSummaryIds] = useState<Set<string>>(() => new Set());
   const [summaryArchiveConfirmId, setSummaryArchiveConfirmId] = useState<string | null>(null);
   const [copiedLeadCode, setCopiedLeadCode] = useState<string | null>(null);
@@ -2256,8 +2381,11 @@ export function CrmTable({
     [isDarkMode, tableFontScale]
   );
   const tableRowHeight = useMemo(
-    () => (columns.some((column) => column.id === "description" || column.id === "address") ? Math.round(48 * tableFontScale) : undefined),
-    [columns, tableFontScale]
+    () =>
+      columns.some((column) => shouldWrapTableColumn(column) || isWrappedAddressColumn(column))
+        ? wrappedTableRowHeight(fontSizeFromTheme(activeTableTheme, 13))
+        : undefined,
+    [activeTableTheme, columns]
   );
   const activeRelatedTableHeaderTheme = useMemo(
     () => relatedTableHeaderTheme(linkedTableColor, isDarkMode),
@@ -2414,6 +2542,19 @@ export function CrmTable({
   }, [clientOptionsEndpoint]);
 
   const configuredColumns = useMemo(() => applyTablePreferences(columns, preferences), [columns, preferences]);
+  const countryOptions = useMemo(() => {
+    if (!isColdTargetTable) {
+      return [];
+    }
+    return Array.from(
+      new Set(
+        editableRows
+          .map((row) => (typeof row.values.country === "string" ? row.values.country.trim() : ""))
+          .filter(Boolean)
+          .map(countryFilterLabel)
+      )
+    ).sort((left, right) => left.localeCompare(right));
+  }, [editableRows, isColdTargetTable]);
   const createTargetColumnIndex = useMemo(() => {
     if (!createRecord) {
       return 0;
@@ -2449,8 +2590,8 @@ export function CrmTable({
           Object.values(row.values).some((value) => String(value ?? "").toLowerCase().includes(normalized))
         )
       : editableRows;
-    return sortRows(searchedRows, sort);
-  }, [editableRows, query, sort]);
+    return sortRows(filterRowsByCountry(searchedRows, countryFilter), sort);
+  }, [countryFilter, editableRows, query, sort]);
 
   useEffect(() => {
     if (!initialFocusRowId || filteredRows.length === 0 || configuredColumns.length === 0) {
@@ -2537,6 +2678,7 @@ export function CrmTable({
   const detailsPanelVisibleDocuments = detailsPanelDocuments.slice(0, 3);
   const detailsPanelExtraDocuments = detailsPanelDocuments.slice(3);
   const detailsPanelCalendarItems = detailsPanelRow ? sortCalendarItemsByStart(cellCalendarItems(detailsPanelRow.values.calendar)) : [];
+  const detailsPanelOutreachProtocol = detailsPanelRow ? cellOutreachProtocol(detailsPanelRow.values.outreachProtocol) : [];
   const detailsPanelSummary = detailsPanelRow ? mobileLeadSummary(detailsPanelRow) : null;
   const detailsPanelOfferMissingFields = detailsPanelRow ? offerMissingFieldChips(detailsPanelRow.values.offerMissingFields) : [];
   const detailsOfferMissingInputs = detailsPanelOfferMissingFields.map(offerMissingInputForField);
@@ -2570,6 +2712,21 @@ export function CrmTable({
     outreachCampaigns.find((campaign) => campaign.status === "active") ??
     outreachCampaigns[0] ??
     null;
+  const detailsOutreachProgress = parseOutreachTouchProgress(
+    detailsPanelRow?.values.campaignTouch,
+    selectedOutreachCampaign?.touchpoints.length
+  );
+  const detailsCurrentOutreachTouch =
+    selectedOutreachCampaign && detailsOutreachProgress
+      ? selectedOutreachCampaign.touchpoints.find((touch) => touch.touchNumber === detailsOutreachProgress.current) ?? null
+      : null;
+  const detailsOutreachProgressLabel = formatOutreachTouchProgressLabel(detailsOutreachProgress);
+  const orderedOutreachTouchpoints = selectedOutreachCampaign
+    ? orderOutreachTouchpoints(selectedOutreachCampaign.touchpoints, detailsOutreachProgress?.current)
+    : [];
+  const outreachChannelLabel = (channel: OutreachCampaignTouchpoint["channel"]) =>
+    channel === "linkedin" ? "LinkedIn" : channel === "phone" ? "Cold call" : "Email";
+  const detailsMarkSentLabel = formatOutreachTouchActionLabel(detailsOutreachProgress);
   const hasDetailsDocumentsSection = detailsPanelDocuments.length > 0 || columns.some((column) => column.id === "documents");
   const hasDetailsCalendarSection = detailsPanelCalendarItems.length > 0 || columns.some((column) => column.id === "calendar");
   const hasDetailsSideSections =
@@ -2765,12 +2922,14 @@ export function CrmTable({
       setDocumentTooltip(null);
       setCalendarTooltip(null);
       setHandoffTooltip(null);
+      setWrappedTextTooltip(null);
       return;
     }
     if (args.kind === "group-header" && args.group === "Client") {
       setDocumentTooltip(null);
       setCalendarTooltip(null);
       setHandoffTooltip(null);
+      setWrappedTextTooltip(null);
       setRelatedTooltip({
         left: args.bounds.x - frameBounds.left + args.bounds.width / 2,
         top: args.bounds.y - frameBounds.top + args.bounds.height + 6,
@@ -2781,6 +2940,13 @@ export function CrmTable({
     if (args.kind === "cell") {
       const column = configuredColumns[args.location[0]];
       const row = filteredRows[args.location[1]];
+      const nextWrappedTextTooltip = wrappedCellTooltipForHover({
+        column,
+        row,
+        bounds: args.bounds,
+        frameBounds,
+        theme: activeTableTheme
+      });
       const localX = args.localEventX <= args.bounds.width ? args.localEventX : args.localEventX - args.bounds.x;
       const localY = args.localEventY <= args.bounds.height ? args.localEventY : args.localEventY - args.bounds.y;
       setHoveredClientPickerCell(
@@ -2797,6 +2963,7 @@ export function CrmTable({
         setRelatedTooltip(null);
         setDocumentTooltip(null);
         setCalendarTooltip(null);
+        setWrappedTextTooltip(null);
         setHandoffTooltip(
           normalizedHandoffSide(row.values[column.id]) === "us"
             ? {
@@ -2816,6 +2983,7 @@ export function CrmTable({
         setRelatedTooltip(null);
         setDocumentTooltip(null);
         setHandoffTooltip(null);
+        setWrappedTextTooltip(null);
         setCalendarTooltip(
           items.length > 0
             ? {
@@ -2840,6 +3008,7 @@ export function CrmTable({
           setRelatedTooltip(null);
           setCalendarTooltip(null);
           setHandoffTooltip(null);
+          setWrappedTextTooltip(null);
           const hoveredDocument = documents[action.index];
           if (!hoveredDocument) {
             setDocumentTooltip(null);
@@ -2857,13 +3026,22 @@ export function CrmTable({
           return;
         }
       }
+      setWrappedTextTooltip(nextWrappedTextTooltip);
+      if (nextWrappedTextTooltip) {
+        setRelatedTooltip(null);
+        setDocumentTooltip(null);
+        setCalendarTooltip(null);
+        setHandoffTooltip(null);
+        return;
+      }
     }
     setHoveredClientPickerCell(null);
     setRelatedTooltip(null);
     setDocumentTooltip(null);
     setCalendarTooltip(null);
     setHandoffTooltip(null);
-  }, [clientOptionsEndpoint, configuredColumns, filteredRows, updateRecordEndpoint]);
+    setWrappedTextTooltip(null);
+  }, [activeTableTheme, clientOptionsEndpoint, configuredColumns, filteredRows, updateRecordEndpoint]);
 
   const toggleColumn = useCallback((columnId: string) => {
     setPreferences((current) => {
@@ -3246,6 +3424,12 @@ export function CrmTable({
           )
         );
         void persistNextAction(row, nextValue);
+        return;
+      }
+      if (column.valueKind === "ping") {
+        return;
+      }
+      if (column.valueKind === "currentTouch") {
         return;
       }
       const nextRow = {
@@ -4187,6 +4371,74 @@ export function CrmTable({
         return;
       }
 
+      if (column?.valueKind === "ping" && args.cell.kind === GridCellKind.Text) {
+        const row = filteredRows[args.row];
+        const pingValue = row?.values.pingAt;
+        const tone = coldTargetPingTone(typeof pingValue === "string" ? pingValue : null);
+        const label = coldTargetPingLabel(typeof pingValue === "string" ? pingValue : null);
+        const { ctx, rect, theme } = args;
+        const colors = {
+          fresh: { fill: isDarkMode ? "#203c2b" : "#e6f5eb", text: isDarkMode ? "#bfe8c9" : "#24653a", dot: "#3d9b5f" },
+          overdue: { fill: isDarkMode ? "#4a3a1e" : "#fff2ce", text: isDarkMode ? "#ffe1a0" : "#805b06", dot: "#d49a24" },
+          dormant: { fill: isDarkMode ? "#302f33" : "#e8e8eb", text: isDarkMode ? "#d6d2dc" : "#4b4b54", dot: "#393942" }
+        }[tone];
+        ctx.save();
+        const chipHeight = Math.max(18, Math.min(rect.height - 8, 24));
+        const chipWidth = Math.min(rect.width - 12, Math.max(72, label.length * 7 + 30));
+        const chipX = rect.x + Math.max(6, (rect.width - chipWidth) / 2);
+        const chipY = rect.y + (rect.height - chipHeight) / 2;
+        ctx.beginPath();
+        ctx.roundRect(chipX, chipY, chipWidth, chipHeight, chipHeight / 2);
+        ctx.fillStyle = colors.fill;
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(chipX + 11, rect.y + rect.height / 2, 3, 0, Math.PI * 2);
+        ctx.fillStyle = colors.dot;
+        ctx.fill();
+        ctx.font = `600 11px ${theme.fontFamily ?? "Inter, sans-serif"}`;
+        ctx.fillStyle = colors.text;
+        ctx.textBaseline = "middle";
+        ctx.fillText(label, chipX + 19, rect.y + rect.height / 2, chipWidth - 24);
+        ctx.restore();
+        drawSearchMatchHighlight(args, query, isDarkMode);
+        return;
+      }
+
+      if (column?.valueKind === "currentTouch" && args.cell.kind === GridCellKind.Text) {
+        const row = filteredRows[args.row];
+        const tone = currentTouchChipTone(row?.values[column.id]);
+        if (!tone) {
+          drawContent();
+          drawSearchMatchHighlight(args, query, isDarkMode);
+          return;
+        }
+        const text = args.cell.displayData || args.cell.data || "";
+        const { ctx, rect, theme } = args;
+        ctx.save();
+        const chipHeight = Math.max(18, Math.min(rect.height - 8, 24));
+        const chipWidth = Math.min(rect.width - 12, Math.max(72, String(text).length * 7 + 30));
+        const chipX = rect.x + Math.max(6, (rect.width - chipWidth) / 2);
+        const chipY = rect.y + (rect.height - chipHeight) / 2;
+        ctx.beginPath();
+        ctx.roundRect(chipX, chipY, chipWidth, chipHeight, chipHeight / 2);
+        ctx.fillStyle = isDarkMode ? "#162b4c" : tone.fill;
+        ctx.fill();
+        ctx.strokeStyle = isDarkMode ? "#2d63be" : tone.stroke;
+        ctx.lineWidth = 1;
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.arc(chipX + 11, rect.y + rect.height / 2, 3, 0, Math.PI * 2);
+        ctx.fillStyle = tone.dot;
+        ctx.fill();
+        ctx.font = `700 11px ${theme.fontFamily ?? "Inter, sans-serif"}`;
+        ctx.fillStyle = isDarkMode ? "#b8d3ff" : tone.text;
+        ctx.textBaseline = "middle";
+        ctx.fillText(String(text), chipX + 19, rect.y + rect.height / 2, chipWidth - 24);
+        ctx.restore();
+        drawSearchMatchHighlight(args, query, isDarkMode);
+        return;
+      }
+
       if (args.cell.kind === GridCellKind.Text && (isInlineLongTextColumn(column) || isWrappedAddressColumn(column))) {
         const text = args.cell.displayData || args.cell.data || "";
         const mutableCell = args.cell as typeof args.cell & { displayData?: string; data?: string };
@@ -4492,6 +4744,7 @@ export function CrmTable({
     rowPatch?: Record<string, string | null>;
     calendarItem?: CalendarCellItem | null;
     calendarItems?: CalendarCellItem[];
+    outreachProtocolItems?: OutreachProtocolItem[];
   }) => {
     setEditableRows((current) =>
       current.map((row) => {
@@ -4510,6 +4763,15 @@ export function CrmTable({
               (item) => !nextCalendarItems.some((nextItem) => nextItem.kind === item.kind && nextItem.id === item.id)
             ),
             ...nextCalendarItems
+          ];
+        }
+        if (payload.outreachProtocolItems && payload.outreachProtocolItems.length > 0) {
+          const existingProtocolItems = cellOutreachProtocol(row.values.outreachProtocol);
+          patchedValues.outreachProtocol = [
+            ...payload.outreachProtocolItems,
+            ...existingProtocolItems.filter(
+              (item) => !payload.outreachProtocolItems?.some((nextItem) => nextItem.id === item.id)
+            )
           ];
         }
         return { ...row, values: patchedValues };
@@ -4799,6 +5061,7 @@ export function CrmTable({
           error?: string;
           rowPatch?: Record<string, string | null>;
           calendarItems?: CalendarCellItem[];
+          outreachProtocolItems?: OutreachProtocolItem[];
         };
         if (!response.ok) {
           throw new Error(payload.error ?? "Campaign update failed.");
@@ -4965,6 +5228,20 @@ export function CrmTable({
             <Search size={16} aria-hidden="true" />
             <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search" />
           </label>
+          {isColdTargetTable ? (
+            <label className={`countryFilter ${countryFilter ? "active" : ""}`}>
+              <Globe2 size={15} aria-hidden="true" />
+              <select value={countryFilter} onChange={(event) => setCountryFilter(event.target.value)} aria-label="Filter by country">
+                <option value="">All countries</option>
+                {countryOptions.includes("Germany") ? null : <option value="Germany">Germany</option>}
+                {countryOptions.map((country) => (
+                  <option key={country} value={country}>
+                    {country}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : null}
           <button
             type="button"
             className="toolbarIconButton toolbarCreateButton"
@@ -5149,6 +5426,7 @@ export function CrmTable({
         setDocumentTooltip(null);
         setCalendarTooltip(null);
         setHandoffTooltip(null);
+        setWrappedTextTooltip(null);
         setHoveredClientPickerCell(null);
       }}>
         {relatedTooltip ? (
@@ -5193,6 +5471,17 @@ export function CrmTable({
             <strong>Insight available</strong>
             <span>Suggested next action will appear here.</span>
             <span>{handoffTooltip.rowName}</span>
+          </div>
+        ) : null}
+        {wrappedTextTooltip ? (
+          <div
+            className={`relatedTableTooltip wrappedTextCellTooltip ${
+              wrappedTextTooltip.placement === "below" ? "relatedTableTooltipBelow" : ""
+            }`}
+            style={tableTooltipStyle(wrappedTextTooltip.left, wrappedTextTooltip.top)}
+          >
+            <strong>{wrappedTextTooltip.title}</strong>
+            <span>{wrappedTextTooltip.text}</span>
           </div>
         ) : null}
         {activeDetailRow && updateRecordEndpoint ? (
@@ -6038,9 +6327,21 @@ export function CrmTable({
                         {column.title}
                         {guide ? <i title={`${guide.source}: ${guide.meaning}`}>?</i> : null}
                       </span>
-                      {isMobileMultilineColumn(column.id) ? (
+                      {column.id === "firstTouchChannel" ? (
+                        <select
+                          value={detailsPanel.values[column.id] ?? ""}
+                          onChange={(event) => setDetailsValue(column.id, event.target.value)}
+                        >
+                          {firstTouchChannelOptions.map((option) => (
+                            <option key={option.value || "auto"} value={option.value}>
+                              {option.label}
+                            </option>
+                          ))}
+                        </select>
+                      ) : isMobileMultilineColumn(column.id) ? (
                         <textarea
                           rows={detailsTextareaRows(column.id, detailsPanel.values[column.id] ?? detailsPanelRow.values[column.id])}
+                          title={detailsPanel.values[column.id] ?? ""}
                           value={detailsPanel.values[column.id] ?? ""}
                           onChange={(event) => setDetailsValue(column.id, event.target.value)}
                         />
@@ -6237,12 +6538,10 @@ export function CrmTable({
 
                   {isColdTargetTable ? (
                     <section className="detailsDrawerSection outreach">
-                      <div className="detailsDrawerSectionHeader">
-                        <div>
-                          <span>
-                            Outreach campaign
-                            <strong>{mobileDisplayValue(detailsPanelRow.values.campaignStatus) || "Not started"}</strong>
-                          </span>
+                      <div className="detailsDrawerSectionHeader detailsOutreachHeader">
+                        <div className="detailsOutreachHeaderTitle">
+                          <span>Outreach</span>
+                          <strong>{mobileDisplayValue(detailsPanelRow.values.campaignStatus) || "Not started"}</strong>
                         </div>
                       </div>
                       <section className="detailsOutreachProtocol" aria-label="Outreach protocol">
@@ -6281,9 +6580,10 @@ export function CrmTable({
                       </section>
                       {outreachCampaigns.length > 0 ? (
                         <div className="detailsOutreachPanel">
-                          <label>
+                          <label className="detailsOutreachCampaignField">
                             <span>Campaign</span>
                             <select
+                              title={selectedOutreachCampaign?.name ?? "Campaign"}
                               value={selectedOutreachCampaign?.id ?? ""}
                               onChange={(event) => setSelectedOutreachCampaignId(event.target.value)}
                             >
@@ -6296,12 +6596,36 @@ export function CrmTable({
                           </label>
                           {selectedOutreachCampaign ? (
                             <>
-                              <p>{selectedOutreachCampaign.summary}</p>
+                              <p className="detailsOutreachSummary" title={selectedOutreachCampaign.summary}>
+                                {selectedOutreachCampaign.summary}
+                              </p>
+                              {detailsPanelRow.values.campaignName ? (
+                                <div
+                                  className="detailsOutreachCurrent"
+                                  title={[
+                                    detailsOutreachProgressLabel,
+                                    detailsCurrentOutreachTouch?.title,
+                                    detailsPanelRow.values.nextAction
+                                  ]
+                                    .filter(Boolean)
+                                    .join(" · ")}
+                                >
+                                  <span>Current touch</span>
+                                  <strong>
+                                    <b>{detailsOutreachProgressLabel}</b>
+                                    {detailsCurrentOutreachTouch
+                                      ? ` · ${outreachChannelLabel(detailsCurrentOutreachTouch.channel)} · ${detailsCurrentOutreachTouch.title} · D+${detailsCurrentOutreachTouch.dayOffset}`
+                                      : ""}
+                                  </strong>
+                                </div>
+                              ) : null}
                               <div className="detailsOutreachTouches">
-                                {selectedOutreachCampaign.touchpoints.map((touch) => {
+                                {orderedOutreachTouchpoints.map((touch) => {
                                   const key = outreachDraftKey(detailsPanelRow.id, selectedOutreachCampaign.id, touch.id);
                                   const draft = outreachDrafts[key];
-                                  const isStyledDraft = styledOutreachDrafts[key] ?? true;
+                                  const isPreviewDraft = styledOutreachDrafts[key] ?? false;
+                                  const isCurrentTouch = detailsOutreachProgress?.current === touch.touchNumber;
+                                  const isPastTouch = Boolean(detailsOutreachProgress && touch.touchNumber < detailsOutreachProgress.current);
                                   const autosaveStatus = draft
                                     ? autosaveLabelForDraft({
                                         saving: draft.saving,
@@ -6312,7 +6636,8 @@ export function CrmTable({
                                     : null;
                                   return (
                                     <details
-                                      className="detailsOutreachTouch"
+                                      className={`detailsOutreachTouch${isCurrentTouch ? " current" : ""}${isPastTouch ? " past" : ""}`}
+                                      open={Boolean(draft && !draft.loading)}
                                       key={touch.id}
                                       onToggle={(event) => {
                                         if (event.currentTarget.open) {
@@ -6325,22 +6650,22 @@ export function CrmTable({
                                           <span>D+{touch.dayOffset}</span>
                                           <strong>{touch.title}</strong>
                                         </span>
-                                        <small>{touch.channel}</small>
+                                        <small>{isCurrentTouch ? "current" : touch.channel}</small>
                                       </summary>
                                       <div className="detailsOutreachDraft">
                                         <div className="detailsOutreachDraftHeader">
                                           <p>{touch.action}</p>
                                           <button
                                             type="button"
-                                            aria-pressed={isStyledDraft}
+                                            aria-pressed={isPreviewDraft}
                                             onClick={() =>
                                               setStyledOutreachDrafts((current) => ({
                                                 ...current,
-                                                [key]: !isStyledDraft
+                                                [key]: !isPreviewDraft
                                               }))
                                             }
                                           >
-                                            {isStyledDraft ? "Styled" : "Plain"}
+                                            {isPreviewDraft ? "Edit" : "Preview"}
                                           </button>
                                         </div>
                                         {!draft || draft.loading ? <p className="detailsOutreachDraftStatus">Preparing draft...</p> : null}
@@ -6362,23 +6687,8 @@ export function CrmTable({
                                             </label>
                                             <label>
                                               <span>Email</span>
-                                              {isStyledDraft ? (
-                                                <div
-                                                  className="detailsOutreachEmailPreview editable"
-                                                  contentEditable
-                                                  role="textbox"
-                                                  aria-label="Email body"
-                                                  suppressContentEditableWarning
-                                                  onInput={(event) => {
-                                                    const body = event.currentTarget.innerText.trim();
-                                                    editOutreachDraftForDetailsRow(key, { body });
-                                                  }}
-                                                  onBlur={(event) => {
-                                                    const body = event.currentTarget.innerText.trim();
-                                                    updateOutreachDraftForDetailsRow(key, { body, message: null });
-                                                    saveOutreachDraftImmediately(key, { body });
-                                                  }}
-                                                >
+                                              {isPreviewDraft ? (
+                                                <div className="detailsOutreachEmailPreview" aria-label="Email body preview">
                                                   {emailBodyParagraphs(draft.body).map((paragraph, paragraphIndex, paragraphs) => (
                                                     <p
                                                       className={
@@ -6457,49 +6767,72 @@ export function CrmTable({
                                   );
                                 })}
                               </div>
-                              {detailsPanelRow.values.nextAction ? (
-                                <div className="detailsOutreachCurrent">
-                                  <span>Current next action</span>
-                                  <strong>{mobileDisplayValue(detailsPanelRow.values.nextAction)}</strong>
-                                </div>
-                              ) : null}
+                              <details className="detailsOutreachProtocol" open={detailsPanelOutreachProtocol.length > 0}>
+                                <summary>
+                                  <span>Protocol</span>
+                                  <strong>
+                                    {detailsPanelOutreachProtocol.length} {detailsPanelOutreachProtocol.length === 1 ? "touch" : "touches"}
+                                  </strong>
+                                </summary>
+                                {detailsPanelOutreachProtocol.length > 0 ? (
+                                  <ul>
+                                    {detailsPanelOutreachProtocol.map((item) => (
+                                      <li key={item.id}>
+                                        <span>{formatOutreachProtocolItem(item)}</span>
+                                        {item.subject ? <small>{item.subject}</small> : null}
+                                      </li>
+                                    ))}
+                                  </ul>
+                                ) : (
+                                  <p>No outreach touches yet.</p>
+                                )}
+                              </details>
                               {outreachCampaignError ? <p className="detailsDrawerError">{outreachCampaignError}</p> : null}
                               {detailsPanelRow.values.campaignName ? (
-                                <div className="detailsOutreachWorkflow">
-                                  <button
-                                    type="button"
-                                    onClick={() => void advanceOutreachCampaignForDetailsRow("mark_sent")}
-                                    disabled={advancingOutreachCampaign || !outreachAdvanceEndpoint}
-                                  >
-                                    {advancingOutreachCampaign ? "Updating" : "Mark touch sent"}
-                                  </button>
-                                  <label>
-                                    <span>Outcome</span>
-                                    <select
-                                      value={selectedOutreachOutcome}
-                                      onChange={(event) => setSelectedOutreachOutcome(event.target.value)}
+                                <>
+                                  <div className="detailsOutreachWorkflow">
+                                    <div>
+                                      <span>Current step action</span>
+                                      <strong>{detailsOutreachProgressLabel}</strong>
+                                    </div>
+                                    <button
+                                      type="button"
+                                      className="primary"
+                                      onClick={() => void advanceOutreachCampaignForDetailsRow("mark_sent")}
+                                      disabled={advancingOutreachCampaign || !outreachAdvanceEndpoint}
                                     >
-                                      <option value="interested">interested</option>
-                                      <option value="later">later</option>
-                                      <option value="existing_architect">existing architect</option>
-                                      <option value="remove_me">remove me</option>
-                                      <option value="silent_8_touches">silent after 8 touches</option>
-                                      <option value="not_a_fit">not a fit</option>
-                                    </select>
-                                  </label>
-                                  <button
-                                    type="button"
-                                    onClick={() => void advanceOutreachCampaignForDetailsRow("stop")}
-                                    disabled={advancingOutreachCampaign || !outreachAdvanceEndpoint}
-                                  >
-                                    Stop with outcome
-                                  </button>
-                                </div>
+                                      {advancingOutreachCampaign ? "Updating" : detailsMarkSentLabel}
+                                    </button>
+                                  </div>
+                                  <div className="detailsOutreachOutcome">
+                                    <label>
+                                      <span>Close campaign outcome</span>
+                                      <select
+                                        value={selectedOutreachOutcome}
+                                        onChange={(event) => setSelectedOutreachOutcome(event.target.value)}
+                                      >
+                                        {outreachOutcomeOptions.map((option) => (
+                                          <option key={option.value} value={option.value}>
+                                            {option.label}
+                                          </option>
+                                        ))}
+                                      </select>
+                                    </label>
+                                    <button
+                                      type="button"
+                                      onClick={() => void advanceOutreachCampaignForDetailsRow("stop")}
+                                      disabled={advancingOutreachCampaign || !outreachAdvanceEndpoint}
+                                    >
+                                      Stop Campaign
+                                    </button>
+                                    <small>Saves the selected outcome and stops the cadence.</small>
+                                  </div>
+                                </>
                               ) : null}
                               <div className="detailsOutreachActions">
                                 <button
                                   type="button"
-                                  className="primary"
+                                  className={detailsPanelRow.values.campaignName ? undefined : "primary"}
                                   onClick={() => void startOutreachCampaignForDetailsRow("next")}
                                   disabled={startingOutreachCampaign || !outreachStartEndpoint}
                                 >
@@ -6514,7 +6847,7 @@ export function CrmTable({
                                   onClick={() => void startOutreachCampaignForDetailsRow("allDraft")}
                                   disabled={startingOutreachCampaign || !outreachStartEndpoint}
                                 >
-                                  Draft full cadence
+                                  Draft all touches
                                 </button>
                               </div>
                             </>
@@ -6992,7 +7325,19 @@ export function CrmTable({
             {createRecord.fields.map((field) => (
               <label className={field.multiline ? "formField wide" : "formField"} key={field.id}>
                 <span>{field.label}</span>
-                {field.multiline ? (
+                {field.id === "firstTouchChannel" ? (
+                  <select
+                    value={createValues[field.id] ?? ""}
+                    onChange={(event) => setCreateValues((current) => ({ ...current, [field.id]: event.target.value }))}
+                    required={field.required}
+                  >
+                    {firstTouchChannelOptions.map((option) => (
+                      <option key={option.value || "auto"} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                ) : field.multiline ? (
                   <textarea
                     rows={3}
                     value={createValues[field.id] ?? ""}

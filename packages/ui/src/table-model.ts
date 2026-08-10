@@ -5,7 +5,8 @@ import type {
   CrmTableColumn,
   CrmTableRow,
   DocumentCellItem,
-  DocumentCellValue
+  DocumentCellValue,
+  OutreachCampaignTouchpoint
 } from "./CrmTable";
 
 export type SortDirection = "asc" | "desc";
@@ -55,6 +56,29 @@ export type ApiRecord = Record<string, unknown> & {
 
 export type CreateRecordFieldValue = string | number | null;
 
+export type OutreachProtocolItem = {
+  id: string;
+  actor?: string | null;
+  channel: string | null;
+  occurredAt: string | null;
+  direction: string | null;
+  outcome: string | null;
+  subject?: string | null;
+};
+
+export type CurrentTouchChipTone = {
+  fill: string;
+  stroke: string;
+  text: string;
+  dot: string;
+};
+
+export type HandoffVisualTone = {
+  accent: string;
+  glow: string;
+  soft: string;
+};
+
 export type CreateRecordPayloadConfig = {
   workspaceId?: string;
   payloadMap?: Record<string, string>;
@@ -76,6 +100,136 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function optionalString(value: unknown): string | null {
   return typeof value === "string" && value.trim() ? value : null;
+}
+
+function normalizedFilterLabel(value: unknown): string {
+  return String(value ?? "").trim().toLocaleLowerCase();
+}
+
+function channelLabel(value: string | null | undefined): string {
+  switch (value?.toLocaleLowerCase()) {
+    case "email":
+      return "Email";
+    case "linkedin":
+      return "LinkedIn";
+    case "phone":
+      return "Call";
+    default:
+      return value?.trim() || "Touch";
+  }
+}
+
+export function filterRowsByCountry(rows: CrmTableRow[], country: string): CrmTableRow[] {
+  const selectedCountry = normalizedFilterLabel(country);
+  if (!selectedCountry) {
+    return rows;
+  }
+  return rows.filter((row) => normalizedFilterLabel(row.values.country) === selectedCountry);
+}
+
+export function formatOutreachProtocolItem(item: OutreachProtocolItem): string {
+  const occurredAt = item.occurredAt ? new Date(item.occurredAt) : null;
+  const dateLabel =
+    occurredAt && !Number.isNaN(occurredAt.getTime())
+      ? occurredAt.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+      : "No date";
+  return [item.actor, channelLabel(item.channel), dateLabel, item.direction, item.outcome].filter(Boolean).join(" | ");
+}
+
+export function currentTouchChipTone(value: CrmTableCellValue | undefined): CurrentTouchChipTone | null {
+  const text = typeof value === "string" ? value.trim() : "";
+  if (!text || text === "n/a") {
+    return null;
+  }
+  return {
+    fill: "#e7f0ff",
+    stroke: "#9bbcfb",
+    text: "#1f5aa6",
+    dot: "#3478f6"
+  };
+}
+
+export type OutreachTouchProgress = {
+  current: number;
+  total: number;
+};
+
+export const outreachOutcomeOptions = [
+  { value: "interested", label: "Interested" },
+  { value: "later", label: "Follow up later" },
+  { value: "existing_architect", label: "Already has architect" },
+  { value: "remove_me", label: "Asked to be removed" },
+  { value: "silent_8_touches", label: "No response after cadence" },
+  { value: "not_a_fit", label: "Not a fit" }
+] as const;
+
+export function parseOutreachTouchProgress(
+  value: CrmTableCellValue | undefined,
+  fallbackTotal?: number
+): OutreachTouchProgress | null {
+  const text = typeof value === "string" ? value.trim() : "";
+  const match = text.match(/(?:touch\s*)?(\d+)(?:\s*\/\s*(\d+))?/i);
+  if (!match) {
+    return null;
+  }
+  const current = Number(match[1]);
+  const total = match[2] ? Number(match[2]) : fallbackTotal;
+  if (
+    !Number.isSafeInteger(current) ||
+    typeof total !== "number" ||
+    !Number.isSafeInteger(total) ||
+    current < 1 ||
+    total < 1
+  ) {
+    return null;
+  }
+  return { current, total };
+}
+
+export function orderOutreachTouchpoints(
+  touchpoints: OutreachCampaignTouchpoint[],
+  currentTouchNumber: number | null | undefined
+): OutreachCampaignTouchpoint[] {
+  return [...touchpoints].sort((left, right) => {
+    if (!currentTouchNumber) {
+      return left.touchNumber - right.touchNumber;
+    }
+    const rank = (touchNumber: number) => {
+      if (touchNumber === currentTouchNumber) {
+        return 0;
+      }
+      if (touchNumber > currentTouchNumber && touchNumber <= currentTouchNumber + 2) {
+        return 1;
+      }
+      if (touchNumber < currentTouchNumber) {
+        return 2;
+      }
+      return 3;
+    };
+    return rank(left.touchNumber) - rank(right.touchNumber) || left.touchNumber - right.touchNumber;
+  });
+}
+
+export function formatOutreachTouchProgressLabel(progress: OutreachTouchProgress | null): string {
+  return progress ? `Touch ${progress.current} of ${progress.total}` : "No active touch";
+}
+
+export function formatOutreachTouchActionLabel(progress: OutreachTouchProgress | null): string {
+  return progress ? `Mark Touch ${progress.current} Sent` : "Mark Current Touch Sent";
+}
+
+export function handoffSideTone(side: "us" | "client"): HandoffVisualTone {
+  return side === "client"
+    ? {
+        accent: "#d9468f",
+        glow: "rgba(217, 70, 143, 0.34)",
+        soft: "rgba(217, 70, 143, 0.16)"
+      }
+    : {
+        accent: "#4f7df3",
+        glow: "rgba(79, 125, 243, 0.28)",
+        soft: "rgba(79, 125, 243, 0.14)"
+      };
 }
 
 function displaySourceChannel(value: string | null): string | null {
@@ -146,6 +300,34 @@ export function normalizeCalendarCellValue(value: unknown): CalendarCellValue {
   });
 }
 
+export function normalizeOutreachProtocolValue(value: unknown): OutreachProtocolItem[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value.flatMap((item): OutreachProtocolItem[] => {
+    if (!isRecord(item)) {
+      return [];
+    }
+    const id = optionalString(item.id);
+    const channel = optionalString(item.channel);
+    const occurredAt = optionalString(item.occurredAt);
+    if (!id || !channel || !occurredAt) {
+      return [];
+    }
+    return [
+      {
+        id,
+        actor: optionalString(item.actor),
+        channel,
+        occurredAt,
+        direction: optionalString(item.direction),
+        outcome: optionalString(item.outcome),
+        subject: optionalString(item.subject)
+      }
+    ];
+  });
+}
+
 export function formatTableValue(value: unknown): CrmTableCellValue {
   if (value === null || value === undefined) {
     return null;
@@ -182,7 +364,14 @@ export function nextActionStateForTodo(value: string): string {
 }
 
 export function shouldWrapTableColumn(column: CrmTableColumn | undefined): boolean {
-  return Boolean(column?.wrapText);
+  return Boolean(column?.wrapText || column?.valueKind === "longText");
+}
+
+export function wrappedTableRowHeight(fontSize: number, maxLines = 3): number {
+  const safeFontSize = Number.isFinite(fontSize) ? Math.max(10, fontSize) : 13;
+  const safeMaxLines = Math.max(1, Math.floor(maxLines));
+  const lineHeight = Math.round(safeFontSize * 1.28);
+  return lineHeight * safeMaxLines + 14;
 }
 
 export function wrapMeasuredTextLines(
@@ -283,20 +472,24 @@ export function leadProgressSteps(row: CrmTableRow, offerTotalGross?: number | n
 }
 
 export function recordToRow(record: ApiRecord, columns: CrmTableColumn[]): CrmTableRow {
+  const values = Object.fromEntries(
+    columns.map((column) => {
+      const value = valueAtPath(record, column.id);
+      if (column.valueKind === "documents") {
+        return [column.id, normalizeDocumentCellValue(value)];
+      }
+      if (column.valueKind === "calendar") {
+        return [column.id, normalizeCalendarCellValue(value)];
+      }
+      return [column.id, formatTableValue(value)];
+    })
+  );
+  if ("outreachProtocol" in record) {
+    values.outreachProtocol = normalizeOutreachProtocolValue(record.outreachProtocol);
+  }
   return {
     id: record.id,
-    values: Object.fromEntries(
-      columns.map((column) => {
-        const value = valueAtPath(record, column.id);
-        if (column.valueKind === "documents") {
-          return [column.id, normalizeDocumentCellValue(value)];
-        }
-        if (column.valueKind === "calendar") {
-          return [column.id, normalizeCalendarCellValue(value)];
-        }
-        return [column.id, formatTableValue(value)];
-      })
-    )
+    values
   };
 }
 
@@ -467,7 +660,13 @@ export function compactDocumentTitle(fileName: string, maxLength = 20): string {
 function csvEscape(value: CrmTableCellValue | undefined): string {
   const text = Array.isArray(value)
     ? value
-        .map((item) => ("fileName" in item ? item.fileName : `${item.startsAt} ${item.title}`))
+        .map((item) =>
+          "fileName" in item
+            ? item.fileName
+            : "startsAt" in item
+              ? `${item.startsAt} ${item.title}`
+              : formatOutreachProtocolItem(item)
+        )
         .join("; ")
     : String(value ?? "");
   if (/[",\r\n]/.test(text)) {

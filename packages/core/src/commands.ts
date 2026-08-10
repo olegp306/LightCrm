@@ -525,6 +525,7 @@ export function createCrmService(repository: CrmRepository) {
       name: input.name,
       company: nullable(input.company ?? existing?.company),
       role: nullable(input.role ?? existing?.role),
+      hook: nullable(input.hook ?? existing?.hook),
       email: nullable(input.email ?? existing?.email),
       phone: nullable(input.phone ?? existing?.phone),
       linkedinUrl: nullable(input.linkedinUrl ?? existing?.linkedinUrl),
@@ -535,6 +536,9 @@ export function createCrmService(repository: CrmRepository) {
       archivedLetters: nullable(input.archivedLetters ?? existing?.archivedLetters),
       notes: nullable(input.notes ?? existing?.notes),
       preferredLanguage: nullableOutreachLanguage(input.preferredLanguage ?? existing?.preferredLanguage),
+      country: nullable(input.country ?? existing?.country),
+      firstTouchChannel: input.firstTouchChannel ?? existing?.firstTouchChannel ?? null,
+      ballSide: input.ballSide ?? existing?.ballSide ?? null,
       createdAt: existing?.createdAt ?? timestamp,
       updatedAt: timestamp,
       archivedAt: existing?.archivedAt ?? null
