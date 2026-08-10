@@ -19,12 +19,27 @@ export async function GET(request: Request) {
       },
       orderBy: [{ updatedAt: "desc" }]
     });
+    const touches = await prisma.outreachTouch.findMany({
+      where: {
+        workspaceId,
+        coldTargetId: { in: rows.map((row) => row.id) }
+      },
+      orderBy: [{ occurredAt: "desc" }]
+    });
     const byTarget = new Map(assignments.map((assignment) => [assignment.coldTargetId, assignment]));
+    const latestTouchByTarget = new Map<string, Date>();
+    for (const touch of touches) {
+      if (!touch.coldTargetId || latestTouchByTarget.has(touch.coldTargetId)) {
+        continue;
+      }
+      latestTouchByTarget.set(touch.coldTargetId, touch.occurredAt);
+    }
     return NextResponse.json(
       rows.map((row) => {
         const assignment = byTarget.get(row.id);
         return {
           ...row,
+          pingAt: latestTouchByTarget.get(row.id)?.toISOString() ?? null,
           campaignName: assignment?.campaignName ?? null,
           campaignStatus: assignment?.status ?? null,
           campaignTouch: assignment ? `Touch ${assignment.currentTouchIndex + 1}` : null,

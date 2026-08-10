@@ -51,7 +51,12 @@ function mapColdTarget(record: Awaited<ReturnType<PrismaClient["coldTarget"]["fi
   return {
     ...record,
     status: ensureStatus(record.status, "new"),
-    preferredLanguage
+    preferredLanguage,
+    firstTouchChannel:
+      record.firstTouchChannel === "email" || record.firstTouchChannel === "linkedin" || record.firstTouchChannel === "phone"
+        ? record.firstTouchChannel
+        : null,
+    ballSide: record.ballSide === "us" || record.ballSide === "client" ? record.ballSide : null
   };
 }
 

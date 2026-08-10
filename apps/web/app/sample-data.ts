@@ -174,12 +174,16 @@ export const tables: Record<string, TableDefinition> = {
       { id: "code", title: "Target ID", width: 120, mobilePriority: 1 },
       { id: "name", title: "Name", width: 190, mobilePriority: 1 },
       { id: "company", title: "Company", width: 180 },
+      { id: "country", title: "Country", width: 140, mobilePriority: 3 },
       { id: "role", title: "Role", width: 180 },
       { id: "email", title: "Email", width: 230 },
       { id: "phone", title: "Phone", width: 160 },
       { id: "website", title: "Website", width: 220, valueKind: "link" },
       { id: "linkedinUrl", title: "LinkedIn", width: 220 },
       { id: "preferredLanguage", title: "Language", width: 120 },
+      { id: "firstTouchChannel", title: "First touch", width: 140 },
+      { id: "ballSide", title: "Ball", width: 96, valueKind: "handoff" },
+      { id: "pingAt", title: "Ping", width: 110, valueKind: "ping", defaultVisible: true },
       { id: "notesResearch", title: "Node Research", width: 360 },
       { id: "archivedLetters", title: "I Have Letters", width: 320 },
       { id: "status", title: "Status", width: 130, mobilePriority: 2 },
@@ -196,6 +200,7 @@ export const tables: Record<string, TableDefinition> = {
         { id: "code", label: "Target ID" },
         { id: "name", label: "Name", required: true },
         { id: "company", label: "Company" },
+        { id: "country", label: "Country" },
         { id: "role", label: "Role" },
         { id: "email", label: "Email" },
         { id: "phone", label: "Phone" },
@@ -207,8 +212,8 @@ export const tables: Record<string, TableDefinition> = {
       ]
     },
     rows: [
-      { id: "1", values: { code: "T-2026-001", name: "Maya Ops", company: "Bright Supply", role: "COO", email: "maya@example.com", linkedinUrl: "linkedin.com/in/maya", notesResearch: "Manual research notes", archivedLetters: "Intro letter draft", status: "queued" } },
-      { id: "2", values: { code: "T-2026-002", name: "Leo Founder", company: "Small SaaS", role: "Founder", email: "leo@example.com", linkedinUrl: "linkedin.com/in/leo", notesResearch: "Founder-led SaaS target", archivedLetters: "Follow-up template", status: "new" } }
+      { id: "1", values: { code: "T-2026-001", name: "Maya Ops", company: "Bright Supply", country: "Germany", role: "COO", email: "maya@example.com", linkedinUrl: "linkedin.com/in/maya", notesResearch: "Manual research notes", archivedLetters: "Intro letter draft", firstTouchChannel: "linkedin", ballSide: "us", pingAt: null, status: "queued" } },
+      { id: "2", values: { code: "T-2026-002", name: "Leo Founder", company: "Small SaaS", country: "United Kingdom", role: "Founder", email: "leo@example.com", linkedinUrl: "linkedin.com/in/leo", notesResearch: "Founder-led SaaS target", archivedLetters: "Follow-up template", firstTouchChannel: "email", ballSide: "client", pingAt: "2026-07-01T12:00:00.000Z", status: "new" } }
     ]
   },
   storage: {

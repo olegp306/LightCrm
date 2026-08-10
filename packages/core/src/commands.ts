@@ -515,6 +515,9 @@ export function createCrmService(repository: CrmRepository) {
       archivedLetters: nullable(input.archivedLetters ?? existing?.archivedLetters),
       notes: nullable(input.notes ?? existing?.notes),
       preferredLanguage: nullableOutreachLanguage(input.preferredLanguage ?? existing?.preferredLanguage),
+      country: nullable(input.country ?? existing?.country),
+      firstTouchChannel: input.firstTouchChannel ?? existing?.firstTouchChannel ?? null,
+      ballSide: input.ballSide ?? existing?.ballSide ?? null,
       createdAt: existing?.createdAt ?? timestamp,
       updatedAt: timestamp,
       archivedAt: existing?.archivedAt ?? null

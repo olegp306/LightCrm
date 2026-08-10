@@ -59,10 +59,13 @@ export async function POST(request: Request) {
     }
 
     const sortedTouches = [...campaign.touchpoints].sort((left, right) => left.touchNumber - right.touchNumber);
-    const touch = sortedTouches[0];
-    if (!touch) {
+    const firstCampaignTouch = sortedTouches[0];
+    if (!firstCampaignTouch) {
       return NextResponse.json({ error: "Campaign has no touchpoints" }, { status: 400 });
     }
+    const touch = coldTarget.firstTouchChannel
+      ? { ...firstCampaignTouch, channel: coldTarget.firstTouchChannel as typeof firstCampaignTouch.channel }
+      : firstCampaignTouch;
 
     const now = new Date();
     const nextTouchAt = addDays(now, touch.dayOffset);
@@ -164,6 +167,5 @@ export async function POST(request: Request) {
     return handleRouteError(error);
   }
 }
-
 
 

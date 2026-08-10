@@ -17,6 +17,7 @@ import {
   updateRowCell,
   wrapMeasuredTextLines
 } from "./table-model";
+import { coldTargetPingTone } from "./cold-target-model";
 import type { CrmTableColumn, CrmTableRow } from "./CrmTable";
 
 const columns: CrmTableColumn[] = [
@@ -32,6 +33,12 @@ const rows: CrmTableRow[] = [
 ];
 
 describe("table-model", () => {
+  it("marks cold target pings as fresh, overdue, or dormant", () => {
+    expect(coldTargetPingTone(null, new Date("2026-08-10T12:00:00.000Z"))).toBe("fresh");
+    expect(coldTargetPingTone("2026-08-01T12:00:00.000Z", new Date("2026-08-10T12:00:00.000Z"))).toBe("overdue");
+    expect(coldTargetPingTone("2026-07-01T12:00:00.000Z", new Date("2026-08-10T12:00:00.000Z"))).toBe("dormant");
+  });
+
   it("applies saved order, width, and hidden column preferences", () => {
     expect(
       applyTablePreferences(columns, {

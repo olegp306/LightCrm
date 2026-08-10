@@ -21,7 +21,10 @@ const schema = z.object({
   preferredLanguage: z.preprocess(
     (value) => (value === "" || value === "auto" ? null : value),
     z.enum(["de", "ru", "en"]).nullable().optional()
-  )
+  ),
+  country: optionalText,
+  firstTouchChannel: z.enum(["email", "linkedin", "phone"]).nullable().optional(),
+  ballSide: z.enum(["us", "client"]).nullable().optional()
 });
 
 export async function POST(request: Request) {

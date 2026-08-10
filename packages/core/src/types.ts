@@ -14,6 +14,8 @@ export type ClientStatus = "active" | "warm" | "paused" | "archived";
 export type LeadStatus = "new" | "contacted" | "qualified" | "lost" | "converted" | "archived";
 export type ColdTargetStatus = "new" | "queued" | "contacted" | "replied" | "notFit" | "archived";
 export type OutreachLanguage = "de" | "ru" | "en";
+export type ColdTargetTouchChannel = "email" | "linkedin" | "phone";
+export type ColdTargetBallSide = "us" | "client";
 export type ReminderStatus = "open" | "done" | "snoozed" | "archived";
 export type OutreachDirection = "inbound" | "outbound";
 
@@ -70,6 +72,9 @@ export type ColdTarget = BaseRecord & {
   archivedLetters: string | null;
   notes: string | null;
   preferredLanguage: OutreachLanguage | null;
+  country: string | null;
+  firstTouchChannel: ColdTargetTouchChannel | null;
+  ballSide: ColdTargetBallSide | null;
 };
 
 export type OutreachTouch = {
@@ -222,6 +227,9 @@ export type UpsertColdTargetInput = {
   archivedLetters?: string | null;
   notes?: string | null;
   preferredLanguage?: OutreachLanguage | null;
+  country?: string | null;
+  firstTouchChannel?: ColdTargetTouchChannel | null;
+  ballSide?: ColdTargetBallSide | null;
 };
 
 export type UpsertReminderInput = {

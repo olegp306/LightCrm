@@ -61,6 +61,7 @@ import {
   autosaveLabelForDraft,
   shouldSaveOutreachDraft
 } from "./outreach-draft-autosave";
+import { coldTargetPingLabel, coldTargetPingTone } from "./cold-target-model";
 import { darkTableTheme, lightTableTheme, scaledTableTheme } from "./table-theme";
 
 type DrawCellArgs = Parameters<NonNullable<ComponentProps<typeof DataEditor>["drawCell"]>>[0];
@@ -72,7 +73,7 @@ export type CrmTableColumn = {
   defaultVisible?: boolean;
   mobilePriority?: number;
   group?: string;
-  valueKind?: "text" | "link" | "documents" | "calendar" | "area" | "longText" | "action" | "handoff";
+  valueKind?: "text" | "link" | "documents" | "calendar" | "area" | "longText" | "action" | "handoff" | "ping";
   wrapText?: boolean;
   textStyle?: ColumnTextStyle;
 };
@@ -1556,6 +1557,7 @@ const mobileReadonlyColumnIds = new Set([
   "offerStatus",
   "offerTotalGross",
   "offerMissingFields",
+  "pingAt",
   "summaryShort",
   "summaryLong",
   "summaryUpdatedAt"
@@ -1579,7 +1581,7 @@ function isDetailsEditableColumn(column: CrmTableColumn): boolean {
       "campaignTouch",
       "campaignStatus",
       "nextAction"
-    ].includes(column.id)
+    ].includes(column.id) && column.valueKind !== "ping"
   );
 }
 
@@ -3134,6 +3136,9 @@ export function CrmTable({
         void persistNextAction(row, nextValue);
         return;
       }
+      if (column.valueKind === "ping") {
+        return;
+      }
       const nextRow = {
         ...row,
         values: { ...row.values, [column.id]: value.data }
@@ -4068,6 +4073,39 @@ export function CrmTable({
         ctx.fillStyle = isDarkMode ? theme.textDark : tone.text;
         ctx.textBaseline = "middle";
         ctx.fillText(text, chipX + 19, rect.y + rect.height / 2, chipWidth - 24);
+        ctx.restore();
+        drawSearchMatchHighlight(args, query, isDarkMode);
+        return;
+      }
+
+      if (column?.valueKind === "ping" && args.cell.kind === GridCellKind.Text) {
+        const row = filteredRows[args.row];
+        const pingValue = row?.values.pingAt;
+        const tone = coldTargetPingTone(typeof pingValue === "string" ? pingValue : null);
+        const label = coldTargetPingLabel(typeof pingValue === "string" ? pingValue : null);
+        const { ctx, rect, theme } = args;
+        const colors = {
+          fresh: { fill: isDarkMode ? "#203c2b" : "#e6f5eb", text: isDarkMode ? "#bfe8c9" : "#24653a", dot: "#3d9b5f" },
+          overdue: { fill: isDarkMode ? "#4a3a1e" : "#fff2ce", text: isDarkMode ? "#ffe1a0" : "#805b06", dot: "#d49a24" },
+          dormant: { fill: isDarkMode ? "#302f33" : "#e8e8eb", text: isDarkMode ? "#d6d2dc" : "#4b4b54", dot: "#393942" }
+        }[tone];
+        ctx.save();
+        const chipHeight = Math.max(18, Math.min(rect.height - 8, 24));
+        const chipWidth = Math.min(rect.width - 12, Math.max(72, label.length * 7 + 30));
+        const chipX = rect.x + Math.max(6, (rect.width - chipWidth) / 2);
+        const chipY = rect.y + (rect.height - chipHeight) / 2;
+        ctx.beginPath();
+        ctx.roundRect(chipX, chipY, chipWidth, chipHeight, chipHeight / 2);
+        ctx.fillStyle = colors.fill;
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(chipX + 11, rect.y + rect.height / 2, 3, 0, Math.PI * 2);
+        ctx.fillStyle = colors.dot;
+        ctx.fill();
+        ctx.font = `600 11px ${theme.fontFamily ?? "Inter, sans-serif"}`;
+        ctx.fillStyle = colors.text;
+        ctx.textBaseline = "middle";
+        ctx.fillText(label, chipX + 19, rect.y + rect.height / 2, chipWidth - 24);
         ctx.restore();
         drawSearchMatchHighlight(args, query, isDarkMode);
         return;
