@@ -6340,40 +6340,6 @@ export function CrmTable({
                   <p>{detailsModalSubtitle}</p>
                 </div>
               )}
-              {manualPingEndpoint && manualPingEntity ? (
-                <button
-                  type="button"
-                  className="manualPingTrigger"
-                  onClick={() =>
-                    setManualPingMenu((current) =>
-                      current?.source === "details"
-                        ? null
-                        : { rowId: detailsPanelRow.id, source: "details", saving: false }
-                    )
-                  }
-                  aria-label="Record manual ping"
-                >
-                  Record ping
-                </button>
-              ) : null}
-              {manualPingMenu?.source === "details" && detailsPanelRow ? (
-                <div className="manualPingMenu manualPingMenuDetails" role="menu" aria-label="Choose ping channel">
-                  <strong>Channel</strong>
-                  <div>
-                    {manualPingChannels.map((channel) => (
-                      <button
-                        type="button"
-                        key={channel.value}
-                        role="menuitem"
-                        disabled={manualPingMenu.saving}
-                        onClick={() => void recordManualPing(detailsPanelRow, channel.value)}
-                      >
-                        {channel.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              ) : null}
               <button type="button" onClick={() => setDetailsPanel(null)} aria-label="Close lead details">
                 <X size={18} />
               </button>
@@ -6796,7 +6762,42 @@ export function CrmTable({
                           <span>Ping history</span>
                           <strong>{outreachProtocol.length} entries</strong>
                         </div>
+                        {manualPingEndpoint && manualPingEntity ? (
+                          <button
+                            type="button"
+                            className="manualPingTrigger"
+                            onClick={() =>
+                              setManualPingMenu((current) =>
+                                current?.source === "details"
+                                  ? null
+                                  : { rowId: detailsPanelRow.id, source: "details", saving: false }
+                              )
+                            }
+                            aria-label="Record manual ping"
+                          >
+                            <MessageCircle size={14} aria-hidden="true" />
+                            <span>Record ping</span>
+                          </button>
+                        ) : null}
                       </div>
+                      {manualPingMenu?.source === "details" && detailsPanelRow ? (
+                        <div className="manualPingMenu manualPingMenuDetails" role="menu" aria-label="Choose ping channel">
+                          <strong>Channel</strong>
+                          <div>
+                            {manualPingChannels.map((channel) => (
+                              <button
+                                type="button"
+                                key={channel.value}
+                                role="menuitem"
+                                disabled={manualPingMenu.saving}
+                                onClick={() => void recordManualPing(detailsPanelRow, channel.value)}
+                              >
+                                {channel.label}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      ) : null}
                       <section className="detailsOutreachProtocol" aria-label="Ping history protocol">
                         {outreachProtocolError ? <p className="detailsDrawerError">{outreachProtocolError}</p> : null}
                         {!outreachProtocolError && outreachProtocol.length === 0 ? (
@@ -6832,7 +6833,42 @@ export function CrmTable({
                           <span>Outreach</span>
                           <strong>{mobileDisplayValue(detailsPanelRow.values.campaignStatus) || "Not started"}</strong>
                         </div>
+                        {manualPingEndpoint && manualPingEntity ? (
+                          <button
+                            type="button"
+                            className="manualPingTrigger"
+                            onClick={() =>
+                              setManualPingMenu((current) =>
+                                current?.source === "details"
+                                  ? null
+                                  : { rowId: detailsPanelRow.id, source: "details", saving: false }
+                              )
+                            }
+                            aria-label="Record manual ping"
+                          >
+                            <MessageCircle size={14} aria-hidden="true" />
+                            <span>Record ping</span>
+                          </button>
+                        ) : null}
                       </div>
+                      {manualPingMenu?.source === "details" && detailsPanelRow ? (
+                        <div className="manualPingMenu manualPingMenuDetails" role="menu" aria-label="Choose ping channel">
+                          <strong>Channel</strong>
+                          <div>
+                            {manualPingChannels.map((channel) => (
+                              <button
+                                type="button"
+                                key={channel.value}
+                                role="menuitem"
+                                disabled={manualPingMenu.saving}
+                                onClick={() => void recordManualPing(detailsPanelRow, channel.value)}
+                              >
+                                {channel.label}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      ) : null}
                       <section className="detailsOutreachProtocol" aria-label="Outreach protocol">
                         <div className="detailsOutreachProtocolHeader">
                           <span>Protocol</span>
