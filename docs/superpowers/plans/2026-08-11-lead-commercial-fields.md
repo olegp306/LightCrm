@@ -37,5 +37,5 @@
 ### Task 3: Verify and publish
 
 - [x] Run UI tests, API tests, typechecks, and `git diff --check`.
-- [ ] Run Prisma `db push` against the test database and build the web app.
-- [ ] Deploy the checked `main` commit to `http://204.168.163.99:3004/` and verify service/HTTP health.
+- [x] Run Prisma `db push` against the test database and build the web app.
+- [x] Deploy the checked `main` commit to `http://204.168.163.99:3004/` and verify service/HTTP health.
