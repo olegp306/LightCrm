@@ -114,6 +114,10 @@ export function formatOutreachProtocolChannel(value: string | null | undefined):
       return "LinkedIn";
     case "phone":
       return "Call";
+    case "telegram":
+      return "Telegram";
+    case "whatsapp":
+      return "WhatsApp";
     default:
       return value?.trim() || "Touch";
   }
