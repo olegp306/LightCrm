@@ -106,7 +106,7 @@ function normalizedFilterLabel(value: unknown): string {
   return String(value ?? "").trim().toLocaleLowerCase();
 }
 
-function channelLabel(value: string | null | undefined): string {
+export function formatOutreachProtocolChannel(value: string | null | undefined): string {
   switch (value?.toLocaleLowerCase()) {
     case "email":
       return "Email";
@@ -119,6 +119,19 @@ function channelLabel(value: string | null | undefined): string {
   }
 }
 
+export function formatOutreachProtocolDate(value: string | null | undefined): string {
+  const occurredAt = value ? new Date(value) : null;
+  return occurredAt && !Number.isNaN(occurredAt.getTime())
+    ? occurredAt.toLocaleString("en-US", {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit"
+      })
+    : "No date";
+}
+
 export function filterRowsByCountry(rows: CrmTableRow[], country: string): CrmTableRow[] {
   const selectedCountry = normalizedFilterLabel(country);
   if (!selectedCountry) {
@@ -128,18 +141,7 @@ export function filterRowsByCountry(rows: CrmTableRow[], country: string): CrmTa
 }
 
 export function formatOutreachProtocolItem(item: OutreachProtocolItem): string {
-  const occurredAt = item.occurredAt ? new Date(item.occurredAt) : null;
-  const dateLabel =
-    occurredAt && !Number.isNaN(occurredAt.getTime())
-      ? occurredAt.toLocaleString("en-US", {
-          month: "short",
-          day: "numeric",
-          year: "numeric",
-          hour: "2-digit",
-          minute: "2-digit"
-        })
-      : "No date";
-  return [channelLabel(item.channel), dateLabel, item.actor || "Unknown"].join(" | ");
+  return [formatOutreachProtocolChannel(item.channel), formatOutreachProtocolDate(item.occurredAt), item.actor || "Unknown"].join(" | ");
 }
 
 export function currentTouchChipTone(value: CrmTableCellValue | undefined): CurrentTouchChipTone | null {

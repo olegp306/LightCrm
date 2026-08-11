@@ -47,6 +47,8 @@ import {
   documentExtensionLabel,
   filterRowsByCountry,
   formatAreaValue,
+  formatOutreachProtocolChannel,
+  formatOutreachProtocolDate,
   formatOutreachProtocolItem,
   formatOutreachTouchActionLabel,
   formatOutreachTouchProgressLabel,
@@ -6552,23 +6554,19 @@ export function CrmTable({
                         ) : null}
                         {outreachProtocol.length > 0 ? (
                           <div className="detailsOutreachProtocolList">
-                            {outreachProtocol.map((entry, index) => {
-                              const date = new Intl.DateTimeFormat(undefined, {
-                                day: "2-digit",
-                                month: "short",
-                                hour: "2-digit",
-                                minute: "2-digit"
-                              }).format(new Date(entry.occurredAt));
+                            {outreachProtocol.map((entry) => {
+                              const date = formatOutreachProtocolDate(entry.occurredAt);
                               const tooltip = `${entry.authorName}${entry.authorEmail ? ` · ${entry.authorEmail}` : ""} · ${date}`;
                               return (
                                 <div className="detailsOutreachProtocolRow" key={entry.id}>
-                                  <span className="detailsOutreachProtocolIndex">{outreachProtocol.length - index}</span>
-                                  <span className="detailsOutreachProtocolChannel">{entry.channel}</span>
-                                  <span className="detailsOutreachProtocolDate">{date}</span>
-                                  <span className="detailsOutreachProtocolAuthor" title={tooltip} aria-label={tooltip}>
-                                    <strong>{entry.authorCode}</strong>
-                                    <span>{entry.authorName}</span>
-                                  </span>
+                                  <div className="detailsOutreachProtocolMeta">
+                                    <span className="detailsOutreachProtocolChannel">{formatOutreachProtocolChannel(entry.channel)}</span>
+                                    <span className="detailsOutreachProtocolAuthor" title={tooltip} aria-label={tooltip}>
+                                      <strong>{entry.authorCode}</strong>
+                                      <span>{entry.authorName}</span>
+                                    </span>
+                                  </div>
+                                  <time className="detailsOutreachProtocolDate">{date}</time>
                                 </div>
                               );
                             })}
@@ -6774,8 +6772,12 @@ export function CrmTable({
                                 {detailsPanelOutreachProtocol.length > 0 ? (
                                   <ul>
                                   {detailsPanelOutreachProtocol.map((item) => (
-                                    <li key={item.id}>
-                                      <span>{formatOutreachProtocolItem(item)}</span>
+                                    <li key={item.id} title={formatOutreachProtocolItem(item)}>
+                                      <div className="detailsOutreachProtocolMeta">
+                                        <span>{formatOutreachProtocolChannel(item.channel)}</span>
+                                        <strong>{item.actor || "Unknown"}</strong>
+                                      </div>
+                                      <time>{formatOutreachProtocolDate(item.occurredAt)}</time>
                                     </li>
                                   ))}
                                   </ul>
