@@ -49,7 +49,6 @@ import {
   formatAreaValue,
   formatOutreachProtocolChannel,
   formatOutreachProtocolDate,
-  formatOutreachProtocolItem,
   formatOutreachTouchActionLabel,
   formatOutreachTouchProgressLabel,
   handoffSideTone,
@@ -2685,7 +2684,6 @@ export function CrmTable({
   const detailsPanelVisibleDocuments = detailsPanelDocuments.slice(0, 3);
   const detailsPanelExtraDocuments = detailsPanelDocuments.slice(3);
   const detailsPanelCalendarItems = detailsPanelRow ? sortCalendarItemsByStart(cellCalendarItems(detailsPanelRow.values.calendar)) : [];
-  const detailsPanelOutreachProtocol = detailsPanelRow ? cellOutreachProtocol(detailsPanelRow.values.outreachProtocol) : [];
   const detailsPanelSummary = detailsPanelRow ? mobileLeadSummary(detailsPanelRow) : null;
   const detailsPanelOfferMissingFields = detailsPanelRow ? offerMissingFieldChips(detailsPanelRow.values.offerMissingFields) : [];
   const detailsOfferMissingInputs = detailsPanelOfferMissingFields.map(offerMissingInputForField);
@@ -6608,11 +6606,14 @@ export function CrmTable({
                         ) : null}
                         {outreachProtocol.length > 0 ? (
                           <div className="detailsOutreachProtocolList">
-                            {outreachProtocol.map((entry) => {
+                            {outreachProtocol.map((entry, index) => {
                               const date = formatOutreachProtocolDate(entry.occurredAt);
                               const tooltip = `${entry.authorName}${entry.authorEmail ? ` · ${entry.authorEmail}` : ""} · ${date}`;
                               return (
-                                <div className="detailsOutreachProtocolRow" key={entry.id}>
+                                <div
+                                  className={`detailsOutreachProtocolRow ${index === 0 ? "current" : "completed"}`}
+                                  key={entry.id}
+                                >
                                   <div className="detailsOutreachProtocolMeta">
                                     <span className="detailsOutreachProtocolChannel">{formatOutreachProtocolChannel(entry.channel)}</span>
                                     <span className="detailsOutreachProtocolAuthor" title={tooltip} aria-label={tooltip}>
@@ -6816,29 +6817,6 @@ export function CrmTable({
                                   );
                                 })}
                               </div>
-                              <details className="detailsOutreachProtocol" open={detailsPanelOutreachProtocol.length > 0}>
-                                <summary>
-                                  <span>Protocol</span>
-                                  <strong>
-                                    {detailsPanelOutreachProtocol.length} {detailsPanelOutreachProtocol.length === 1 ? "touch" : "touches"}
-                                  </strong>
-                                </summary>
-                                {detailsPanelOutreachProtocol.length > 0 ? (
-                                  <ul>
-                                  {detailsPanelOutreachProtocol.map((item) => (
-                                    <li key={item.id} title={formatOutreachProtocolItem(item)}>
-                                      <div className="detailsOutreachProtocolMeta">
-                                        <span>{formatOutreachProtocolChannel(item.channel)}</span>
-                                        <strong>{item.actor || "Unknown"}</strong>
-                                      </div>
-                                      <time>{formatOutreachProtocolDate(item.occurredAt)}</time>
-                                    </li>
-                                  ))}
-                                  </ul>
-                                ) : (
-                                  <p>No outreach touches yet.</p>
-                                )}
-                              </details>
                               {outreachCampaignError ? <p className="detailsDrawerError">{outreachCampaignError}</p> : null}
                               {detailsPanelRow.values.campaignName ? (
                                 <>
