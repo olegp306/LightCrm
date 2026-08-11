@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
+import { getPrismaClient } from "@lightcrm/db";
 import { evaluateCommercialOfferReadiness } from "@lightcrm/core";
 import { defaultWorkspaceId, getCrm, handleRouteError } from "../_shared";
 import { getCrmRuntimeSettings } from "../settings/crm-settings-store";
+import { latestOutreachAt, outreachTouchLabel } from "../_shared/outreach-columns";
 import { leadNoteFields, readJsonNoteField, readNoteField } from "./note-fields";
 
 const leadSummaryShortMax = 260;
@@ -94,15 +96,27 @@ export async function GET(request: Request) {
     const workspaceId = url.searchParams.get("workspaceId") ?? defaultWorkspaceId;
     const includeArchived = url.searchParams.get("includeArchived") === "true";
     const crm = getCrm();
+    const prisma = getPrismaClient();
     const [leads, clients, documents, summaries] = await Promise.all([
       crm.listRecords({ entity: "lead", workspaceId, includeArchived }),
       crm.listRecords({ entity: "client", workspaceId, includeArchived: true }),
       crm.listRecords({ entity: "documentFile", workspaceId, includeArchived: true }),
       crm.listRecords({ entity: "leadSummary", workspaceId, includeArchived: true })
     ]);
+    const outreachTouches = await prisma.outreachTouch.findMany({
+      where: { workspaceId, leadId: { in: leads.map((lead) => lead.id) } },
+      orderBy: { occurredAt: "asc" }
+    });
     const crmSettings = await getCrmRuntimeSettings();
     const feeRows = crmSettings.commercialOffers.activeFeeTable?.rows ?? [];
     const clientsById = new Map(clients.map((client) => [client.id, client]));
+    const touchesByLeadId = new Map<string, typeof outreachTouches>();
+    for (const touch of outreachTouches) {
+      if (!touch.leadId) {
+        continue;
+      }
+      touchesByLeadId.set(touch.leadId, [...(touchesByLeadId.get(touch.leadId) ?? []), touch]);
+    }
     const documentsByLeadId = new Map<string, typeof documents>();
     for (const document of documents) {
       if (!document.leadId || document.archivedAt) {
@@ -147,6 +161,7 @@ export async function GET(request: Request) {
           feeRows
         );
         const nextAction = nextActionFrom({ todo, offerStatus: offerReadiness.status, status: lead.status });
+        const leadTouches = touchesByLeadId.get(lead.id) ?? [];
         return {
           ...lead,
           archiveMood: lead.archivedAt ? archiveMoodFromNotes(lead.notes) ?? "regular" : null,
@@ -164,6 +179,8 @@ export async function GET(request: Request) {
           urgency: readNoteField(lead.notes, leadNoteFields.urgency),
           todo,
           ballSide,
+          pingAt: latestOutreachAt(leadTouches, lead.lastPingAt ?? null),
+          campaignTouch: outreachTouchLabel(leadTouches),
           nextAction: nextAction.nextAction,
           nextActionState: nextAction.nextActionState,
           address,

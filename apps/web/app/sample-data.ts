@@ -59,6 +59,8 @@ export const tables: Record<string, TableDefinition> = {
       { id: "urgency", title: "Urgency", width: 120, mobilePriority: 7 },
       { id: "todo", title: "Todo", width: 180, wrapText: true },
       { id: "ballSide", title: "Ball", width: 96, valueKind: "handoff" },
+      { id: "pingAt", title: "Ping", width: 110, valueKind: "ping", defaultVisible: true },
+      { id: "campaignTouch", title: "Touch", width: 120, valueKind: "currentTouch" },
       { id: "address", title: "Address", width: 210 },
       { id: "client.phone", title: "Phone", width: 150, group: "Client" },
       { id: "client.email", title: "Email", width: 230, group: "Client" },

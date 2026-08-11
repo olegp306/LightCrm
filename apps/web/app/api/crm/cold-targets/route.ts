@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { accountDisplayName } from "../../../../auth/session";
 import { defaultWorkspaceId, getCrm, handleRouteError } from "../_shared";
 import { getCrmRuntimeSettings } from "../settings/crm-settings-store";
+import { latestOutreachAt } from "../_shared/outreach-columns";
 
 export const dynamic = "force-dynamic";
 
@@ -89,7 +90,10 @@ export async function GET(request: Request) {
           : null;
         return {
           ...row,
-          pingAt: latestTouchByTarget.get(row.id)?.toISOString() ?? null,
+          pingAt: latestOutreachAt(
+            touches.filter((touch) => touch.coldTargetId === row.id),
+            null
+          )?.toISOString() ?? null,
           outreachProtocol: protocolByTarget.get(row.id) ?? [],
           campaignName: assignment?.campaignName ?? null,
           campaignStatus: assignment?.status ?? null,
