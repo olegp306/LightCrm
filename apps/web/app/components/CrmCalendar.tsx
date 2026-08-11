@@ -835,12 +835,13 @@ export function CrmCalendar({
           ? await fetch("/api/crm/outreach-campaigns/advance", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                workspaceId: "default",
-                coldTargetId: item.related.id,
-                campaignId: item.outreach.campaignId,
-                action: "mark_sent"
-              })
+                body: JSON.stringify({
+                  workspaceId: "default",
+                  coldTargetId: item.related.id,
+                  campaignId: item.outreach.campaignId,
+                  reminderId: item.id,
+                  action: "mark_sent"
+                })
             })
           : item.kind === "reminder"
             ? await fetch("/api/crm/reminders/upsert", {

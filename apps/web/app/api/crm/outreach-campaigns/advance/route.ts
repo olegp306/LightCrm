@@ -13,6 +13,7 @@ const advanceCampaignSchema = z.object({
   workspaceId: z.string().optional().nullable(),
   coldTargetId: z.string().min(1),
   campaignId: z.string().min(1),
+  reminderId: z.string().min(1).optional(),
   action: z.enum(["mark_sent", "stop"]),
   outcome: z
     .enum(["interested", "later", "existing_architect", "remove_me", "silent_8_touches", "not_a_fit"])
@@ -223,16 +224,26 @@ export async function POST(request: Request) {
     }
 
     const currentTitle = `Touch ${currentTouch.touchNumber}: ${currentTouch.title} - ${coldTarget.company || coldTarget.name}`;
-    const currentReminder = await prisma.reminder.findFirst({
-      where: {
-        workspaceId,
-        coldTargetId: coldTarget.id,
-        title: currentTitle,
-        sourceChannel: "outreach-campaign",
-        archivedAt: null
-      },
-      orderBy: [{ dueAt: "asc" }]
-    });
+    const currentReminder = input.reminderId
+      ? await prisma.reminder.findFirst({
+          where: {
+            id: input.reminderId,
+            workspaceId,
+            coldTargetId: coldTarget.id,
+            sourceChannel: "outreach-campaign",
+            archivedAt: null
+          }
+        })
+      : await prisma.reminder.findFirst({
+          where: {
+            workspaceId,
+            coldTargetId: coldTarget.id,
+            title: currentTitle,
+            sourceChannel: "outreach-campaign",
+            archivedAt: null
+          },
+          orderBy: [{ dueAt: "asc" }]
+        });
     if (currentReminder) {
       await prisma.reminder.update({ where: { id: currentReminder.id }, data: { status: "done" } });
     }
