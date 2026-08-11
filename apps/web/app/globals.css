@@ -3497,6 +3497,10 @@ input {
   padding: 0 2px 8px 0;
 }
 
+.detailsDrawerBody.lead .detailsDrawerFields {
+  grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
+}
+
 .detailsDrawerFields label,
 .detailsDrawerField,
 .detailsClientSection {
@@ -7467,6 +7471,10 @@ input {
     padding: 0 10px 10px;
   }
 
+  .detailsDrawerBody.lead .detailsDrawerFields {
+    grid-template-columns: 1fr;
+  }
+
   .detailsSecondaryFields > div {
     grid-template-columns: 1fr;
   }
@@ -8056,35 +8064,16 @@ input {
 }
 
 .detailsCommercialFields {
-  border-top: 1px solid var(--line);
   display: grid;
-  gap: 7px;
-  margin: 6px 0;
-  padding-top: 8px;
-}
-
-.detailsCommercialFields > header {
-  align-items: baseline;
-  display: flex;
-  gap: 7px;
-}
-
-.detailsCommercialFields > header span {
-  color: var(--ink);
-  font-size: 11px;
-  font-weight: 800;
-}
-
-.detailsCommercialFields > header small {
-  color: var(--muted);
-  font-size: 10px;
+  gap: 0;
+  margin: 0;
 }
 
 .detailsCommercialGrid {
   align-items: end;
   display: grid;
-  gap: 8px;
-  grid-template-columns: repeat(2, minmax(0, 1fr)) auto;
+  gap: 6px;
+  grid-template-columns: minmax(92px, 1.3fr) minmax(52px, 0.65fr) minmax(88px, auto);
 }
 
 .detailsCommercialGrid label {
@@ -8099,8 +8088,8 @@ input {
 .detailsCommercialToggle {
   align-items: center;
   display: flex !important;
-  gap: 5px !important;
-  min-height: 30px;
+  gap: 4px !important;
+  min-height: 34px;
   white-space: nowrap;
 }
 
@@ -8110,5 +8099,7 @@ input {
 
 .detailsCommercialToggle span {
   color: var(--muted);
-  font-size: 10px;
+  font-size: 9px;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }

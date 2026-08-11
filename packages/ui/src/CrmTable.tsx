@@ -6330,10 +6330,6 @@ export function CrmTable({
                 ) : null}
                 {isLeadTable ? (
                   <section className="detailsCommercialFields" aria-label="Commercial fields">
-                    <header>
-                      <span>Commercial</span>
-                      <small>Editable net amount and Oleg commission</small>
-                    </header>
                     <div className="detailsCommercialGrid">
                       <label>
                         <span className="detailsFieldLabel">Deal net</span>
@@ -6358,10 +6354,11 @@ export function CrmTable({
                       <label className="detailsCommercialToggle">
                         <input
                           type="checkbox"
+                          aria-label="Oleg commission enabled"
                           checked={detailsPanel.values.olegCommissionEnabled === "true" || detailsPanel.values.olegCommissionEnabled === "yes"}
                           onChange={(event) => setDetailsValue("olegCommissionEnabled", event.target.checked ? "true" : "false")}
                         />
-                        <span>Oleg commission enabled</span>
+                        <span>Oleg commission</span>
                       </label>
                     </div>
                   </section>
