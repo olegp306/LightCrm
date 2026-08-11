@@ -6776,12 +6776,11 @@ export function CrmTable({
                                 </summary>
                                 {detailsPanelOutreachProtocol.length > 0 ? (
                                   <ul>
-                                    {detailsPanelOutreachProtocol.map((item) => (
-                                      <li key={item.id}>
-                                        <span>{formatOutreachProtocolItem(item)}</span>
-                                        {item.subject ? <small>{item.subject}</small> : null}
-                                      </li>
-                                    ))}
+                                  {detailsPanelOutreachProtocol.map((item) => (
+                                    <li key={item.id}>
+                                      <span>{formatOutreachProtocolItem(item)}</span>
+                                    </li>
+                                  ))}
                                   </ul>
                                 ) : (
                                   <p>No outreach touches yet.</p>

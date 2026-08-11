@@ -131,9 +131,15 @@ export function formatOutreachProtocolItem(item: OutreachProtocolItem): string {
   const occurredAt = item.occurredAt ? new Date(item.occurredAt) : null;
   const dateLabel =
     occurredAt && !Number.isNaN(occurredAt.getTime())
-      ? occurredAt.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+      ? occurredAt.toLocaleString("en-US", {
+          month: "short",
+          day: "numeric",
+          year: "numeric",
+          hour: "2-digit",
+          minute: "2-digit"
+        })
       : "No date";
-  return [item.actor, channelLabel(item.channel), dateLabel, item.direction, item.outcome].filter(Boolean).join(" | ");
+  return [channelLabel(item.channel), dateLabel, item.actor || "Unknown"].join(" | ");
 }
 
 export function currentTouchChipTone(value: CrmTableCellValue | undefined): CurrentTouchChipTone | null {

@@ -137,7 +137,7 @@ describe("table-model", () => {
     expect(filterRowsByCountry(countryRows, "").map((row) => row.id)).toEqual(["1", "2", "3", "4"]);
   });
 
-  it("formats outreach protocol rows with actor, channel, date, direction, and outcome", () => {
+  it("formats compact outreach protocol rows with channel, date-time, and actor", () => {
     expect(
       formatOutreachProtocolItem({
         id: "touch-1",
@@ -147,7 +147,7 @@ describe("table-model", () => {
         direction: "outbound",
         outcome: "sent"
       })
-    ).toBe("CRM | LinkedIn | Aug 10, 2026 | outbound | sent");
+    ).toBe("LinkedIn | Aug 10, 2026, 11:30 AM | CRM");
   });
 
   it("uses a blue current-touch chip tone only when a touch exists", () => {
