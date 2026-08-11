@@ -189,6 +189,28 @@ type OutreachProtocolEntry = {
   authorCode: string;
 };
 
+function outreachProtocolTooltip(entry: OutreachProtocolEntry): string {
+  const occurredAt = new Date(entry.occurredAt);
+  const fullDate = Number.isNaN(occurredAt.getTime())
+    ? entry.occurredAt
+    : occurredAt.toLocaleString("en-US", {
+        month: "2-digit",
+        day: "2-digit",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit"
+      });
+  return [
+    formatOutreachProtocolChannel(entry.channel),
+    entry.authorName || "Unknown author",
+    entry.authorEmail,
+    fullDate
+  ]
+    .filter(Boolean)
+    .join(" · ");
+}
+
 type ManualPingChannel = "email" | "linkedin" | "phone" | "telegram" | "whatsapp";
 const manualPingChannels: Array<{ value: ManualPingChannel; label: string }> = [
   { value: "email", label: "Email" },
@@ -6807,7 +6829,7 @@ export function CrmTable({
                           <div className="detailsOutreachProtocolList">
                             {outreachProtocol.map((entry, index) => {
                               const date = formatOutreachProtocolDate(entry.occurredAt);
-                              const tooltip = `${entry.authorName}${entry.authorEmail ? ` · ${entry.authorEmail}` : ""} · ${date}`;
+                              const tooltip = outreachProtocolTooltip(entry);
                               return (
                                 <div className={`detailsOutreachProtocolRow ${index === 0 ? "current" : "completed"}`} key={entry.id}>
                                   <div className="detailsOutreachProtocolMeta">
@@ -6882,7 +6904,7 @@ export function CrmTable({
                           <div className="detailsOutreachProtocolList">
                             {outreachProtocol.map((entry, index) => {
                               const date = formatOutreachProtocolDate(entry.occurredAt);
-                              const tooltip = `${entry.authorName}${entry.authorEmail ? ` · ${entry.authorEmail}` : ""} · ${date}`;
+                              const tooltip = outreachProtocolTooltip(entry);
                               return (
                                 <div
                                   className={`detailsOutreachProtocolRow ${index === 0 ? "current" : "completed"}`}

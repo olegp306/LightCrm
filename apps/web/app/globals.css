@@ -8087,7 +8087,7 @@ input {
 .detailsOutreachProtocolRow.current .detailsOutreachProtocolDate,
 .detailsOutreachProtocolRow.current time {
   color: var(--accent);
-  font-weight: 900;
+  font-weight: 700;
 }
 
 .detailsOutreachProtocolMeta {
@@ -8134,8 +8134,8 @@ input {
 .detailsOutreachProtocol li time {
   color: var(--accent);
   display: block;
-  font-size: 10px;
-  font-weight: 800;
+  font-size: 9px;
+  font-weight: 600;
   line-height: 1.15;
   overflow: hidden;
   text-overflow: ellipsis;

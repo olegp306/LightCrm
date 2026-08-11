@@ -123,8 +123,8 @@ export function formatOutreachProtocolDate(value: string | null | undefined): st
   const occurredAt = value ? new Date(value) : null;
   return occurredAt && !Number.isNaN(occurredAt.getTime())
     ? occurredAt.toLocaleString("en-US", {
-        month: "short",
-        day: "numeric",
+        month: "2-digit",
+        day: "2-digit",
         year: "numeric",
         hour: "2-digit",
         minute: "2-digit"
