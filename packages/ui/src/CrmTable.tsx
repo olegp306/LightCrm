@@ -6336,7 +6336,7 @@ export function CrmTable({
                     </header>
                     <div className="detailsCommercialGrid">
                       <label>
-                        <span className="detailsFieldLabel">Fee net</span>
+                        <span className="detailsFieldLabel">Deal net</span>
                         <input
                           type="number"
                           min="0"
