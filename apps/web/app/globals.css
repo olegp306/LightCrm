@@ -8073,7 +8073,7 @@ input {
   align-items: end;
   display: grid;
   gap: 6px;
-  grid-template-columns: minmax(92px, 1.3fr) minmax(52px, 0.65fr) minmax(88px, auto);
+  grid-template-columns: minmax(100px, 1fr) minmax(112px, auto);
 }
 
 .detailsCommercialGrid label {
@@ -8087,9 +8087,15 @@ input {
 
 .detailsCommercialToggle {
   align-items: center;
+  background: var(--control);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  box-sizing: border-box;
   display: flex !important;
   gap: 4px !important;
-  min-height: 34px;
+  height: 34px;
+  min-width: 0;
+  padding: 10px 8px 6px;
   white-space: nowrap;
 }
 
@@ -8098,8 +8104,9 @@ input {
 }
 
 .detailsCommercialToggle span {
-  color: var(--muted);
-  font-size: 9px;
+  color: var(--ink);
+  font-size: 10px;
+  font-weight: 650;
   overflow: hidden;
   text-overflow: ellipsis;
 }

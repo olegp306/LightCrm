@@ -4022,8 +4022,14 @@ export function CrmTable({
         }
         return Boolean(valueName && clientName === valueName);
       }) ?? null;
-    setDetailsPanel({ rowId: row.id, values, clientPickerOpen: false, selectedClientId: selectedClient?.id ?? null, saving: false });
-  }, [clientOptions, detailsEditableColumns, offerTemplateFields]);
+    setDetailsPanel({
+      rowId: row.id,
+      values: isLeadTable ? { ...values, olegPercent: "2" } : values,
+      clientPickerOpen: false,
+      selectedClientId: selectedClient?.id ?? null,
+      saving: false
+    });
+  }, [clientOptions, detailsEditableColumns, isLeadTable, offerTemplateFields]);
 
   useEffect(() => {
     if (!initialFocusRowId || !updateRecordEndpoint || initialDetailsOpenedRef.current === initialFocusRowId) {
@@ -5205,6 +5211,12 @@ export function CrmTable({
     .sort((left, right) => (left.mobilePriority ?? 99) - (right.mobilePriority ?? 99))
     .slice(0, 6);
   const activeFieldGuideItems = isLeadTable ? leadFieldGuideItems : isColdTargetTable ? coldTargetFieldGuideItems : null;
+  const dealNetValue = detailsPanel ? Number((detailsPanel.values.expectedFeeNet ?? "").replace(",", ".")) : NaN;
+  const olegCommissionValue = Number.isFinite(dealNetValue) ? dealNetValue * 0.02 : null;
+  const olegCommissionHint =
+    olegCommissionValue === null
+      ? "Oleg commission: fixed 2% of Deal net"
+      : `Oleg commission: 2% of ${dealNetValue.toLocaleString("en-US")} = ${olegCommissionValue.toLocaleString("en-US")}`;
 
   return (
     <section
@@ -6335,22 +6347,15 @@ export function CrmTable({
                           onChange={(event) => setDetailsValue("expectedFeeNet", event.target.value)}
                         />
                       </label>
-                      <label>
-                        <span className="detailsFieldLabel">Oleg %</span>
-                        <input
-                          type="number"
-                          min="0"
-                          step="0.01"
-                          value={detailsPanel.values.olegPercent ?? ""}
-                          onChange={(event) => setDetailsValue("olegPercent", event.target.value)}
-                        />
-                      </label>
-                      <label className="detailsCommercialToggle">
+                      <label className="detailsCommercialToggle" title={olegCommissionHint}>
                         <input
                           type="checkbox"
                           aria-label="Oleg commission enabled"
                           checked={detailsPanel.values.olegCommissionEnabled === "true" || detailsPanel.values.olegCommissionEnabled === "yes"}
-                          onChange={(event) => setDetailsValue("olegCommissionEnabled", event.target.checked ? "true" : "false")}
+                          onChange={(event) => {
+                            setDetailsValue("olegPercent", "2");
+                            setDetailsValue("olegCommissionEnabled", event.target.checked ? "true" : "false");
+                          }}
                         />
                         <span>Oleg commission</span>
                       </label>
