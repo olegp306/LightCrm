@@ -60,6 +60,7 @@ export type Lead = BaseRecord & {
   contractNumber: string | null;
   expectedFeeNet: number | null;
   olegPercent: number | null;
+  olegCommissionEnabled: boolean;
   handoffNote: string | null;
   lastPingAt: Date | null;
   clientType: string | null;
@@ -223,6 +224,7 @@ export type UpsertLeadInput = {
   contractNumber?: string | null;
   expectedFeeNet?: number | null;
   olegPercent?: number | null;
+  olegCommissionEnabled?: boolean;
   handoffNote?: string | null;
   lastPingAt?: Date | null;
   clientType?: string | null;

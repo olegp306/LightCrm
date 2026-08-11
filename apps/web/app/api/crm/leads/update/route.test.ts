@@ -41,6 +41,7 @@ describe("lead update route", () => {
         contractNumber: null,
         expectedFeeNet: null,
         olegPercent: null,
+        olegCommissionEnabled: false,
         handoffNote: null,
         lastPingAt: null,
         clientType: null,
@@ -66,6 +67,7 @@ describe("lead update route", () => {
             contractNumber: "CTR-700",
             expectedFeeNet: 15000,
             olegPercent: 30,
+            olegCommissionEnabled: true,
             handoffNote: "Final client handoff.",
             lastPingAt: "2026-08-10T12:00:00.000Z",
             clientType: "developer"
@@ -85,6 +87,7 @@ describe("lead update route", () => {
         contractNumber: "CTR-700",
         expectedFeeNet: 15000,
         olegPercent: 30,
+        olegCommissionEnabled: true,
         handoffNote: "Final client handoff.",
         lastPingAt: new Date("2026-08-10T12:00:00.000Z"),
         clientType: "developer"
@@ -111,5 +114,28 @@ describe("lead update route", () => {
     expect(response.status).toBe(400);
     expect(payload).toEqual({ error: "patch.progressStage: Number must be greater than or equal to 0" });
     expect(mocks.crm.upsertLeadWithClientResolution).not.toHaveBeenCalled();
+  });
+
+  it("accepts numeric and checkbox values from the details form", async () => {
+    const { POST } = await import("./route");
+    const response = await POST(
+      new Request("http://localhost/api/crm/leads/update", {
+        method: "POST",
+        body: JSON.stringify({
+          workspaceId: "default",
+          leadId: "lead-1",
+          patch: {
+            expectedFeeNet: "18000",
+            olegPercent: "2",
+            olegCommissionEnabled: "true"
+          }
+        })
+      })
+    );
+
+    expect(response.status).toBe(200);
+    expect(mocks.crm.upsertLeadWithClientResolution).toHaveBeenCalledWith(
+      expect.objectContaining({ expectedFeeNet: 18000, olegPercent: 2, olegCommissionEnabled: true })
+    );
   });
 });

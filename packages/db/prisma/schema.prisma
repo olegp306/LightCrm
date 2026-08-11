@@ -78,6 +78,7 @@ model Lead {
   contractNumber    String?
   expectedFeeNet    Float?
   olegPercent       Float?
+  olegCommissionEnabled Boolean @default(false)
   handoffNote       String?
   lastPingAt        DateTime?
   clientType        String?

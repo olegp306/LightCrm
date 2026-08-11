@@ -15,7 +15,8 @@ describe("lead progress persistence", () => {
     expect(lead.preferredLanguage).toBeNull();
     expect(lead.contractNumber).toBeNull();
     expect(lead.expectedFeeNet).toBeNull();
-    expect(lead.olegPercent).toBeNull();
+    expect(lead.olegPercent).toBe(2);
+    expect(lead.olegCommissionEnabled).toBe(true);
     expect(lead.handoffNote).toBeNull();
     expect(lead.lastPingAt).toBeNull();
     expect(lead.clientType).toBeNull();
@@ -34,6 +35,7 @@ describe("lead progress persistence", () => {
       contractNumber: "CTR-204",
       expectedFeeNet: 12500,
       olegPercent: 22.5,
+      olegCommissionEnabled: true,
       handoffNote: "Hand off after permit call.",
       lastPingAt,
       clientType: "private"
@@ -45,6 +47,7 @@ describe("lead progress persistence", () => {
       contractNumber: "CTR-204",
       expectedFeeNet: 12500,
       olegPercent: 22.5,
+      olegCommissionEnabled: true,
       handoffNote: "Hand off after permit call.",
       clientType: "private"
     });

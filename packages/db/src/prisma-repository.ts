@@ -46,7 +46,8 @@ function mapLead(record: Awaited<ReturnType<PrismaClient["lead"]["findFirst"]>>)
     ...record,
     status: ensureStatus(record.status, "new"),
     progressStage: ensureLeadProgressStage(record.progressStage),
-    preferredLanguage: ensureOutreachLanguage(record.preferredLanguage)
+    preferredLanguage: ensureOutreachLanguage(record.preferredLanguage),
+    olegCommissionEnabled: record.olegCommissionEnabled
   };
 }
 

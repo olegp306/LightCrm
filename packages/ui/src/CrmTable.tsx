@@ -2642,7 +2642,12 @@ export function CrmTable({
     [configuredColumns]
   );
   const detailsPrimaryColumns = useMemo(
-    () => detailsModalColumns.filter((column) => !(isLeadTable && isLeadSecondaryColumn(column))),
+    () =>
+      detailsModalColumns.filter(
+        (column) =>
+          !(isLeadTable && isLeadSecondaryColumn(column)) &&
+          !(isLeadTable && ["expectedFeeNet", "olegPercent", "olegCommissionEnabled"].includes(column.id))
+      ),
     [detailsModalColumns, isLeadTable]
   );
   const detailsSecondaryColumns = useMemo(
@@ -3264,7 +3269,7 @@ export function CrmTable({
   );
 
   const persistInlinePatch = useCallback(
-    async (row: CrmTableRow, patch: Record<string, string | null>, label = "Update field") => {
+    async (row: CrmTableRow, patch: Record<string, string | number | boolean | null>, label = "Update field") => {
       if (!updateRecordEndpoint || row.id.startsWith("draft-")) {
         return;
       }
@@ -3434,6 +3439,17 @@ export function CrmTable({
       if (column.valueKind === "currentTouch") {
         return;
       }
+      if (isLeadTable && (column.id === "expectedFeeNet" || column.id === "olegPercent")) {
+        const rawValue = String(value.data ?? "").trim();
+        const numericValue = rawValue ? Number(rawValue.replace(",", ".")) : null;
+        setEditableRows((current) => updateRowCell(current, row.id, column.id, value.data));
+        void persistInlinePatch(
+          row,
+          { [column.id]: numericValue !== null && Number.isFinite(numericValue) ? numericValue : null },
+          `Update ${column.title}`
+        );
+        return;
+      }
       const nextRow = {
         ...row,
         values: { ...row.values, [column.id]: value.data }
@@ -3449,7 +3465,7 @@ export function CrmTable({
         void persistEditedRow(nextRow);
       }
     },
-    [configuredColumns, createRecord, draftRowIds, filteredRows, persistEditedRow, persistInlineNoteField, persistInlinePatch, persistNextAction, saveDraftRow]
+    [configuredColumns, createRecord, draftRowIds, filteredRows, isLeadTable, persistEditedRow, persistInlineNoteField, persistInlinePatch, persistNextAction, saveDraftRow]
   );
 
   const openCreateRecord = useCallback(() => {
@@ -6259,6 +6275,44 @@ export function CrmTable({
                           )}
                         </div>
                       ) : null}
+                    </div>
+                  </section>
+                ) : null}
+                {isLeadTable ? (
+                  <section className="detailsCommercialFields" aria-label="Commercial fields">
+                    <header>
+                      <span>Commercial</span>
+                      <small>Editable net amount and Oleg commission</small>
+                    </header>
+                    <div className="detailsCommercialGrid">
+                      <label>
+                        <span className="detailsFieldLabel">Fee net</span>
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={detailsPanel.values.expectedFeeNet ?? ""}
+                          onChange={(event) => setDetailsValue("expectedFeeNet", event.target.value)}
+                        />
+                      </label>
+                      <label>
+                        <span className="detailsFieldLabel">Oleg %</span>
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={detailsPanel.values.olegPercent ?? ""}
+                          onChange={(event) => setDetailsValue("olegPercent", event.target.value)}
+                        />
+                      </label>
+                      <label className="detailsCommercialToggle">
+                        <input
+                          type="checkbox"
+                          checked={detailsPanel.values.olegCommissionEnabled === "true" || detailsPanel.values.olegCommissionEnabled === "yes"}
+                          onChange={(event) => setDetailsValue("olegCommissionEnabled", event.target.checked ? "true" : "false")}
+                        />
+                        <span>Oleg commission enabled</span>
+                      </label>
                     </div>
                   </section>
                 ) : null}

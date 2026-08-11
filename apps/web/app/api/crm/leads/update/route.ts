@@ -8,6 +8,11 @@ const optionalLeadLanguage = z.preprocess(
   z.enum(["de", "ru", "en"]).nullable().optional()
 );
 
+const numericNullable = z.preprocess(
+  (value) => (value === "" || value === null ? null : typeof value === "string" ? Number(value) : value),
+  z.number().finite().nullable().optional()
+);
+
 const LeadPatch = z
   .object({
     clientId: optionalText,
@@ -24,8 +29,12 @@ const LeadPatch = z
     progressStage: z.number().int().min(0).max(7).optional(),
     preferredLanguage: optionalLeadLanguage,
     contractNumber: optionalText,
-    expectedFeeNet: z.number().finite().nullable().optional(),
-    olegPercent: z.number().finite().nullable().optional(),
+    expectedFeeNet: numericNullable,
+    olegPercent: numericNullable,
+    olegCommissionEnabled: z.preprocess(
+      (value) => (value === "true" || value === "yes" ? true : value === "false" || value === "no" ? false : value),
+      z.boolean().optional()
+    ),
     handoffNote: optionalText,
     lastPingAt: dateString.nullable().optional(),
     clientType: optionalText,
@@ -72,6 +81,7 @@ type NativeLeadPatch = {
   contractNumber?: string | null;
   expectedFeeNet?: number | null;
   olegPercent?: number | null;
+  olegCommissionEnabled?: boolean;
   handoffNote?: string | null;
   lastPingAt?: Date | null;
   clientType?: string | null;
@@ -117,6 +127,7 @@ export async function POST(request: Request) {
     if (input.patch.contractNumber !== undefined) leadPatch.contractNumber = input.patch.contractNumber;
     if (input.patch.expectedFeeNet !== undefined) leadPatch.expectedFeeNet = input.patch.expectedFeeNet;
     if (input.patch.olegPercent !== undefined) leadPatch.olegPercent = input.patch.olegPercent;
+    if (input.patch.olegCommissionEnabled !== undefined) leadPatch.olegCommissionEnabled = input.patch.olegCommissionEnabled;
     if (input.patch.handoffNote !== undefined) leadPatch.handoffNote = input.patch.handoffNote;
     if (input.patch.lastPingAt !== undefined) leadPatch.lastPingAt = input.patch.lastPingAt;
     if (input.patch.clientType !== undefined) leadPatch.clientType = input.patch.clientType;

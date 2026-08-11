@@ -50,6 +50,7 @@ describe("createCrmBackupModel", () => {
       contractNumber: null,
       expectedFeeNet: null,
       olegPercent: null,
+      olegCommissionEnabled: false,
       handoffNote: null,
       lastPingAt: null,
       clientType: null

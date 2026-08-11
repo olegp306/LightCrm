@@ -8,6 +8,11 @@ const optionalLeadLanguage = z.preprocess(
   z.enum(["de", "ru", "en"]).nullable().optional()
 );
 
+const numericNullable = z.preprocess(
+  (value) => (value === "" || value === null ? null : typeof value === "string" ? Number(value) : value),
+  z.number().finite().nullable().optional()
+);
+
 const schema = z.object({
   id: z.string().optional(),
   workspaceId,
@@ -25,8 +30,12 @@ const schema = z.object({
   progressStage: z.number().int().min(0).max(7).optional(),
   preferredLanguage: optionalLeadLanguage,
   contractNumber: optionalText,
-  expectedFeeNet: z.number().finite().nullable().optional(),
-  olegPercent: z.number().finite().nullable().optional(),
+  expectedFeeNet: numericNullable,
+  olegPercent: numericNullable,
+  olegCommissionEnabled: z.preprocess(
+    (value) => (value === "true" || value === "yes" ? true : value === "false" || value === "no" ? false : value),
+    z.boolean().optional()
+  ),
   handoffNote: optionalText,
   lastPingAt: dateString.nullable().optional(),
   clientType: optionalText
