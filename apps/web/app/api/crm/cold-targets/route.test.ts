@@ -9,7 +9,8 @@ const mocks = vi.hoisted(() => ({
     outreachTouch: {
       findMany: vi.fn()
     }
-  }
+  },
+  getCrmRuntimeSettings: vi.fn()
 }));
 
 vi.mock("@lightcrm/db", () => ({
@@ -26,6 +27,10 @@ vi.mock("../_shared", async () => {
   };
 });
 
+vi.mock("../settings/crm-settings-store", () => ({
+  getCrmRuntimeSettings: mocks.getCrmRuntimeSettings
+}));
+
 describe("cold targets route", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -37,6 +42,7 @@ describe("cold targets route", () => {
       }
     ]);
     mocks.prisma.outreachCampaignAssignment.findMany.mockResolvedValue([]);
+    mocks.getCrmRuntimeSettings.mockResolvedValue({ outreachCampaigns: { campaigns: [] } });
     mocks.prisma.outreachTouch.findMany.mockResolvedValue([
       {
         id: "touch-2",
@@ -45,6 +51,7 @@ describe("cold targets route", () => {
         direction: "outbound",
         subject: null,
         outcome: "sent",
+        actorEmail: "ekaterina.reyzbikh@gmail.com",
         occurredAt: new Date("2026-08-10T09:30:00.000Z")
       },
       {
@@ -54,6 +61,7 @@ describe("cold targets route", () => {
         direction: "outbound",
         subject: "Intro",
         outcome: "sent",
+        actorEmail: null,
         occurredAt: new Date("2026-08-01T09:30:00.000Z")
       }
     ]);
@@ -71,7 +79,7 @@ describe("cold targets route", () => {
       outreachProtocol: [
         {
           id: "touch-2",
-          actor: "CRM",
+          actor: "Екатерина",
           channel: "linkedin",
           direction: "outbound",
           occurredAt: "2026-08-10T09:30:00.000Z",
@@ -84,5 +92,30 @@ describe("cold targets route", () => {
         }
       ]
     });
+  });
+
+  it("labels the current touch with its campaign day offset", async () => {
+    mocks.prisma.outreachCampaignAssignment.findMany.mockResolvedValue([
+      { coldTargetId: "cold-1", campaignId: "campaign-1", currentTouchIndex: 1, campaignName: "Outbound" }
+    ]);
+    mocks.getCrmRuntimeSettings.mockResolvedValue({
+      outreachCampaigns: {
+        campaigns: [
+          {
+            id: "campaign-1",
+            touchpoints: [
+              { touchNumber: 1, dayOffset: 0 },
+              { touchNumber: 2, dayOffset: 7 }
+            ]
+          }
+        ]
+      }
+    });
+
+    const { GET } = await import("./route");
+    const response = await GET(new Request("http://localhost/api/crm/cold-targets"));
+    const payload = await response.json();
+
+    expect(payload[0].campaignTouch).toBe("D+7");
   });
 });

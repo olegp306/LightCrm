@@ -1,6 +1,8 @@
 import { getPrismaClient } from "@lightcrm/db";
 import { NextResponse } from "next/server";
+import { accountDisplayName } from "../../../../auth/session";
 import { defaultWorkspaceId, getCrm, handleRouteError } from "../_shared";
+import { getCrmRuntimeSettings } from "../settings/crm-settings-store";
 
 export const dynamic = "force-dynamic";
 
@@ -38,6 +40,7 @@ export async function GET(request: Request) {
         subject: string | null;
         occurredAt: string;
         outcome: string | null;
+        actorEmail: string | null;
       }>
     >();
     for (const touch of touches) {
@@ -47,12 +50,13 @@ export async function GET(request: Request) {
           if (protocol.length < 8) {
             protocol.push({
               id: touch.id,
-              actor: "CRM",
+              actor: touch.actorEmail ? accountDisplayName(touch.actorEmail) : "CRM",
               channel: touch.channel,
               direction: touch.direction,
               subject: touch.subject,
               occurredAt: touch.occurredAt.toISOString(),
-              outcome: touch.outcome
+              outcome: touch.outcome,
+              actorEmail: touch.actorEmail
             });
             protocolByTarget.set(touch.coldTargetId, protocol);
           }
@@ -63,25 +67,33 @@ export async function GET(request: Request) {
       const protocol = protocolByTarget.get(touch.coldTargetId) ?? [];
       protocol.push({
         id: touch.id,
-        actor: "CRM",
+        actor: touch.actorEmail ? accountDisplayName(touch.actorEmail) : "CRM",
         channel: touch.channel,
         direction: touch.direction,
         subject: touch.subject,
         occurredAt: touch.occurredAt.toISOString(),
-        outcome: touch.outcome
+        outcome: touch.outcome,
+        actorEmail: touch.actorEmail
       });
       protocolByTarget.set(touch.coldTargetId, protocol);
     }
+    const settings = await getCrmRuntimeSettings();
+    const campaignsById = new Map(settings.outreachCampaigns.campaigns.map((campaign) => [campaign.id, campaign]));
+
     return NextResponse.json(
       rows.map((row) => {
         const assignment = byTarget.get(row.id);
+        const campaign = assignment ? campaignsById.get(assignment.campaignId) : null;
+        const currentTouch = campaign
+          ? [...campaign.touchpoints].sort((left, right) => left.touchNumber - right.touchNumber)[assignment?.currentTouchIndex ?? -1] ?? null
+          : null;
         return {
           ...row,
           pingAt: latestTouchByTarget.get(row.id)?.toISOString() ?? null,
           outreachProtocol: protocolByTarget.get(row.id) ?? [],
           campaignName: assignment?.campaignName ?? null,
           campaignStatus: assignment?.status ?? null,
-          campaignTouch: assignment ? `Touch ${assignment.currentTouchIndex + 1}` : null,
+          campaignTouch: currentTouch ? `D+${currentTouch.dayOffset}` : assignment ? `Touch ${assignment.currentTouchIndex + 1}` : null,
           nextAction: assignment?.nextActionTitle
             ? [assignment.nextActionTitle, assignment.nextTouchAt?.toISOString().slice(0, 10)].filter(Boolean).join(" · ")
             : null
