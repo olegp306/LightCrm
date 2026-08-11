@@ -1386,9 +1386,24 @@ const leadFieldGuideItems = [
     meaning: "Original incoming text kept for audit/debugging. It should not be used as the main working description."
   },
   {
+    field: "Deal net",
+    source: "Manual / offer",
+    meaning: "Net deal amount from the commercial offer or entered manually. This is the amount used with Oleg %; it is separate from the legacy Budget EUR input and calculated offer totals."
+  },
+  {
+    field: "Oleg %",
+    source: "Manual / default",
+    meaning: "Oleg's commission rate. New leads start at 2%; the percentage can be changed manually."
+  },
+  {
+    field: "Oleg commission",
+    source: "Manual switch",
+    meaning: "Turns Oleg's commission calculation on or off for this lead. New leads are enabled by default; existing leads stay disabled unless changed."
+  },
+  {
     field: "Budget EUR",
     source: "Manual / intake",
-    meaning: "Manual or extracted budget/offer amount. Can make offer generation possible when automatic pricing is not enough."
+    meaning: "Legacy budget or manual gross price used to unlock commercial-offer generation. It is not the same as Deal net."
   },
   {
     field: "Missing for offer",
@@ -1401,8 +1416,38 @@ const leadFieldGuideByField: Map<string, (typeof leadFieldGuideItems)[number]> =
   leadFieldGuideItems.map((item) => [item.field, item])
 );
 
-function guideForColumn(column: Pick<CrmTableColumn, "id" | "title">) {
-  return leadFieldGuideByField.get(column.title) ?? leadFieldGuideByField.get(column.id);
+const coldTargetFieldGuideItems = [
+  { field: "Target ID", source: "Automatic", meaning: "Stable identifier for the target record." },
+  { field: "Name", source: "Manual / import", meaning: "Person or organization contact name used in the target card." },
+  { field: "Company", source: "Manual / import", meaning: "Company connected to the target." },
+  { field: "Country", source: "Manual / import", meaning: "Country used by the country filter and search." },
+  { field: "Role", source: "Manual / import", meaning: "Contact role. Long text wraps to three lines and the full value appears on hover." },
+  { field: "Hook", source: "Manual / import", meaning: "Personalized reason or angle for starting the conversation with this target." },
+  { field: "Email", source: "Manual / import", meaning: "Email used for outreach drafts and sending." },
+  { field: "Phone", source: "Manual / import", meaning: "Phone number for a cold call or follow-up." },
+  { field: "Website", source: "Manual / import", meaning: "Company or contact website." },
+  { field: "LinkedIn", source: "Manual / import", meaning: "LinkedIn profile or company URL." },
+  { field: "Language", source: "Manual / default", meaning: "Preferred language for outreach content." },
+  { field: "First touch", source: "Manual", meaning: "Starting channel for the cadence: Email, LinkedIn, or Cold call." },
+  { field: "Ball", source: "Manual", meaning: "Shows whether the next action is on our side or the client's side." },
+  { field: "Ping", source: "Automatic", meaning: "Date and freshness of the latest recorded outreach touch." },
+  { field: "Node Research", source: "Manual / import", meaning: "Research notes about the target and company." },
+  { field: "I Have Letters", source: "Manual / import", meaning: "Existing letters, context, or correspondence notes." },
+  { field: "Status", source: "Manual / automatic", meaning: "Current target status. Campaign actions may update it." },
+  { field: "Campaign", source: "Manual / automatic", meaning: "Selected outreach cadence for this target." },
+  { field: "Campaign status", source: "Automatic", meaning: "Whether the selected campaign is active, stopped, or not started." },
+  { field: "Touch", source: "Automatic", meaning: "Current cadence position, for example D+7 or Touch 3/8." },
+  { field: "Next action", source: "Automatic", meaning: "Next planned outreach action generated from the current touch." },
+  { field: "Calendar", source: "Linked calendar", meaning: "Calendar items connected to the outreach cadence." }
+] as const;
+
+const coldTargetFieldGuideByField: Map<string, (typeof coldTargetFieldGuideItems)[number]> = new Map(
+  coldTargetFieldGuideItems.map((item) => [item.field, item])
+);
+
+function guideForColumn(column: Pick<CrmTableColumn, "id" | "title">, coldTarget = false) {
+  const guide = coldTarget ? coldTargetFieldGuideByField : leadFieldGuideByField;
+  return guide.get(column.title) ?? guide.get(column.id);
 }
 
 type OfferMissingFieldInput = {
@@ -5162,6 +5207,7 @@ export function CrmTable({
     .slice()
     .sort((left, right) => (left.mobilePriority ?? 99) - (right.mobilePriority ?? 99))
     .slice(0, 6);
+  const activeFieldGuideItems = isLeadTable ? leadFieldGuideItems : isColdTargetTable ? coldTargetFieldGuideItems : null;
 
   return (
     <section
@@ -5629,19 +5675,25 @@ export function CrmTable({
           </div>
         </div>
       ) : null}
-      {isLeadTable ? (
+      {activeFieldGuideItems ? (
         <details className="leadFieldGuide">
           <summary>
             <span>Field guide</span>
-            <strong>What is manual, automatic, linked, and technical in the Leads table</strong>
+            <strong>
+              What is manual, automatic, linked, and technical in the {isLeadTable ? "Leads" : "Cold Targets"} table
+            </strong>
           </summary>
-          <div className="leadFieldGuideGrid" role="table" aria-label="Leads field guide">
+          <div
+            className="leadFieldGuideGrid"
+            role="table"
+            aria-label={`${isLeadTable ? "Leads" : "Cold Targets"} field guide`}
+          >
             <div className="leadFieldGuideHeader" role="row">
               <span role="columnheader">Field</span>
               <span role="columnheader">Source</span>
               <span role="columnheader">Meaning</span>
             </div>
-            {leadFieldGuideItems.map((item) => (
+            {activeFieldGuideItems.map((item) => (
               <div className="leadFieldGuideRow" role="row" key={item.field}>
                 <strong role="cell">{item.field}</strong>
                 <span role="cell">{item.source}</span>
@@ -6320,7 +6372,7 @@ export function CrmTable({
                     column.valueKind === "area"
                       ? formatAreaValue(detailsPanelRow.values[column.id])
                       : mobileDisplayValue(detailsPanelRow.values[column.id]);
-                  const guide = guideForColumn(column);
+                  const guide = guideForColumn(column, isColdTargetTable);
                   if (!canEdit) {
                     return (
                       <div className="detailsDrawerField readonly" key={column.id}>
@@ -6417,7 +6469,7 @@ export function CrmTable({
                           column.valueKind === "area"
                             ? formatAreaValue(detailsPanelRow.values[column.id])
                             : mobileDisplayValue(detailsPanelRow.values[column.id]);
-                        const guide = guideForColumn(column);
+                        const guide = guideForColumn(column, isColdTargetTable);
                         return (
                           <div className="detailsSecondaryField" key={column.id}>
                             <span className="detailsFieldLabel">

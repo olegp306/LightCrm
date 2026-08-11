@@ -69,7 +69,7 @@ export const tables: Record<string, TableDefinition> = {
       { id: "progressStage", title: "Katya stage", width: 120, defaultVisible: false },
       { id: "preferredLanguage", title: "Language", width: 120, defaultVisible: false },
       { id: "contractNumber", title: "Contract #", width: 130, defaultVisible: false },
-      { id: "expectedFeeNet", title: "Fee net", width: 130 },
+      { id: "expectedFeeNet", title: "Deal net", width: 130 },
       { id: "olegPercent", title: "Oleg %", width: 100 },
       { id: "olegCommissionEnabled", title: "Oleg commission", width: 140, defaultVisible: false },
       { id: "clientType", title: "Client type", width: 130, defaultVisible: false },
