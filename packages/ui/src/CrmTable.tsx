@@ -6194,9 +6194,6 @@ export function CrmTable({
                               void persistLeadProgressStage(detailsPanelRow, stageIndex);
                             }}
                           >
-                            <span className="leadProgressIndex" aria-hidden="true">
-                              {stageIndex + 1}
-                            </span>
                             <span className="leadProgressIcon" aria-hidden="true">
                               <img src={stage.image} alt="" draggable={false} />
                             </span>
