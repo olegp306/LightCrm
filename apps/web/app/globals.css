@@ -1312,6 +1312,30 @@ input {
   min-width: 0;
 }
 
+.outreachFloatField {
+  background: color-mix(in srgb, var(--control) 72%, var(--panel));
+  border: 1px solid color-mix(in srgb, var(--line) 68%, transparent);
+  border-radius: 7px;
+  display: grid;
+  gap: 0;
+  min-width: 0;
+  padding: 3px 6px 4px;
+  position: relative;
+}
+
+.outreachFloatField > span {
+  background: var(--panel);
+  color: var(--muted);
+  font-size: 7px;
+  font-weight: 700;
+  left: 7px;
+  line-height: 1;
+  padding: 0 3px;
+  position: absolute;
+  text-transform: uppercase;
+  top: -4px;
+}
+
 .calendarEmailSubjectRow button,
 .calendarEmailActions button,
 .calendarEmailGmailButton {
@@ -1337,15 +1361,6 @@ input {
   margin: 0;
 }
 
-.calendarEmailSubjectRow label > span,
-.calendarEmailBody > span {
-  color: var(--muted);
-  font-size: 7px;
-  font-weight: 700;
-  line-height: 1;
-  text-transform: uppercase;
-}
-
 .calendarEmailPreview > p strong {
   color: var(--ink);
   font-size: 13px;
@@ -1353,14 +1368,14 @@ input {
 
 .calendarEmailPreview input,
 .calendarEmailPreview textarea {
-  background: color-mix(in srgb, var(--control) 72%, var(--panel));
-  border: 1px solid color-mix(in srgb, var(--line) 68%, transparent);
-  border-radius: 7px;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
   color: var(--ink);
   font: inherit;
   font-size: 13px;
   min-width: 0;
-  padding: 5px 7px;
+  padding: 4px 1px 1px;
   width: 100%;
 }
 
@@ -4730,17 +4745,27 @@ input {
   gap: 4px;
 }
 
+.detailsOutreachDraft .outreachFloatField {
+  background: var(--control);
+  border-color: var(--line);
+  padding: 5px 8px 6px;
+}
+
+.detailsOutreachDraft .outreachFloatField > span {
+  background: var(--panel);
+}
+
 .detailsOutreachDraft input,
 .detailsOutreachDraft textarea {
-  background: var(--control);
-  border: 1px solid var(--line);
-  border-radius: 6px;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
   color: var(--ink);
   font: inherit;
   font-size: calc(13px * var(--table-font-scale, 1));
   line-height: 1.35;
   min-width: 0;
-  padding: 8px 9px;
+  padding: 4px 0 1px;
 }
 
 .detailsOutreachDraftActions {

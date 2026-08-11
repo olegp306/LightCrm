@@ -277,7 +277,7 @@ function OutreachEmailPreview({
       </summary>
       <div className="calendarEmailPreview">
         <div className="calendarEmailSubjectRow">
-          <label>
+          <label className="outreachFloatField">
             <span>Subject</span>
             <input
               value={subject}
@@ -290,7 +290,7 @@ function OutreachEmailPreview({
             {styled ? "Styled" : "Plain"}
           </button>
         </div>
-        <div className="calendarEmailBody">
+        <label className="calendarEmailBody outreachFloatField">
           <span>Email</span>
           {styled ? (
             <div
@@ -322,7 +322,7 @@ function OutreachEmailPreview({
               onChange={(event) => onDraftChange({ body: event.target.value })}
             />
           )}
-        </div>
+        </label>
         <div className="calendarEmailActions">
           <button type="button" onClick={() => onSaveDraft()} disabled={draft.saveStatus === "saving"}>
             {draft.saveStatus === "saving" ? "Saving" : "Save draft"}
@@ -387,6 +387,7 @@ function CalendarInspector({
             const canSendOutreachEmail =
               Boolean(item.outreach?.email && draft.subject.trim() && draft.body.trim()) && item.status !== "done";
             const isDoneCelebrating = Boolean(celebratingDoneItems[item.id]);
+            const isOutreachDone = Boolean(item.outreach && item.status === "done");
             const doneNotice = doneNotices[item.id];
             return (
               <article className="calendarTimelineItem" key={`${item.kind}-${item.id}`}>
@@ -432,7 +433,7 @@ function CalendarInspector({
                         disabled={item.status === "done" && !isDoneCelebrating}
                         onClick={() => onMarkSent(item)}
                       >
-                        <span>{item.status === "done" ? "Done" : item.outreach ? "Mark sent" : "Done"}</span>
+                        <span>{isOutreachDone ? "Sent" : item.outreach ? "Mark sent" : "Done"}</span>
                         {isDoneCelebrating ? <PartyPopper aria-hidden="true" size={14} strokeWidth={2.2} /> : null}
                       </button>
                       <button type="button" onClick={() => window.alert("Calendar rescheduling is not implemented yet.")}>

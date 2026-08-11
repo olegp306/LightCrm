@@ -7018,7 +7018,7 @@ export function CrmTable({
                                         {draft?.error ? <p className="detailsDrawerError">{draft.error}</p> : null}
                                         {draft && !draft.loading && draft.reminderId ? (
                                           <>
-                                            <label>
+                                            <label className="outreachFloatField">
                                               <span>Subject</span>
                                               <input
                                                 value={draft.subject}
@@ -7031,7 +7031,7 @@ export function CrmTable({
                                                 }
                                               />
                                             </label>
-                                            <label>
+                                            <label className="outreachFloatField detailsOutreachEmailField">
                                               <span>Email</span>
                                               {isPreviewDraft ? (
                                                 <div className="detailsOutreachEmailPreview" aria-label="Email body preview">

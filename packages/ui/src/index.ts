@@ -10,3 +10,5 @@ export {
   toCsv
 } from "./table-model";
 export type { ApiRecord, CreateRecordPayloadConfig, TablePreferences, TableSort } from "./table-model";
+export { outreachDetailsForReminder } from "./outreach-calendar";
+export type { OutreachCalendarCampaign, OutreachCalendarDetails, OutreachCalendarReminder } from "./outreach-calendar";
