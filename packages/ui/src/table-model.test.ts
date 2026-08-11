@@ -147,7 +147,7 @@ describe("table-model", () => {
         direction: "outbound",
         outcome: "sent"
       })
-    ).toBe("LinkedIn | 08/10/2026, 11:30 AM | CRM");
+    ).toBe("LinkedIn | 08/10/2026 11:30 | CRM");
   });
 
   it("uses a blue current-touch chip tone only when a touch exists", () => {
