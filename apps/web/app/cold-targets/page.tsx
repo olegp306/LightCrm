@@ -13,6 +13,7 @@ export default function ColdTargetsPage() {
       outreachAdvanceEndpoint="/api/crm/outreach-campaigns/advance"
       outreachDraftEndpoint="/api/crm/outreach-campaigns/draft"
       outreachProtocolEndpoint="/api/crm/outreach-protocol"
+      manualPingEndpoint="/api/crm/manual-ping"
     />
   );
 }

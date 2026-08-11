@@ -11,6 +11,7 @@ export default function LeadsPage() {
       leadSummariesEndpoint="/api/crm/leads/summaries"
       updateRecordEndpoint="/api/crm/leads/update"
       updateRecordIdField="leadId"
+      manualPingEndpoint="/api/crm/manual-ping"
       offerGenerateEndpoint="/api/crm/leads/generate-offer"
       sendToTelegramEndpoint="/api/crm/leads/send-to-telegram"
       clientOptionsEndpoint="/api/crm/clients"

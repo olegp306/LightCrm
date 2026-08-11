@@ -21,6 +21,7 @@ export const tables: Record<string, TableDefinition> = {
       { id: "company", title: "Company", width: 180, mobilePriority: 2 },
       { id: "email", title: "Email", width: 230, mobilePriority: 3 },
       { id: "phone", title: "Phone", width: 150, mobilePriority: 4 },
+      { id: "pingAt", title: "Ping", width: 110, valueKind: "ping", defaultVisible: true },
       { id: "address", title: "Address", width: 220, mobilePriority: 5 },
       { id: "status", title: "Status", width: 120, mobilePriority: 6 },
       { id: "sourceChannel", title: "Source", width: 140, defaultVisible: false },

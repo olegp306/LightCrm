@@ -2936,6 +2936,81 @@ input {
   display: flex;
   gap: 14px;
   justify-content: space-between;
+  position: relative;
+}
+
+.manualPingTrigger {
+  align-self: center;
+  background: var(--control);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--ink-soft);
+  cursor: pointer;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 750;
+  margin-left: auto;
+  min-height: 30px;
+  padding: 5px 9px;
+  white-space: nowrap;
+}
+
+.manualPingTrigger:hover,
+.manualPingMenu button:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.manualPingMenu {
+  background: var(--panel-raised);
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  box-shadow: 0 12px 28px var(--shadow-strong);
+  display: grid;
+  gap: 6px;
+  padding: 8px;
+  z-index: 40;
+}
+
+.manualPingMenu strong {
+  color: var(--muted);
+  font-size: 10px;
+  text-transform: uppercase;
+}
+
+.manualPingMenu > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.manualPingMenu button {
+  background: var(--control);
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  color: var(--ink-soft);
+  cursor: pointer;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  min-height: 28px;
+  padding: 4px 7px;
+  white-space: nowrap;
+}
+
+.manualPingMenu button:disabled {
+  cursor: wait;
+  opacity: 0.55;
+}
+
+.manualPingMenuDetails {
+  position: absolute;
+  right: 45px;
+  top: 38px;
+}
+
+.manualPingMenuTable {
+  position: fixed;
 }
 
 .detailsDrawer header span {

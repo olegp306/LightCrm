@@ -2,5 +2,13 @@ import { TablePage } from "../components/TablePage";
 import { tables } from "../sample-data";
 
 export default function ClientsPage() {
-  return <TablePage {...tables.clients} endpoint="/api/crm/clients" updateRecordEndpoint="/api/crm/clients/update" updateRecordIdField="clientId" />;
+  return (
+    <TablePage
+      {...tables.clients}
+      endpoint="/api/crm/clients"
+      updateRecordEndpoint="/api/crm/clients/update"
+      updateRecordIdField="clientId"
+      manualPingEndpoint="/api/crm/manual-ping"
+    />
+  );
 }

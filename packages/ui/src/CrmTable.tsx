@@ -189,6 +189,15 @@ type OutreachProtocolEntry = {
   authorCode: string;
 };
 
+type ManualPingChannel = "email" | "linkedin" | "phone" | "telegram" | "whatsapp";
+const manualPingChannels: Array<{ value: ManualPingChannel; label: string }> = [
+  { value: "email", label: "Email" },
+  { value: "linkedin", label: "LinkedIn" },
+  { value: "phone", label: "Call" },
+  { value: "telegram", label: "Telegram" },
+  { value: "whatsapp", label: "WhatsApp" }
+];
+
 function visibleClientReference(client: ClientOption): string | null {
   const code = client.code?.trim();
   if (code && !/^csv-client-/i.test(code)) {
@@ -232,6 +241,7 @@ export type CrmTableProps = {
   outreachAdvanceEndpoint?: string;
   outreachDraftEndpoint?: string;
   outreachProtocolEndpoint?: string;
+  manualPingEndpoint?: string;
   sendToTelegramEndpoint?: string;
   clientOptionsEndpoint?: string;
   clientLinkEndpoint?: string;
@@ -2272,6 +2282,7 @@ export function CrmTable({
   outreachAdvanceEndpoint,
   outreachDraftEndpoint,
   outreachProtocolEndpoint,
+  manualPingEndpoint,
   sendToTelegramEndpoint,
   clientOptionsEndpoint,
   clientLinkEndpoint,
@@ -2335,6 +2346,13 @@ export function CrmTable({
   const [outreachCampaignError, setOutreachCampaignError] = useState<string | null>(null);
   const [outreachProtocol, setOutreachProtocol] = useState<OutreachProtocolEntry[]>([]);
   const [outreachProtocolError, setOutreachProtocolError] = useState<string | null>(null);
+  const [manualPingMenu, setManualPingMenu] = useState<{
+    rowId: string;
+    source: "table" | "details";
+    left?: number;
+    top?: number;
+    saving: boolean;
+  } | null>(null);
   const [isSendingToTelegram, setIsSendingToTelegram] = useState(false);
   const [leadProgressFeedback, setLeadProgressFeedback] = useState<Record<string, { stageIndex: number; kind: "advance" | "complete" }>>({});
   const [leadProgressSavingRowId, setLeadProgressSavingRowId] = useState<string | null>(null);
@@ -2408,6 +2426,13 @@ export function CrmTable({
     [columns]
   );
   const isColdTargetTable = archiveEntity === "coldTarget";
+  const manualPingEntity: "lead" | "coldTarget" | "client" | null = isLeadTable
+    ? "lead"
+    : isColdTargetTable
+      ? "coldTarget"
+      : archiveEntity === "client"
+        ? "client"
+        : null;
   const isDarkMode = useDarkModeEnabled();
   const tableFontScale = normalizedFontScale(preferences.fontScale);
   const tableTooltipFontSize = Math.round(11 * tableFontScale);
@@ -2698,32 +2723,43 @@ export function CrmTable({
     [detailsModalColumns, isLeadTable]
   );
   const detailsPanelRow = detailsPanel ? editableRows.find((row) => row.id === detailsPanel.rowId) ?? null : null;
-  const loadOutreachProtocol = useCallback(async (coldTargetId: string) => {
-    if (!outreachProtocolEndpoint) {
+  const loadOutreachProtocol = useCallback(async (recordId: string) => {
+    const endpoint = manualPingEndpoint ?? outreachProtocolEndpoint;
+    if (!endpoint || !manualPingEntity) {
       return;
     }
     setOutreachProtocolError(null);
     try {
-      const query = new URLSearchParams({ workspaceId: "default", coldTargetId });
-      const response = await fetch(`${outreachProtocolEndpoint}?${query.toString()}`);
-      const payload = (await response.json()) as OutreachProtocolEntry[] | { error?: string };
+      const query = manualPingEndpoint
+        ? new URLSearchParams({ workspaceId: "default", entity: manualPingEntity, recordId })
+        : new URLSearchParams({ workspaceId: "default", coldTargetId: recordId });
+      const response = await fetch(`${endpoint}?${query.toString()}`);
+      const payload = (await response.json()) as Array<OutreachProtocolEntry & { actor?: string; actorCode?: string }> | { error?: string };
       if (!response.ok || !Array.isArray(payload)) {
         throw new Error((payload as { error?: string }).error ?? "Protocol load failed.");
       }
-      setOutreachProtocol(payload);
+      setOutreachProtocol(
+        payload.map((entry) => ({
+          ...entry,
+          authorName: entry.authorName ?? entry.actor ?? "Не указан",
+          authorCode: entry.authorCode ?? entry.actorCode ?? "—",
+          authorEmail: entry.authorEmail ?? null,
+          subject: entry.subject ?? null
+        }))
+      );
     } catch (reason) {
       setOutreachProtocol([]);
       setOutreachProtocolError(reason instanceof Error ? reason.message : "Protocol load failed.");
     }
-  }, [outreachProtocolEndpoint]);
+  }, [manualPingEndpoint, manualPingEntity, outreachProtocolEndpoint]);
   useEffect(() => {
-    if (!isColdTargetTable || !detailsPanelRow || !outreachProtocolEndpoint) {
+    if (!detailsPanelRow || !manualPingEntity || (!manualPingEndpoint && !outreachProtocolEndpoint)) {
       setOutreachProtocol([]);
       setOutreachProtocolError(null);
       return;
     }
     void loadOutreachProtocol(detailsPanelRow.id);
-  }, [detailsPanelRow?.id, isColdTargetTable, loadOutreachProtocol, outreachProtocolEndpoint]);
+  }, [detailsPanelRow?.id, loadOutreachProtocol, manualPingEndpoint, manualPingEntity, outreachProtocolEndpoint]);
   const detailsPanelDocuments = detailsPanelRow ? sortDocumentsByAdded(cellDocuments(detailsPanelRow.values.documents)) : [];
   const detailsPanelVisibleDocuments = detailsPanelDocuments.slice(0, 3);
   const detailsPanelExtraDocuments = detailsPanelDocuments.slice(3);
@@ -2779,7 +2815,7 @@ export function CrmTable({
   const hasDetailsDocumentsSection = detailsPanelDocuments.length > 0 || columns.some((column) => column.id === "documents");
   const hasDetailsCalendarSection = detailsPanelCalendarItems.length > 0 || columns.some((column) => column.id === "calendar");
   const hasDetailsSideSections =
-    isLeadTable || isColdTargetTable || hasDetailsDocumentsSection || hasDetailsCalendarSection || Boolean(detailsPanelSummary);
+    isLeadTable || isColdTargetTable || Boolean(manualPingEndpoint && manualPingEntity) || hasDetailsDocumentsSection || hasDetailsCalendarSection || Boolean(detailsPanelSummary);
   const detailsModalEyebrow = isLeadTable ? "Lead card" : `${title.replace(/\s+table$/i, "").replace(/s$/i, "")} details`;
   const detailsModalTitle = detailsPanelRow
     ? String(mobileDisplayValue(detailsPanelRow.values.code) || mobileDisplayValue(detailsPanelRow.values.name) || detailsPanelRow.id)
@@ -3630,6 +3666,36 @@ export function CrmTable({
     [documentUploadEndpoint]
   );
 
+  const recordManualPing = useCallback(
+    async (row: CrmTableRow, channel: ManualPingChannel) => {
+      if (!manualPingEndpoint || !manualPingEntity || manualPingMenu?.saving) {
+        return;
+      }
+      setManualPingMenu((current) => (current ? { ...current, saving: true } : current));
+      try {
+        const response = await fetch(manualPingEndpoint, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ workspaceId: "default", entity: manualPingEntity, recordId: row.id, channel })
+        });
+        const payload = (await response.json()) as { error?: string; pingAt?: string; protocolEntry?: OutreachProtocolEntry };
+        if (!response.ok) {
+          throw new Error(payload.error ?? "Manual Ping failed.");
+        }
+        setEditableRows((current) => updateRowCell(current, row.id, "pingAt", payload.pingAt ?? new Date().toISOString()));
+        if (payload.protocolEntry) {
+          setOutreachProtocol((current) => [payload.protocolEntry as OutreachProtocolEntry, ...current.filter((entry) => entry.id !== payload.protocolEntry?.id)]);
+        }
+        setCreateError(null);
+        setManualPingMenu(null);
+      } catch (error) {
+        setCreateError(error instanceof Error ? error.message : "Manual Ping failed.");
+        setManualPingMenu(null);
+      }
+    },
+    [manualPingEndpoint, manualPingEntity, manualPingMenu?.saving]
+  );
+
   const handleCellClicked = useCallback(
     ([columnIndex, rowIndex]: Item, event: Parameters<NonNullable<ComponentProps<typeof DataEditor>["onCellClicked"]>>[1]) => {
       const column = configuredColumns[columnIndex];
@@ -3638,6 +3704,18 @@ export function CrmTable({
         return;
       }
       setDetailAnchorRowId(row.id);
+      if (column.valueKind === "ping" && manualPingEndpoint && manualPingEntity) {
+        event.preventDefault();
+        const frameBounds = gridFrameRef.current?.getBoundingClientRect();
+        setManualPingMenu({
+          rowId: row.id,
+          source: "table",
+          left: (frameBounds?.left ?? 0) + event.bounds.x,
+          top: (frameBounds?.top ?? 0) + event.bounds.y + event.bounds.height + 4,
+          saving: false
+        });
+        return;
+      }
       if (column.valueKind === "handoff") {
         event.preventDefault();
         const key = `${row.id}:${column.id}`;
@@ -3729,7 +3807,7 @@ export function CrmTable({
         openDocumentUploadForRow(row.id);
       }
     },
-    [configuredColumns, filteredRows, openDocumentUploadForRow, toggleHandoffBall]
+    [configuredColumns, filteredRows, manualPingEndpoint, manualPingEntity, openDocumentUploadForRow, toggleHandoffBall]
   );
 
   const decrementPendingDocumentUploads = useCallback((rowId: string, count: number) => {
@@ -5671,6 +5749,36 @@ export function CrmTable({
           smoothScrollY
         />
       </div>
+      {manualPingMenu?.source === "table" && manualPingEndpoint && manualPingEntity ? (
+        <div
+          className="manualPingMenu manualPingMenuTable"
+          role="menu"
+          aria-label="Choose ping channel"
+          style={{ left: manualPingMenu.left, top: manualPingMenu.top }}
+        >
+          <strong>Channel</strong>
+          <div>
+            {manualPingChannels.map((channel) => {
+              const row = editableRows.find((candidate) => candidate.id === manualPingMenu.rowId);
+              return (
+                <button
+                  type="button"
+                  key={channel.value}
+                  role="menuitem"
+                  disabled={manualPingMenu.saving || !row}
+                  onClick={() => {
+                    if (row) {
+                      void recordManualPing(row, channel.value);
+                    }
+                  }}
+                >
+                  {channel.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      ) : null}
       {archiveBlast ? (
         <div className="archiveBlast" key={archiveBlast.key} aria-live="polite">
           <div className="archiveBlastAsh" aria-hidden="true" />
@@ -6232,6 +6340,40 @@ export function CrmTable({
                   <p>{detailsModalSubtitle}</p>
                 </div>
               )}
+              {manualPingEndpoint && manualPingEntity ? (
+                <button
+                  type="button"
+                  className="manualPingTrigger"
+                  onClick={() =>
+                    setManualPingMenu((current) =>
+                      current?.source === "details"
+                        ? null
+                        : { rowId: detailsPanelRow.id, source: "details", saving: false }
+                    )
+                  }
+                  aria-label="Record manual ping"
+                >
+                  Record ping
+                </button>
+              ) : null}
+              {manualPingMenu?.source === "details" && detailsPanelRow ? (
+                <div className="manualPingMenu manualPingMenuDetails" role="menu" aria-label="Choose ping channel">
+                  <strong>Channel</strong>
+                  <div>
+                    {manualPingChannels.map((channel) => (
+                      <button
+                        type="button"
+                        key={channel.value}
+                        role="menuitem"
+                        disabled={manualPingMenu.saving}
+                        onClick={() => void recordManualPing(detailsPanelRow, channel.value)}
+                      >
+                        {channel.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
               <button type="button" onClick={() => setDetailsPanel(null)} aria-label="Close lead details">
                 <X size={18} />
               </button>
@@ -6647,6 +6789,42 @@ export function CrmTable({
                     </details>
                   ) : null}
 
+                  {manualPingEndpoint && manualPingEntity && !isColdTargetTable ? (
+                    <section className="detailsDrawerSection outreach">
+                      <div className="detailsDrawerSectionHeader detailsOutreachHeader">
+                        <div className="detailsOutreachHeaderTitle">
+                          <span>Ping history</span>
+                          <strong>{outreachProtocol.length} entries</strong>
+                        </div>
+                      </div>
+                      <section className="detailsOutreachProtocol" aria-label="Ping history protocol">
+                        {outreachProtocolError ? <p className="detailsDrawerError">{outreachProtocolError}</p> : null}
+                        {!outreachProtocolError && outreachProtocol.length === 0 ? (
+                          <p className="detailsOutreachProtocolEmpty">No manual pings yet</p>
+                        ) : null}
+                        {outreachProtocol.length > 0 ? (
+                          <div className="detailsOutreachProtocolList">
+                            {outreachProtocol.map((entry, index) => {
+                              const date = formatOutreachProtocolDate(entry.occurredAt);
+                              const tooltip = `${entry.authorName}${entry.authorEmail ? ` · ${entry.authorEmail}` : ""} · ${date}`;
+                              return (
+                                <div className={`detailsOutreachProtocolRow ${index === 0 ? "current" : "completed"}`} key={entry.id}>
+                                  <div className="detailsOutreachProtocolMeta">
+                                    <span className="detailsOutreachProtocolChannel">{formatOutreachProtocolChannel(entry.channel)}</span>
+                                    <span className="detailsOutreachProtocolAuthor" title={tooltip} aria-label={tooltip}>
+                                      <strong>{entry.authorCode}</strong>
+                                      <span>{entry.authorName}</span>
+                                    </span>
+                                  </div>
+                                  <time className="detailsOutreachProtocolDate">{date}</time>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        ) : null}
+                      </section>
+                    </section>
+                  ) : null}
                   {isColdTargetTable ? (
                     <section className="detailsDrawerSection outreach">
                       <div className="detailsDrawerSectionHeader detailsOutreachHeader">
