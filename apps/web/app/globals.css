@@ -2960,6 +2960,36 @@ input {
   line-height: 1.2;
 }
 
+.detailsDrawerLeadHeader {
+  min-width: 0;
+}
+
+.detailsDrawerLeadHeader h2 {
+  align-items: baseline;
+  display: flex;
+  gap: 7px;
+  min-width: 0;
+}
+
+.detailsDrawerLeadCode {
+  flex: 0 0 auto;
+}
+
+.detailsDrawerLeadSeparator {
+  color: var(--muted);
+  flex: 0 0 auto;
+}
+
+.detailsDrawerLeadName {
+  color: var(--muted);
+  font-size: calc(14px * var(--table-font-scale, 1));
+  font-weight: 650;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .detailsDrawer p {
   color: var(--muted);
   font-size: calc(13px * var(--table-font-scale, 1));

@@ -6215,11 +6215,23 @@ export function CrmTable({
         <div className="detailsDrawerBackdrop" role="presentation" onMouseDown={() => setDetailsPanel(null)}>
           <section className="detailsDrawer" role="dialog" aria-modal="true" onMouseDown={(event) => event.stopPropagation()}>
             <header>
-              <div>
-                <span>{detailsModalEyebrow}</span>
-                <h2>{detailsModalTitle}</h2>
-                <p>{detailsModalSubtitle}</p>
-              </div>
+              {isLeadTable ? (
+                <div className="detailsDrawerLeadHeader">
+                  <h2>
+                    <span className="detailsDrawerLeadCode">{detailsModalTitle}</span>
+                    <span className="detailsDrawerLeadSeparator" aria-hidden="true">
+                      ·
+                    </span>
+                    <span className="detailsDrawerLeadName">{detailsModalSubtitle}</span>
+                  </h2>
+                </div>
+              ) : (
+                <div>
+                  <span>{detailsModalEyebrow}</span>
+                  <h2>{detailsModalTitle}</h2>
+                  <p>{detailsModalSubtitle}</p>
+                </div>
+              )}
               <button type="button" onClick={() => setDetailsPanel(null)} aria-label="Close lead details">
                 <X size={18} />
               </button>
