@@ -13,6 +13,7 @@ import {
   orderOutreachTouchpoints,
   currentTouchChipTone,
   handoffSideTone,
+  updateRowCell,
   leadProgressReward,
   leadProgressSteps,
   nextActionStateForTodo,
@@ -23,7 +24,6 @@ import {
   shouldWrapTableColumn,
   sortRows,
   toCsv,
-  updateRowCell,
   wrappedTableRowHeight,
   wrapMeasuredTextLines
 } from "./table-model";
@@ -185,6 +185,18 @@ describe("table-model", () => {
   it("uses pink handoff tone when the ball is with the client", () => {
     expect(handoffSideTone("client").accent).toBe("#d9468f");
     expect(handoffSideTone("us").accent).toBe("#4f7df3");
+  });
+
+  it("updates only the selected row when a handoff ball is moved", () => {
+    const rows = [
+      { id: "lead-1", values: { ballSide: "us" } },
+      { id: "lead-2", values: { ballSide: "client" } }
+    ];
+
+    expect(updateRowCell(rows, "lead-1", "ballSide", "client")).toEqual([
+      { id: "lead-1", values: { ballSide: "client" } },
+      { id: "lead-2", values: { ballSide: "client" } }
+    ]);
   });
 
   it("maps nested linked records to dotted table columns", () => {

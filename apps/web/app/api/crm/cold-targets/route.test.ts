@@ -39,6 +39,11 @@ describe("cold targets route", () => {
         id: "cold-1",
         workspaceId: "default",
         name: "German Builder"
+      },
+      {
+        id: "cold-2",
+        workspaceId: "default",
+        name: "Other Builder"
       }
     ]);
     mocks.prisma.outreachCampaignAssignment.findMany.mockResolvedValue([]);
@@ -92,6 +97,7 @@ describe("cold targets route", () => {
         }
       ]
     });
+    expect(payload[1]).toMatchObject({ pingAt: null, outreachProtocol: [], campaignTouch: null });
   });
 
   it("labels the current touch with its campaign day offset", async () => {

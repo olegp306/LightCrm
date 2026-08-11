@@ -18,7 +18,10 @@ describe("leads route outreach columns", () => {
     vi.clearAllMocks();
     mocks.listRecords.mockImplementation(async ({ entity }: { entity: string }) => {
       if (entity === "lead") {
-        return [{ id: "lead-1", workspaceId: "default", name: "Lead", status: "new", notes: null, lastPingAt: null }];
+        return [
+          { id: "lead-1", workspaceId: "default", name: "Lead", status: "new", notes: null, lastPingAt: null },
+          { id: "lead-2", workspaceId: "default", name: "Other lead", status: "new", notes: null, lastPingAt: null }
+        ];
       }
       return [];
     });
@@ -39,5 +42,6 @@ describe("leads route outreach columns", () => {
       pingAt: "2026-08-10T09:30:00.000Z",
       campaignTouch: "Touch 2"
     });
+    expect(payload[1]).toMatchObject({ pingAt: null, campaignTouch: null });
   });
 });
