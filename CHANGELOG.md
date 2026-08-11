@@ -1040,3 +1040,7 @@ The current product focuses on fast CRM work inside rich tables: users can inspe
 - `pnpm --filter @lightcrm/ui typecheck`
 - `pnpm --filter @lightcrm/web typecheck`
 - Local `/leads` and `/clients` routes respond successfully on the development server.
+## 0.3.54 - 2026-08-11
+
+- Compact protocol date and time display with full hover details.
+- Normalized manual Ping channel labels and finalized Leads/Cold Targets history layout.
