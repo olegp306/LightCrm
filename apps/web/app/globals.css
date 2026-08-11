@@ -8188,7 +8188,7 @@ input {
   align-items: end;
   display: grid;
   gap: 6px;
-  grid-template-columns: minmax(100px, 1fr) minmax(112px, auto);
+  grid-template-columns: minmax(100px, 1fr) minmax(136px, auto);
 }
 
 .detailsCommercialGrid label {
@@ -8218,10 +8218,12 @@ input {
 
 .detailsCommercialToggle input {
   accent-color: var(--accent);
-  margin: 0;
+  margin: 6px 0 0;
 }
 
 .detailsCommercialToggle > .detailsFieldLabel {
+  font-size: 10px;
   left: 8px;
+  max-width: calc(100% - 16px);
   top: 0;
 }
