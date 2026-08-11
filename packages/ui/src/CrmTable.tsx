@@ -21,7 +21,6 @@ import {
   Columns3,
   Download,
   FileText,
-  Flame,
   Globe2,
   Italic,
   Merge,
@@ -306,7 +305,7 @@ type LongTextPreview = {
   text: string;
 };
 
-type BulkActionDialog = "archive" | "delete" | "merge" | "spicyArchive" | null;
+type BulkActionDialog = "archive" | "delete" | "merge" | null;
 type ArchiveMood = "regular" | "spicy";
 type WrappedTextTooltip = {
   left: number;
@@ -4624,19 +4623,17 @@ export function CrmTable({
   }, [archiveEntity, selectedRows]);
 
   const confirmArchiveSelectedRows = useCallback(
-    async (mood: ArchiveMood) => {
+    async () => {
       if (!archiveEntity || selectedRows.length === 0) {
         setBulkActionDialog(null);
         return;
       }
       const selectedIds = new Set(selectedRows.map((row) => row.id));
-      if (mood === "spicy") {
-        setArchiveBlast({ key: Date.now(), count: selectedRows.length });
-      }
+      setArchiveBlast({ key: Date.now(), count: selectedRows.length });
       const response = await fetch("/api/crm/archive", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ entity: archiveEntity, ids: [...selectedIds], mood })
+        body: JSON.stringify({ entity: archiveEntity, ids: [...selectedIds], mood: "regular" })
       });
       if (!response.ok) {
         const payload = (await response.json()) as { error?: string };
@@ -4663,7 +4660,7 @@ export function CrmTable({
               ...row.values,
               status: "archived",
               archivedAt: fallbackArchivedAt,
-              archiveMood: mood
+              archiveMood: "regular"
             }
           };
         })
@@ -5266,18 +5263,15 @@ export function CrmTable({
                   </button>
                 )}
                 {archiveEntity ? (
-                  <>
-                    <button type="button" onClick={() => setBulkActionDialog("archive")}>
-                      <Archive size={13} />
-                      Archive
-                    </button>
-                    {archiveEntity === "lead" ? (
-                      <button type="button" className="spicy" onClick={() => setBulkActionDialog("spicyArchive")}>
-                        <Flame size={13} />
-                        В утиль
-                      </button>
-                    ) : null}
-                  </>
+                  <button
+                    type="button"
+                    title="Archive · Virtual massage room"
+                    aria-label="Send selected records to the virtual massage room"
+                    onClick={() => setBulkActionDialog("archive")}
+                  >
+                    <Archive size={13} />
+                    Archive
+                  </button>
                 ) : null}
                 <button type="button" className="clearSelectionButton" aria-label="Clear row selection" onClick={() => setGridSelection(emptySelection())}>
                   <X size={13} />
@@ -5669,9 +5663,9 @@ export function CrmTable({
         <div className="archiveBlast" key={archiveBlast.key} aria-live="polite">
           <div className="archiveBlastAsh" aria-hidden="true" />
           <div className="archiveBlastStamp">
-            <Flame size={20} />
-            <strong>В утиль</strong>
-            <span>{archiveBlast.count === 1 ? "Lead closed" : `${archiveBlast.count} leads closed`}</span>
+            <Archive size={20} />
+            <strong>Virtual massage room</strong>
+            <span>{archiveBlast.count === 1 ? "Archived" : `${archiveBlast.count} records archived`}</span>
           </div>
         </div>
       ) : null}
@@ -7185,38 +7179,13 @@ export function CrmTable({
                 <X size={18} />
               </button>
             </header>
-            <p>Archived leads stay visible at the bottom of the table in a muted state.</p>
+            <p>This sends the selected records to the archive, the virtual massage room. They stay visible at the bottom in a muted state.</p>
             <footer>
               <button type="button" onClick={() => setBulkActionDialog(null)}>
                 Cancel
               </button>
-              <button type="button" onClick={() => void confirmArchiveSelectedRows("regular")}>
+              <button type="button" onClick={() => void confirmArchiveSelectedRows()}>
                 Archive
-              </button>
-            </footer>
-          </section>
-        </div>
-      ) : null}
-      {bulkActionDialog === "spicyArchive" ? (
-        <div className="documentModalBackdrop" role="presentation" onMouseDown={() => setBulkActionDialog(null)}>
-          <section className="bulkActionDialog spicyArchiveDialog" role="dialog" aria-modal="true" onMouseDown={(event) => event.stopPropagation()}>
-            <header>
-              <div>
-                <span>Final archive</span>
-                <h2>{selectedRows.length === 1 ? "Send this lead to В утиль?" : `Send ${selectedRows.length} leads to В утиль?`}</h2>
-              </div>
-              <button type="button" onClick={() => setBulkActionDialog(null)} aria-label="Close final archive dialog">
-                <X size={18} />
-              </button>
-            </header>
-            <p>The lead stays at the bottom, greyed out, with a small “В утиле” status marker.</p>
-            <footer>
-              <button type="button" onClick={() => setBulkActionDialog(null)}>
-                Cancel
-              </button>
-              <button type="button" className="spicy" onClick={() => void confirmArchiveSelectedRows("spicy")}>
-                <Flame size={14} />
-                В утиль
               </button>
             </footer>
           </section>
