@@ -3632,7 +3632,8 @@ input {
 
 .detailsDrawerFields > label > .detailsFieldLabel,
 .detailsDrawerField > .detailsFieldLabel,
-.detailsClientSection > .detailsFieldLabel {
+.detailsClientSection > .detailsFieldLabel,
+.detailsCommercialToggle > .detailsFieldLabel {
   align-items: center;
   background: var(--panel-raised);
   border-radius: 999px;
@@ -3740,7 +3741,8 @@ input {
 }
 
 .detailsClientSection {
-  gap: 4px;
+  align-self: start;
+  gap: 0;
 }
 
 .detailsClientSection > header {
@@ -3782,7 +3784,9 @@ input {
 .detailsClientPicker input {
   border-bottom-right-radius: 0;
   border-top-right-radius: 0;
+  box-sizing: border-box;
   cursor: pointer;
+  height: 34px;
   overflow: hidden;
   text-overflow: ellipsis;
 }
@@ -3793,9 +3797,11 @@ input {
   border: 1px solid var(--line);
   border-left: 0;
   border-radius: 0 6px 6px 0;
+  box-sizing: border-box;
   color: var(--muted);
   cursor: pointer;
   display: inline-flex;
+  height: 34px;
   justify-content: center;
   padding: 0;
 }
@@ -8191,6 +8197,8 @@ input {
 }
 
 .detailsCommercialGrid input[type="number"] {
+  box-sizing: border-box;
+  height: 34px;
   min-width: 0;
 }
 
@@ -8210,12 +8218,10 @@ input {
 
 .detailsCommercialToggle input {
   accent-color: var(--accent);
+  margin: 0;
 }
 
-.detailsCommercialToggle span {
-  color: var(--ink);
-  font-size: 10px;
-  font-weight: 650;
-  overflow: hidden;
-  text-overflow: ellipsis;
+.detailsCommercialToggle > .detailsFieldLabel {
+  left: 8px;
+  top: 0;
 }

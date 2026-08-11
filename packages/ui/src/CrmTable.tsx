@@ -6477,7 +6477,7 @@ export function CrmTable({
                             setDetailsValue("olegCommissionEnabled", event.target.checked ? "true" : "false");
                           }}
                         />
-                        <span>Oleg commission</span>
+                        <span className="detailsFieldLabel">Oleg commission · 2%</span>
                       </label>
                     </div>
                   </section>
