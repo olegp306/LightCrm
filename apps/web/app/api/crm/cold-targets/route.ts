@@ -1,7 +1,7 @@
 import { getPrismaClient } from "@lightcrm/db";
 import { NextResponse } from "next/server";
 import { accountDisplayName } from "../../../../auth/session";
-import { defaultWorkspaceId, getCrm, handleRouteError } from "../_shared";
+import { getCrm, handleRouteError, resolveWorkspaceId } from "../_shared";
 import { getCrmRuntimeSettings } from "../settings/crm-settings-store";
 import { latestOutreachAt } from "../_shared/outreach-columns";
 
@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 export async function GET(request: Request) {
   try {
     const url = new URL(request.url);
-    const workspaceId = url.searchParams.get("workspaceId") ?? defaultWorkspaceId;
+    const workspaceId = resolveWorkspaceId(url.searchParams.get("workspaceId"));
     const includeArchived = url.searchParams.get("includeArchived") === "true";
     const rows = await getCrm().listRecords({ entity: "coldTarget", workspaceId, includeArchived });
     const prisma = getPrismaClient();

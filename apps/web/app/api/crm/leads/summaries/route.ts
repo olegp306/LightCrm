@@ -13,7 +13,7 @@ const CreateLeadSummaryInput = z.object({
 export async function GET(request: Request) {
   try {
     const url = new URL(request.url);
-    const workspaceId = url.searchParams.get("workspaceId") ?? defaultWorkspaceId;
+    const workspaceId = resolveWorkspaceId(url.searchParams.get("workspaceId"));
     const leadId = url.searchParams.get("leadId");
     if (!leadId) {
       return NextResponse.json({ error: "leadId is required" }, { status: 400 });

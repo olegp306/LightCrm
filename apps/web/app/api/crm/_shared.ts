@@ -82,7 +82,7 @@ export function tableRowsResponse(entity: CrmCollection) {
   return async function GET(request: Request) {
     try {
       const url = new URL(request.url);
-      const workspaceId = url.searchParams.get("workspaceId") ?? defaultWorkspaceId;
+      const workspaceId = resolveWorkspaceId(url.searchParams.get("workspaceId"));
       const includeArchived = url.searchParams.get("includeArchived") === "true";
       const rows = await getCrm().listRecords({ entity, workspaceId, includeArchived });
       return NextResponse.json(rows.map(displayRecordSourceChannel));

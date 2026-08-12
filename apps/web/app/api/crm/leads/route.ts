@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getPrismaClient } from "@lightcrm/db";
 import { evaluateCommercialOfferReadiness } from "@lightcrm/core";
-import { defaultWorkspaceId, getCrm, handleRouteError } from "../_shared";
+import { getCrm, handleRouteError, resolveWorkspaceId } from "../_shared";
 import { getCrmRuntimeSettings } from "../settings/crm-settings-store";
 import { latestOutreachAt, outreachTouchLabel } from "../_shared/outreach-columns";
 import { leadNoteFields, readJsonNoteField, readNoteField } from "./note-fields";
@@ -93,7 +93,7 @@ function readLatestLeadSummary(notes: string | null): { summaryShort: string | n
 export async function GET(request: Request) {
   try {
     const url = new URL(request.url);
-    const workspaceId = url.searchParams.get("workspaceId") ?? defaultWorkspaceId;
+    const workspaceId = resolveWorkspaceId(url.searchParams.get("workspaceId"));
     const includeArchived = url.searchParams.get("includeArchived") === "true";
     const crm = getCrm();
     const prisma = getPrismaClient();

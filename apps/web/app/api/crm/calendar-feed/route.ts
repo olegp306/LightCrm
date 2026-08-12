@@ -1,7 +1,7 @@
 import type { CalendarEvent, Client, ColdTarget, Lead, Reminder } from "@lightcrm/core";
 import { outreachDetailsForReminder } from "@lightcrm/ui";
 import { NextResponse } from "next/server";
-import { defaultWorkspaceId, getCrm, handleRouteError } from "../_shared";
+import { getCrm, handleRouteError, resolveWorkspaceId } from "../_shared";
 import { getCrmRuntimeSettings } from "../settings/crm-settings-store";
 
 type CalendarFeedKind = "reminder" | "event";
@@ -130,7 +130,7 @@ export async function GET(request: Request) {
   try {
     const url = new URL(request.url);
     const fallbackRange = defaultRange();
-    const workspaceId = url.searchParams.get("workspaceId") ?? defaultWorkspaceId;
+    const workspaceId = resolveWorkspaceId(url.searchParams.get("workspaceId"));
     const from = parseDateParam(url.searchParams.get("from")) ?? fallbackRange.from;
     const to = parseDateParam(url.searchParams.get("to")) ?? fallbackRange.to;
     const requestedFilters = {

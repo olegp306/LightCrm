@@ -1,12 +1,12 @@
 import { getPrismaClient } from "@lightcrm/db";
 import { latestOutreachAt } from "../_shared/outreach-columns";
-import { defaultWorkspaceId, getCrm, handleRouteError } from "../_shared";
+import { getCrm, handleRouteError, resolveWorkspaceId } from "../_shared";
 import { NextResponse } from "next/server";
 
 export async function GET(request: Request) {
   try {
     const url = new URL(request.url);
-    const workspaceId = url.searchParams.get("workspaceId") ?? defaultWorkspaceId;
+    const workspaceId = resolveWorkspaceId(url.searchParams.get("workspaceId"));
     const includeArchived = url.searchParams.get("includeArchived") === "true";
     const clients = await getCrm().listRecords({ entity: "client", workspaceId, includeArchived });
     const touches = await getPrismaClient().outreachTouch.findMany({
